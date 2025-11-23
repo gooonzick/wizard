@@ -1,0 +1,29 @@
+{
+	"$schema": "https://unpkg.com/knip@5/schema.json",
+	"ignoreExportsUsedInFile": {
+		"interface": true,
+		"type": true
+	},
+	"tags": ["-lintignore"],
+	"workspaces": {
+		".": {
+			"entry": ["vitest.config.ts"],
+			"project": ["*.{ts,json}"],
+			"ignore": ["packages/**", "examples/**", "docs/**"],
+			"ignoreDependencies": ["@vitest/coverage-v8"]
+		},
+		"packages/core": {
+			"entry": ["src/index.ts!"],
+			"project": ["src/**/*.ts", "tests/**/*.ts"],
+			"ignore": ["src/examples/**"]
+		},
+		"packages/react": {
+			"entry": ["src/index.ts!"],
+			"project": ["src/**/*.{ts,tsx}", "tests/**/*.{ts,tsx}"]
+		},
+		"examples/react-examples": {
+			"entry": ["src/main.tsx"],
+			"project": ["src/**/*.{ts,tsx}"]
+		}
+	}
+}

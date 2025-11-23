@@ -1,0 +1,37 @@
+{
+	"name": "@wizard/core",
+	"version": "0.0.0",
+	"description": "Core package for WizardForm framework",
+	"type": "module",
+	"files": [
+		"dist",
+		"README.md"
+	],
+	"main": "./dist/index.js",
+	"module": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		}
+	},
+	"scripts": {
+		"build": "vite build",
+		"typecheck": "tsc --build --verbose",
+		"test": "vitest --run",
+		"test:watch": "vitest --watch",
+		"lint": "biome check .",
+		"lint:fix": "biome check . --write"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.3.8",
+		"typescript": "~5.9.3",
+		"vite": "npm:rolldown-vite@7.2.5",
+		"vite-plugin-dts": "^4.5.4",
+		"vitest": "^4.0.13"
+	},
+	"dependencies": {
+		"@standard-schema/spec": "^1.0.0"
+	}
+}

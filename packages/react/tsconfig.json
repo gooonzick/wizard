@@ -1,0 +1,12 @@
+{
+	"extends": "../../tsconfig.base.json",
+	"compilerOptions": {
+		"baseUrl": ".",
+		"outDir": "./.tsbuild",
+		"emitDeclarationOnly": true,
+		"jsx": "react-jsx",
+		"jsxImportSource": "react"
+	},
+	"include": ["src/**/*", "tests/**/*", "../core/src/**/*"],
+	"references": [{ "path": "../core" }]
+}

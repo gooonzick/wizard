@@ -1,0 +1,40 @@
+{
+	"$schema": "https://turbo.build/schema.json",
+	"tasks": {
+		"build": {
+			"outputs": ["dist/**", "*.d.ts"],
+			"cache": true,
+			"dependsOn": ["^build"],
+			"inputs": ["src/**", "tsconfig.json", "vite.config.ts"]
+		},
+		"test": {
+			"outputs": ["coverage/**"],
+			"cache": false,
+			"dependsOn": ["^build"],
+			"inputs": ["src/**", "tests/**", "vitest.config.ts"]
+		},
+		"test:watch": {
+			"cache": false,
+			"persistent": true
+		},
+		"typecheck": {
+			"cache": false,
+			"inputs": ["src/**", "tsconfig.json"],
+			"dependsOn": ["build"]
+		},
+		"dev": {
+			"cache": true,
+			"persistent": true
+		},
+		"lint": {
+			"outputs": [],
+			"cache": true,
+			"inputs": ["**/*.{ts,tsx,js,jsx,json,css,md}"]
+		},
+		"lint:fix": {
+			"outputs": [],
+			"cache": true,
+			"inputs": ["**/*.{ts,tsx,js,jsx,json,css,md}"]
+		}
+	}
+}

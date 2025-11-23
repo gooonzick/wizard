@@ -1,0 +1,28 @@
+{
+	"name": "wizard-monorepo",
+	"private": true,
+	"version": "0.0.0",
+	"type": "module",
+	"description": "A monorepo for the WizardForm framework with core and framework-specific integrations",
+	"scripts": {
+		"build": "turbo run build",
+		"test": "turbo run test",
+		"test:watch": "turbo run test:watch",
+		"dev": "turbo run dev",
+		"typecheck": "turbo run typecheck",
+		"clean": "rm -rf packages/*/dist examples/*/dist",
+		"lint": "turbo run lint",
+		"lint:fix": "turbo run lint:fix",
+		"knip": "knip",
+		"syncpack:lint": "syncpack lint",
+		"syncpack:fix": "syncpack fix-mismatches"
+	},
+	"devDependencies": {
+		"@types/node": "^24.10.1",
+		"knip": "^5.70.2",
+		"syncpack": "13.0.4",
+		"turbo": "2.6.1",
+		"typescript": "~5.9.3"
+	},
+	"packageManager": "pnpm@10.23.0"
+}

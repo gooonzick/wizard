@@ -1,0 +1,107 @@
+name: Publish to npm
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      package:
+        description: 'Package to publish (core, react, vue, or all)'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - core
+          - react
+          - vue
+      tag:
+        description: 'npm dist-tag (latest, next, beta)'
+        required: true
+        default: 'latest'
+        type: choice
+        options:
+          - latest
+          - next
+          - beta
+
+jobs:
+  publish:
+    name: Publish Packages
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # Required for npm provenance
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm build
+
+      - name: Run tests
+        run: pnpm test
+
+      - name: Determine packages to publish
+        id: packages
+        run: |
+          PACKAGE="${{ github.event.inputs.package || 'all' }}"
+          TAG="${{ github.event.inputs.tag || 'latest' }}"
+
+          echo "package=$PACKAGE" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+          if [ "$PACKAGE" = "all" ]; then
+            echo "packages=core react vue" >> $GITHUB_OUTPUT
+          else
+            echo "packages=$PACKAGE" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Publish @wizard/core
+        if: contains(steps.packages.outputs.packages, 'core')
+        working-directory: ./packages/core
+        run: |
+          pnpm publish --access public --tag ${{ steps.packages.outputs.tag }} --no-git-checks --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish @wizard/react
+        if: contains(steps.packages.outputs.packages, 'react')
+        working-directory: ./packages/react
+        run: |
+          pnpm publish --access public --tag ${{ steps.packages.outputs.tag }} --no-git-checks --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish @wizard/vue
+        if: contains(steps.packages.outputs.packages, 'vue')
+        working-directory: ./packages/vue
+        run: |
+          pnpm publish --access public --tag ${{ steps.packages.outputs.tag }} --no-git-checks --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create GitHub Release Summary
+        run: |
+          echo "## Published Packages" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          for pkg in ${{ steps.packages.outputs.packages }}; do
+            VERSION=$(node -p "require('./packages/$pkg/package.json').version")
+            echo "- **@wizard/$pkg@$VERSION** (tag: ${{ steps.packages.outputs.tag }})" >> $GITHUB_STEP_SUMMARY
+          done

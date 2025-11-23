@@ -1,0 +1,50 @@
+# Label PRs based on changed files
+
+'package: core':
+  - changed-files:
+    - any-glob-to-any-file: 'packages/core/**/*'
+
+'package: react':
+  - changed-files:
+    - any-glob-to-any-file: 'packages/react/**/*'
+
+'package: vue':
+  - changed-files:
+    - any-glob-to-any-file: 'packages/vue/**/*'
+
+'documentation':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'docs/**/*'
+      - '*.md'
+      - 'packages/**/README.md'
+
+'tests':
+  - changed-files:
+    - any-glob-to-any-file:
+      - '**/*.test.ts'
+      - '**/*.test.tsx'
+      - '**/*.spec.ts'
+
+'dependencies':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'packages/*/package.json'
+
+'ci/cd':
+  - changed-files:
+    - any-glob-to-any-file: '.github/**/*'
+
+'examples':
+  - changed-files:
+    - any-glob-to-any-file: 'examples/**/*'
+
+'configuration':
+  - changed-files:
+    - any-glob-to-any-file:
+      - '*.config.*'
+      - '.*.json'
+      - 'turbo.json'
+      - 'tsconfig*.json'

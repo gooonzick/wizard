@@ -1,0 +1,81 @@
+name: PR Checks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  size-check:
+    name: Bundle Size Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm build
+
+      - name: Check bundle sizes
+        run: |
+          echo "## Bundle Sizes" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Package | Size | Gzipped |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|------|---------|" >> $GITHUB_STEP_SUMMARY
+
+          for pkg in core react vue; do
+            if [ -f "packages/$pkg/dist/index.js" ]; then
+              SIZE=$(wc -c < "packages/$pkg/dist/index.js" | awk '{print $1}')
+              GZIP=$(gzip -c "packages/$pkg/dist/index.js" | wc -c | awk '{print $1}')
+              SIZE_KB=$(echo "scale=2; $SIZE/1024" | bc)
+              GZIP_KB=$(echo "scale=2; $GZIP/1024" | bc)
+              echo "| @wizard/$pkg | ${SIZE_KB}KB | ${GZIP_KB}KB |" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
+
+  validate-package-json:
+    name: Validate package.json
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Validate package.json files
+        run: |
+          for pkg in packages/*/package.json; do
+            echo "Validating $pkg"
+            node -e "require('$pkg')" || exit 1
+          done
+
+  pr-labeler:
+    name: Label PR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Label PR based on files changed
+        uses: actions/labeler@v5
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}

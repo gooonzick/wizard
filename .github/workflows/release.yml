@@ -1,0 +1,95 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+      - '@wizard/core@*'
+      - '@wizard/react@*'
+      - '@wizard/vue@*'
+
+jobs:
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          TAG=${GITHUB_REF#refs/tags/}
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+          if [[ $TAG =~ ^@wizard/([a-z]+)@(.+)$ ]]; then
+            PACKAGE=${BASH_REMATCH[1]}
+            VERSION=${BASH_REMATCH[2]}
+          elif [[ $TAG =~ ^v(.+)$ ]]; then
+            PACKAGE="all"
+            VERSION=${BASH_REMATCH[1]}
+          else
+            echo "Invalid tag format"
+            exit 1
+          fi
+
+          echo "package=$PACKAGE" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          PACKAGE="${{ steps.version.outputs.package }}"
+          VERSION="${{ steps.version.outputs.version }}"
+
+          if [ "$PACKAGE" = "all" ]; then
+            TITLE="Release v${VERSION}"
+            echo "title=$TITLE" >> $GITHUB_OUTPUT
+          else
+            TITLE="@wizard/${PACKAGE} v${VERSION}"
+            echo "title=$TITLE" >> $GITHUB_OUTPUT
+          fi
+
+          # Generate changelog
+          NOTES=$(cat << EOF
+          ## What's Changed
+
+          This release includes updates to the wizard framework.
+
+          ### Installation
+
+          \`\`\`bash
+          # Install specific package
+          npm install @wizard/${PACKAGE}@${VERSION}
+
+          # Or with pnpm
+          pnpm add @wizard/${PACKAGE}@${VERSION}
+          \`\`\`
+
+          ### Documentation
+
+          - [Getting Started](https://github.com/${{ github.repository }}/blob/main/docs/getting-started.md)
+          - [API Reference](https://github.com/${{ github.repository }}/blob/main/docs/api-reference.md)
+
+          **Full Changelog**: https://github.com/${{ github.repository }}/compare/${{ steps.version.outputs.tag }}...main
+          EOF
+          )
+
+          echo "notes<<EOF" >> $GITHUB_OUTPUT
+          echo "$NOTES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          release_name: ${{ steps.notes.outputs.title }}
+          body: ${{ steps.notes.outputs.notes }}
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.version, 'beta') || contains(steps.version.outputs.version, 'alpha') || contains(steps.version.outputs.version, 'rc') }}
