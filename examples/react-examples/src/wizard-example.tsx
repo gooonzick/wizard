@@ -1,5 +1,5 @@
-import { createWizard } from "@wizard/core";
-import { useWizard } from "@wizard/react";
+import { createWizard } from "@gooonzick/wizard-core";
+import { useWizard } from "@gooonzick/wizard-react";
 import type React from "react";
 import { Button } from "@/components/ui/button";
 import { WizardForm } from "./components/wizard-form";

@@ -1,5 +1,5 @@
 {
-	"name": "@wizard/vue",
+	"name": "@gooonzick/wizard-vue",
 	"version": "0.0.1",
 	"description": "Vue 3 integration for Wizard framework",
 	"type": "module",
@@ -28,7 +28,7 @@
 		"vue": "^3.5.0"
 	},
 	"dependencies": {
-		"@wizard/core": "workspace:*"
+		"@gooonzick/wizard-core": "workspace:*"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.3.8",

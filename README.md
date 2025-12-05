@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/YOUR_USERNAME/wizard-vite/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_USERNAME/wizard-vite/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/YOUR_USERNAME/wizard-vite/branch/main/graph/badge.svg)](https://codecov.io/gh/YOUR_USERNAME/wizard-vite)
-[![npm version](https://badge.fury.io/js/@wizard%2Fcore.svg)](https://www.npmjs.com/package/@wizard/core)
+[![npm version](https://badge.fury.io/js/@wizard%2Fcore.svg)](https://www.npmjs.com/package/@gooonzick/wizard-core)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A declarative, type-safe, and extensible framework for building multi-step wizards in TypeScript.
@@ -23,13 +23,13 @@ A declarative, type-safe, and extensible framework for building multi-step wizar
 
 ```bash
 # Install core package
-npm install @wizard/core
+npm install @gooonzick/wizard-core
 
 # For React integration
-npm install @wizard/core @wizard/react
+npm install @gooonzick/wizard-core @gooonzick/wizard-react
 
 # For Vue integration
-npm install @wizard/core @wizard/vue
+npm install @gooonzick/wizard-core @gooonzick/wizard-vue
 ```
 
 ## 🚀 Quick Start
@@ -49,7 +49,7 @@ type SignupData = {
 ### 2. Create Wizard Definition (Declarative)
 
 ```typescript
-import { WizardDefinition } from "@wizard/core";
+import { WizardDefinition } from "@gooonzick/wizard-core";
 
 const signupWizard: WizardDefinition<SignupData> = {
   id: "signup",
@@ -105,7 +105,7 @@ const signupWizard: WizardDefinition<SignupData> = {
 ### 3. Or Use Builder Pattern
 
 ```typescript
-import { createWizard } from "@wizard/core";
+import { createWizard } from "@gooonzick/wizard-core";
 
 const wizard = createWizard<SignupData>("signup")
   .initialStep("personal")
@@ -127,7 +127,7 @@ const wizard = createWizard<SignupData>("signup")
 ### 4. Use with React
 
 ```typescript
-import { useWizard } from "@wizard/react";
+import { useWizard } from "@gooonzick/wizard-react";
 
 function WizardComponent() {
   const { state, navigation, actions, validation, loading } = useWizard({
@@ -196,7 +196,7 @@ function WizardComponent() {
 ### 5. Or Use Runtime Machine Directly
 
 ```typescript
-import { WizardMachine, createWizardContext } from "@wizard/core";
+import { WizardMachine, createWizardContext } from "@gooonzick/wizard-core";
 
 const context = createWizardContext({
   logger: console,
@@ -319,12 +319,12 @@ import {
   combineValidators,
   requiredFields,
   createValidator,
-} from "@wizard/core";
+} from "@gooonzick/wizard-core";
 
 const emailValidator = createValidator(
   (data) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email),
   "Invalid email format",
-  "email"
+  "email",
 );
 
 const step = {
@@ -337,7 +337,7 @@ const step = {
 WizardForm understands any validator that implements the [Standard Schema](https://standardschema.dev/) contract. Wrap your favorite schema library (Valibot, ArkType, Zod adapters, etc.) with `createStandardSchemaValidator` and WizardMachine will handle the rest.
 
 ```typescript
-import { createStandardSchemaValidator } from "@wizard/core";
+import { createStandardSchemaValidator } from "@gooonzick/wizard-core";
 import { mySchema } from "./schema"; // Anything exposing the ~standard interface
 
 const step = {
@@ -350,7 +350,7 @@ const step = {
 ### Guard Combinators
 
 ```typescript
-import { andGuards, orGuards, notGuard } from "@wizard/core";
+import { andGuards, orGuards, notGuard } from "@gooonzick/wizard-core";
 
 const isPremium = (data) => data.plan === "premium";
 const hasInvoice = (data) => data.needsInvoice;
@@ -389,7 +389,7 @@ validate: async (data, ctx: MyContext) => {
 For simple linear flows:
 
 ```typescript
-import { createLinearWizard } from "@wizard/core";
+import { createLinearWizard } from "@gooonzick/wizard-core";
 
 const wizard = createLinearWizard({
   id: "onboarding",

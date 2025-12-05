@@ -50,9 +50,9 @@ This project follows a standard code of conduct. Be respectful, inclusive, and c
 ```
 wizard-vite/
 ├── packages/
-│   ├── core/       # @wizard/core - Framework-agnostic core
-│   ├── react/      # @wizard/react - React integration
-│   └── vue/        # @wizard/vue - Vue integration
+│   ├── core/       # @gooonzick/wizard-core - Framework-agnostic core
+│   ├── react/      # @gooonzick/wizard-react - React integration
+│   └── vue/        # @gooonzick/wizard-vue - Vue integration
 ├── examples/       # Example applications
 └── docs/          # Documentation
 ```
@@ -69,9 +69,9 @@ pnpm test
 pnpm test:watch
 
 # Run tests for specific package
-pnpm --filter=@wizard/core test
-pnpm --filter=@wizard/react test
-pnpm --filter=@wizard/vue test
+pnpm --filter=@gooonzick/wizard-core test
+pnpm --filter=@gooonzick/wizard-react test
+pnpm --filter=@gooonzick/wizard-vue test
 ```
 
 ### Building
@@ -81,7 +81,7 @@ pnpm --filter=@wizard/vue test
 pnpm build
 
 # Build specific package
-pnpm --filter=@wizard/core build
+pnpm --filter=@gooonzick/wizard-core build
 ```
 
 ### Linting and Formatting
@@ -153,9 +153,9 @@ Types:
 
 Scopes:
 
-- `core`: Changes to @wizard/core
-- `react`: Changes to @wizard/react
-- `vue`: Changes to @wizard/vue
+- `core`: Changes to @gooonzick/wizard-core
+- `react`: Changes to @gooonzick/wizard-react
+- `vue`: Changes to @gooonzick/wizard-vue
 - `examples`: Changes to examples
 - `ci`: Changes to CI/CD
 
@@ -233,7 +233,7 @@ The linter will auto-fix most issues with `pnpm lint:fix`.
 
 ### Architecture Principles
 
-1. **Framework Agnostic Core**: Keep `@wizard/core` free of framework dependencies
+1. **Framework Agnostic Core**: Keep `@gooonzick/wizard-core` free of framework dependencies
 2. **Type Safety**: Use TypeScript generics to ensure type safety
 3. **Immutability**: Prefer immutable data structures
 4. **Single Responsibility**: Each function/class should have one clear purpose
@@ -272,10 +272,10 @@ describe("WizardMachine", () => {
 
 ```bash
 # Run specific test file
-pnpm --filter=@wizard/core test wizard-machine.test.ts
+pnpm --filter=@gooonzick/wizard-core test wizard-machine.test.ts
 
 # Run tests matching pattern
-pnpm --filter=@wizard/core test -t "navigation"
+pnpm --filter=@gooonzick/wizard-core test -t "navigation"
 ```
 
 ## Documentation

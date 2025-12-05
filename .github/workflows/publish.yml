@@ -72,7 +72,7 @@ jobs:
             echo "packages=$PACKAGE" >> $GITHUB_OUTPUT
           fi
 
-      - name: Publish @wizard/core
+      - name: Publish @gooonzick/wizard-core
         if: contains(steps.packages.outputs.packages, 'core')
         working-directory: ./packages/core
         run: |
@@ -80,7 +80,7 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Publish @wizard/react
+      - name: Publish @gooonzick/wizard-react
         if: contains(steps.packages.outputs.packages, 'react')
         working-directory: ./packages/react
         run: |
@@ -88,7 +88,7 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Publish @wizard/vue
+      - name: Publish @gooonzick/wizard-vue
         if: contains(steps.packages.outputs.packages, 'vue')
         working-directory: ./packages/vue
         run: |

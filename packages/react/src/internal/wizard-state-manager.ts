@@ -4,7 +4,7 @@ import type {
 	WizardMachine,
 	WizardState,
 	WizardStepDefinition,
-} from "@wizard/core";
+} from "@gooonzick/wizard-core";
 
 /**
  * Subscription channels for fine-grained re-renders

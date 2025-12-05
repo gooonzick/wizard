@@ -1,5 +1,5 @@
 {
-	"name": "@wizard/core",
+	"name": "@gooonzick/wizard-core",
 	"version": "0.0.0",
 	"description": "Core package for WizardForm framework",
 	"type": "module",

@@ -5,8 +5,8 @@ import type {
 	WizardDefinition,
 	WizardState,
 	WizardStepDefinition,
-} from "@wizard/core";
-import { WizardMachine } from "@wizard/core";
+} from "@gooonzick/wizard-core";
+import { WizardMachine } from "@gooonzick/wizard-core";
 import {
 	useCallback,
 	useMemo,

@@ -1,4 +1,4 @@
-# @wizard/core
+# @gooonzick/wizard-core
 
 A framework-agnostic, type-safe state machine for building multi-step wizards in TypeScript.
 
@@ -15,13 +15,13 @@ A framework-agnostic, type-safe state machine for building multi-step wizards in
 ## Installation
 
 ```bash
-npm install @wizard/core
+npm install @gooonzick/wizard-core
 ```
 
 ## Quick Start
 
 ```typescript
-import { WizardMachine, createLinearWizard } from "@wizard/core";
+import { WizardMachine, createLinearWizard } from "@gooonzick/wizard-core";
 
 // 1. Define your data type
 type SignupData = {
@@ -72,22 +72,28 @@ console.log(machine.snapshot.currentStepId); // "email"
 ## Core Concepts
 
 ### Declarative Definitions
+
 Define wizards as data, not imperative code:
 
 ```typescript
-import type { WizardDefinition } from "@wizard/core";
+import type { WizardDefinition } from "@gooonzick/wizard-core";
 
 const wizard: WizardDefinition<MyData> = {
   id: "my-wizard",
   initialStepId: "step1",
   steps: {
-    step1: { /* ... */ },
-    step2: { /* ... */ },
+    step1: {
+      /* ... */
+    },
+    step2: {
+      /* ... */
+    },
   },
 };
 ```
 
 ### State Machine
+
 All navigation and validation goes through `WizardMachine`:
 
 ```typescript
@@ -102,14 +108,17 @@ await machine.validate();
 ```
 
 ### Three Transition Types
+
 Navigate between steps in different ways:
 
 **Static** - Always go to the same step:
+
 ```typescript
 next: { type: "static", to: "next-step" }
 ```
 
 **Conditional** - Branch based on data:
+
 ```typescript
 next: {
   type: "conditional",
@@ -121,6 +130,7 @@ next: {
 ```
 
 **Resolver** - Dynamic resolution with async logic:
+
 ```typescript
 next: {
   type: "resolver",
@@ -132,6 +142,7 @@ next: {
 ```
 
 ### Type Safety
+
 Your entire wizard is typed with your data:
 
 ```typescript
@@ -157,18 +168,16 @@ const wizard: WizardDefinition<CheckoutData> = {
 ## Building Wizards
 
 ### With Builders (Recommended)
+
 Use fluent API for readability:
 
 ```typescript
-import { createWizard } from "@wizard/core";
+import { createWizard } from "@gooonzick/wizard-core";
 
 const wizard = createWizard<SignupData>("signup")
   .initialStep("personal")
   .step("personal", (s) =>
-    s
-      .title("Personal Info")
-      .required("name")
-      .next("contact")
+    s.title("Personal Info").required("name").next("contact"),
   )
   .step("contact", (s) =>
     s
@@ -177,7 +186,7 @@ const wizard = createWizard<SignupData>("signup")
       .previous("personal")
       .onSubmit(async (data) => {
         await api.submit(data);
-      })
+      }),
   )
   .onComplete(async (data) => {
     console.log("Done!");
@@ -186,6 +195,7 @@ const wizard = createWizard<SignupData>("signup")
 ```
 
 ### With Raw Definitions
+
 For complex logic or server-side generation:
 
 ```typescript
@@ -216,6 +226,7 @@ const wizard: WizardDefinition<SignupData> = {
 ```
 
 ### For Simple Linear Flows
+
 Use the linear helper:
 
 ```typescript
@@ -233,37 +244,45 @@ const wizard = createLinearWizard<SignupData>({
 ## Validation
 
 ### Simple Validators
+
 ```typescript
 validate: (data) => ({
   valid: data.name?.length > 0,
   errors: data.name?.length > 0 ? undefined : { name: "Required" },
-})
+});
 ```
 
 ### Using Utilities
+
 ```typescript
-import { combineValidators, requiredFields, createValidator } from "@wizard/core";
+import {
+  combineValidators,
+  requiredFields,
+  createValidator,
+} from "@gooonzick/wizard-core";
 
 const emailValidator = createValidator(
   (data) => data.email?.includes("@"),
   "Invalid email",
-  "email"
+  "email",
 );
 
 step.validate = combineValidators(
   requiredFields("name", "email"),
-  emailValidator
+  emailValidator,
 );
 ```
 
 ### Schema Validation
+
 ```typescript
-import { createStandardSchemaValidator } from "@wizard/core";
+import { createStandardSchemaValidator } from "@gooonzick/wizard-core";
 
 step.validate = createStandardSchemaValidator(myValibotSchema);
 ```
 
 ### Async Validation
+
 ```typescript
 validate: async (data, ctx) => {
   const isAvailable = await ctx.api.checkEmail(data.email);
@@ -271,7 +290,7 @@ validate: async (data, ctx) => {
     valid: isAvailable,
     errors: isAvailable ? undefined : { email: "Already taken" },
   };
-}
+};
 ```
 
 ## Navigation
@@ -376,6 +395,7 @@ machine.snapshot.data.unknown; // ❌ TypeScript error
 ## No Dependencies
 
 The core library has **zero dependencies**. Optional schema validation requires Standard Schema implementations like:
+
 - Valibot
 - ArkType
 - Zod (with adapter)

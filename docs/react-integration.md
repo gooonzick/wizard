@@ -5,7 +5,7 @@ This guide covers how to use the `useWizard` hook to integrate wizards into your
 ## Installation
 
 ```bash
-npm install @wizard/core @wizard/react
+npm install @gooonzick/wizard-core @gooonzick/wizard-react
 ```
 
 ## Basic Usage
@@ -13,8 +13,8 @@ npm install @wizard/core @wizard/react
 The `useWizard()` hook connects a wizard definition to React state and provides everything you need to build a wizard UI.
 
 ```tsx
-import { useWizard } from "@wizard/react";
-import { createLinearWizard } from "@wizard/core";
+import { useWizard } from "@gooonzick/wizard-react";
+import { createLinearWizard } from "@gooonzick/wizard-core";
 
 type SignupData = {
   name: string;
@@ -216,11 +216,14 @@ export function WizardForm() {
 
 ```tsx
 import { useForm } from "react-hook-form";
-import { useWizard } from "@wizard/react";
+import { useWizard } from "@gooonzick/wizard-react";
 
 export function FormWizard() {
   const { register, handleSubmit, watch } = useForm();
-  const { state, navigation, actions, validation } = useWizard({ definition, initialData });
+  const { state, navigation, actions, validation } = useWizard({
+    definition,
+    initialData,
+  });
 
   const formData = watch();
 
@@ -236,7 +239,9 @@ export function FormWizard() {
     <form onSubmit={handleSubmit(handleStepSubmit)}>
       {state.currentStepId === "personal" && <input {...register("name")} />}
 
-      <button type="submit">{navigation.isLastStep ? "Complete" : "Next"}</button>
+      <button type="submit">
+        {navigation.isLastStep ? "Complete" : "Next"}
+      </button>
     </form>
   );
 }
@@ -292,7 +297,13 @@ export function PersistentWizard() {
     },
   });
 
-  return <WizardForm state={wizard.state} actions={wizard.actions} navigation={wizard.navigation} />;
+  return (
+    <WizardForm
+      state={wizard.state}
+      actions={wizard.actions}
+      navigation={wizard.navigation}
+    />
+  );
 }
 ```
 
@@ -321,7 +332,13 @@ export function SafeWizard() {
     );
   }
 
-  return <WizardForm state={wizard.state} actions={wizard.actions} navigation={wizard.navigation} />;
+  return (
+    <WizardForm
+      state={wizard.state}
+      actions={wizard.actions}
+      navigation={wizard.navigation}
+    />
+  );
 }
 ```
 
@@ -338,7 +355,8 @@ export function ProgressWizard() {
     <div>
       <div className="progress-bar" style={{ width: `${progress}%` }} />
       <p>
-        Step {navigation.visitedSteps.length} of {navigation.availableSteps.length}
+        Step {navigation.visitedSteps.length} of{" "}
+        {navigation.availableSteps.length}
       </p>
 
       {state.currentStepId === "review" && (
@@ -421,7 +439,10 @@ export function TabWizard() {
 The `useWizard()` hook returns an organized object with state grouped by concern:
 
 ```tsx
-const { state, validation, navigation, loading, actions } = useWizard({ definition, initialData });
+const { state, validation, navigation, loading, actions } = useWizard({
+  definition,
+  initialData,
+});
 
 // State slice - current step and data
 state.data; // Current form data
@@ -473,7 +494,7 @@ import {
   useWizardValidation,
   useWizardLoading,
   useWizardActions,
-} from "@wizard/react";
+} from "@gooonzick/wizard-react";
 
 function App() {
   return (
@@ -547,7 +568,10 @@ The `useWizard()` hook now returns an organized object with nested slices:
 
 ```tsx
 // New API structure
-const { state, validation, navigation, loading, actions } = useWizard({ definition, initialData });
+const { state, validation, navigation, loading, actions } = useWizard({
+  definition,
+  initialData,
+});
 
 // Access state
 const data = state.data;
@@ -585,7 +609,9 @@ Keep the wizard logic separate from your UI component:
 // ❌ Don't: Logic mixed with UI
 function MyWizard() {
   const { actions } = useWizard({ definition, initialData });
-  return <input onChange={(e) => actions.updateField("name", e.target.value)} />;
+  return (
+    <input onChange={(e) => actions.updateField("name", e.target.value)} />
+  );
 }
 
 // ✅ Do: Use sub-components
@@ -594,8 +620,16 @@ function MyWizard() {
   return <PersonalStep state={wizard.state} actions={wizard.actions} />;
 }
 
-function PersonalStep({ state, actions }: { state: UseWizardState<MyData>; actions: UseWizardActions<MyData> }) {
-  return <input onChange={(e) => actions.updateField("name", e.target.value)} />;
+function PersonalStep({
+  state,
+  actions,
+}: {
+  state: UseWizardState<MyData>;
+  actions: UseWizardActions<MyData>;
+}) {
+  return (
+    <input onChange={(e) => actions.updateField("name", e.target.value)} />
+  );
 }
 ```
 
@@ -748,7 +782,7 @@ const handleNameChange = useCallback(
   (e: React.ChangeEvent<HTMLInputElement>) => {
     actions.updateField("name", e.target.value);
   },
-  [actions]
+  [actions],
 );
 ```
 

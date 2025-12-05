@@ -1,6 +1,6 @@
 # WizardForm Documentation
 
-Welcome to the WizardForm framework documentation. This directory contains comprehensive guides for using the `@wizard/core`, `@wizard/react`, and `@wizard/vue` packages.
+Welcome to the WizardForm framework documentation. This directory contains comprehensive guides for using the `@gooonzick/wizard-core`, `@gooonzick/wizard-react`, and `@gooonzick/wizard-vue` packages.
 
 ## Start Here
 
@@ -10,14 +10,14 @@ Welcome to the WizardForm framework documentation. This directory contains compr
 
 ### For Framework Users
 
-| Guide | Purpose | Best For |
-|-------|---------|----------|
-| [Getting Started](./getting-started.md) | Installation and quick start | First-time users |
-| [Core Concepts](./core-concepts.md) | Understand how WizardForm works | Learning the fundamentals |
-| [Defining Wizards](./defining-wizards.md) | Different ways to build wizards | Building your first wizard |
-| [React Integration](./react-integration.md) | Using `useWizard()` in React | React developers |
-| [Vue Integration](../packages/vue/README.md) | Using composables in Vue 3 | Vue developers |
-| [API Reference](./api-reference.md) | Complete type signatures | Detailed lookups |
+| Guide                                        | Purpose                         | Best For                   |
+| -------------------------------------------- | ------------------------------- | -------------------------- |
+| [Getting Started](./getting-started.md)      | Installation and quick start    | First-time users           |
+| [Core Concepts](./core-concepts.md)          | Understand how WizardForm works | Learning the fundamentals  |
+| [Defining Wizards](./defining-wizards.md)    | Different ways to build wizards | Building your first wizard |
+| [React Integration](./react-integration.md)  | Using `useWizard()` in React    | React developers           |
+| [Vue Integration](../packages/vue/README.md) | Using composables in Vue 3      | Vue developers             |
+| [API Reference](./api-reference.md)          | Complete type signatures        | Detailed lookups           |
 
 ### Quick Navigation
 
@@ -45,35 +45,42 @@ Welcome to the WizardForm framework documentation. This directory contains compr
 
 The quickest way to get started with each package:
 
-- **@wizard/core**: See [packages/core/README.md](../packages/core/README.md)
-- **@wizard/react**: See [packages/react/README.md](../packages/react/README.md)
-- **@wizard/vue**: See [packages/vue/README.md](../packages/vue/README.md)
+- **@gooonzick/wizard-core**: See [packages/core/README.md](../packages/core/README.md)
+- **@gooonzick/wizard-react**: See [packages/react/README.md](../packages/react/README.md)
+- **@gooonzick/wizard-vue**: See [packages/vue/README.md](../packages/vue/README.md)
 
 ## Core Concepts at a Glance
 
 ### State Machine
+
 WizardForm is built on finite state machine principles. Your wizard has defined steps and transitions between them.
 
 ### Declarative
+
 Define wizards as data, not imperative code. Wizards are easy to serialize, test, and reason about.
 
 ### Type Safe
+
 Full TypeScript support with generics. Your data type flows through the entire API.
 
 ### Three Transition Types
+
 - **Static**: Always go to the same step
 - **Conditional**: Branch based on data
 - **Resolver**: Dynamic resolution via async logic
 
 ### Validation
+
 Field-level validation with built-in utilities, schema support, and custom predicates. Supports both sync and async.
 
 ### Extensible
+
 Use context to pass APIs, loggers, and routers to validators and lifecycle hooks.
 
 ## Common Patterns
 
 ### Simple Linear Wizard
+
 ```typescript
 const wizard = createLinearWizard({
   id: "signup",
@@ -85,18 +92,20 @@ const wizard = createLinearWizard({
 ```
 
 ### With Conditional Branching
+
 ```typescript
 const wizard = createWizard()
   .step("plan", (s) =>
     s.nextWhen([
       { when: (d) => d.isPremium, to: "premium-setup" },
       { when: () => true, to: "basic-setup" },
-    ])
+    ]),
   )
   .build();
 ```
 
 ### In React
+
 ```tsx
 const { state, navigation, actions } = useWizard({
   definition,
@@ -113,13 +122,14 @@ return (
 ```
 
 ### In Vue
+
 ```vue
 <script setup>
-import { useWizard } from '@wizard/vue';
+import { useWizard } from "@gooonzick/wizard-vue";
 
 const { state, navigation, actions } = useWizard({
   definition,
-  initialData: { name: '' },
+  initialData: { name: "" },
 });
 </script>
 
@@ -133,11 +143,11 @@ const { state, navigation, actions } = useWizard({
 
 ## Choosing an Approach
 
-| Approach | Complexity | Flexibility | Best For |
-|----------|-----------|-------------|----------|
-| Linear Helper | Minimal | None | Simple 2-3 step flows |
-| Builder Pattern | Low-Medium | High | Most use cases |
-| Declarative | Medium | Very High | Complex logic, server-side definitions |
+| Approach        | Complexity | Flexibility | Best For                               |
+| --------------- | ---------- | ----------- | -------------------------------------- |
+| Linear Helper   | Minimal    | None        | Simple 2-3 step flows                  |
+| Builder Pattern | Low-Medium | High        | Most use cases                         |
+| Declarative     | Medium     | Very High   | Complex logic, server-side definitions |
 
 ## TypeScript Support
 
@@ -184,10 +194,10 @@ See [API Reference](./api-reference.md) for complete documentation.
 
 ## Framework Agnostic
 
-`@wizard/core` works with any JavaScript/TypeScript framework:
+`@gooonzick/wizard-core` works with any JavaScript/TypeScript framework:
 
-- React (with `@wizard/react`)
-- Vue 3 (with `@wizard/vue`)
+- React (with `@gooonzick/wizard-react`)
+- Vue 3 (with `@gooonzick/wizard-vue`)
 - Svelte
 - Angular
 - Vanilla JS/TS

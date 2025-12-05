@@ -1,4 +1,4 @@
-import type { WizardData } from "@wizard/core";
+import type { WizardData } from "@gooonzick/wizard-core";
 import type {
 	UseWizardActions,
 	UseWizardLoading,

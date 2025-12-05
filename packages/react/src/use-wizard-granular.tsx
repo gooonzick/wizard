@@ -1,4 +1,4 @@
-import type { StepId, WizardData } from "@wizard/core";
+import type { StepId, WizardData } from "@gooonzick/wizard-core";
 import { useCallback, useMemo, useSyncExternalStore } from "react";
 import type {
 	UseWizardActions,

@@ -1,4 +1,4 @@
-# @wizard/react
+# @gooonzick/wizard-react
 
 React integration for the WizardForm state machine. Provides a convenient `useWizard()` hook that connects your wizard definitions to React state.
 
@@ -16,14 +16,14 @@ React integration for the WizardForm state machine. Provides a convenient `useWi
 ## Installation
 
 ```bash
-npm install @wizard/core @wizard/react
+npm install @gooonzick/wizard-core @gooonzick/wizard-react
 ```
 
 ## Quick Start
 
 ```tsx
-import { useWizard } from "@wizard/react";
-import { createLinearWizard } from "@wizard/core";
+import { useWizard } from "@gooonzick/wizard-react";
+import { createLinearWizard } from "@gooonzick/wizard-core";
 
 type SignupData = {
   name: string;
@@ -128,41 +128,41 @@ The hook returns state grouped into five logical slices for clarity:
 
 ```tsx
 // State slice - current step and data
-state.currentStepId
-state.currentStep
-state.data
-state.isCompleted
+state.currentStepId;
+state.currentStep;
+state.data;
+state.isCompleted;
 
 // Validation slice
-validation.isValid
-validation.validationErrors
+validation.isValid;
+validation.validationErrors;
 
 // Navigation slice (state + methods)
-navigation.canGoNext
-navigation.canGoPrevious
-navigation.isFirstStep
-navigation.isLastStep
-navigation.visitedSteps
-navigation.availableSteps
-navigation.stepHistory
-navigation.goNext()
-navigation.goPrevious()
-navigation.goBack(n)
-navigation.goToStep(stepId)
+navigation.canGoNext;
+navigation.canGoPrevious;
+navigation.isFirstStep;
+navigation.isLastStep;
+navigation.visitedSteps;
+navigation.availableSteps;
+navigation.stepHistory;
+navigation.goNext();
+navigation.goPrevious();
+navigation.goBack(n);
+navigation.goToStep(stepId);
 
 // Loading slice
-loading.isValidating
-loading.isSubmitting
-loading.isNavigating
+loading.isValidating;
+loading.isSubmitting;
+loading.isNavigating;
 
 // Actions slice
-actions.updateField("name", "John")
-actions.updateData((d) => ({ ...d, name: "John" }))
-actions.setData(newData)
-actions.validate()
-actions.canSubmit()
-actions.submit()
-actions.reset()
+actions.updateField("name", "John");
+actions.updateData((d) => ({ ...d, name: "John" }));
+actions.setData(newData);
+actions.validate();
+actions.canSubmit();
+actions.submit();
+actions.reset();
 ```
 
 ## Hook API
@@ -241,7 +241,12 @@ interface UseWizardActions<T> {
 For performance-critical applications, use `WizardProvider` with granular hooks to subscribe only to relevant state changes:
 
 ```tsx
-import { WizardProvider, useWizardData, useWizardNavigation, useWizardActions } from "@wizard/react";
+import {
+  WizardProvider,
+  useWizardData,
+  useWizardNavigation,
+  useWizardActions,
+} from "@gooonzick/wizard-react";
 
 function App() {
   return (
@@ -267,7 +272,9 @@ function MyWizardForm() {
         value={data.name}
         onChange={(e) => updateField("name", e.target.value)}
       />
-      <button onClick={() => goNext()} disabled={!canGoNext}>Next</button>
+      <button onClick={() => goNext()} disabled={!canGoNext}>
+        Next
+      </button>
     </div>
   );
 }
@@ -284,6 +291,7 @@ function MyWizardForm() {
 ### When to Use Granular Hooks
 
 Use granular hooks when:
+
 - Your wizard has many fields and complex components
 - You want to prevent unnecessary re-renders
 - You're optimizing a large or performance-critical form
@@ -297,7 +305,10 @@ Use granular hooks when:
 
 ```tsx
 function MyWizard() {
-  const { state, navigation, actions, loading } = useWizard({ definition, initialData });
+  const { state, navigation, actions, loading } = useWizard({
+    definition,
+    initialData,
+  });
 
   return (
     <>
@@ -309,9 +320,7 @@ function MyWizard() {
         <ContactStep data={state.data} onUpdate={actions.updateField} />
       )}
 
-      {state.currentStepId === "review" && (
-        <ReviewStep data={state.data} />
-      )}
+      {state.currentStepId === "review" && <ReviewStep data={state.data} />}
 
       <button
         onClick={() => navigation.goPrevious()}
@@ -334,14 +343,17 @@ function MyWizard() {
 
 ```tsx
 import { useForm } from "react-hook-form";
-import { useWizard } from "@wizard/react";
+import { useWizard } from "@gooonzick/wizard-react";
 
 function FormWizard() {
   const { register, watch, handleSubmit } = useForm({
     defaultValues: initialData,
   });
 
-  const { state, navigation, actions, validation } = useWizard({ definition, initialData });
+  const { state, navigation, actions, validation } = useWizard({
+    definition,
+    initialData,
+  });
   const formData = watch();
 
   const handleNext = async () => {
@@ -406,7 +418,13 @@ function PersistentWizard() {
     },
   });
 
-  return <MyWizardForm state={wizard.state} actions={wizard.actions} navigation={wizard.navigation} />;
+  return (
+    <MyWizardForm
+      state={wizard.state}
+      actions={wizard.actions}
+      navigation={wizard.navigation}
+    />
+  );
 }
 ```
 
@@ -419,13 +437,19 @@ function PersistentWizard() {
 const wizard = createWizard(/* ... */).build();
 
 function MyComponent() {
-  const { state, actions, navigation } = useWizard({ definition: wizard, initialData });
+  const { state, actions, navigation } = useWizard({
+    definition: wizard,
+    initialData,
+  });
 }
 
 // ❌ Bad - recreated every render
 function MyComponent() {
   const wizard = createWizard(/* ... */).build();
-  const { state, actions, navigation } = useWizard({ definition: wizard, initialData });
+  const { state, actions, navigation } = useWizard({
+    definition: wizard,
+    initialData,
+  });
 }
 ```
 

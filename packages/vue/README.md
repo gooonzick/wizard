@@ -1,15 +1,15 @@
-# @wizard/vue
+# @gooonzick/wizard-vue
 
 Vue 3 Composition API integration for the Wizard framework.
 
 ## Installation
 
 ```bash
-npm install @wizard/vue @wizard/core
+npm install @gooonzick/wizard-vue @gooonzick/wizard-core
 # or
-pnpm add @wizard/vue @wizard/core
+pnpm add @gooonzick/wizard-vue @gooonzick/wizard-core
 # or
-yarn add @wizard/vue @wizard/core
+yarn add @gooonzick/wizard-vue @gooonzick/wizard-core
 ```
 
 ## Quick Start
@@ -18,8 +18,8 @@ yarn add @wizard/vue @wizard/core
 
 ```vue
 <script setup lang="ts">
-import { useWizard } from '@wizard/vue';
-import { createLinearWizard } from '@wizard/core';
+import { useWizard } from "@gooonzick/wizard-vue";
+import { createLinearWizard } from "@gooonzick/wizard-core";
 
 interface FormData {
   name: string;
@@ -28,17 +28,17 @@ interface FormData {
 }
 
 const definition = createLinearWizard<FormData>({
-  id: 'my-wizard',
+  id: "my-wizard",
   steps: [
-    { id: 'personal', title: 'Personal Info' },
-    { id: 'contact', title: 'Contact' },
-    { id: 'review', title: 'Review' },
+    { id: "personal", title: "Personal Info" },
+    { id: "contact", title: "Contact" },
+    { id: "review", title: "Review" },
   ],
 });
 
 const { state, navigation, actions } = useWizard({
   definition,
-  initialData: { name: '', email: '', age: 0 },
+  initialData: { name: "", email: "", age: 0 },
 });
 </script>
 
@@ -49,7 +49,9 @@ const { state, navigation, actions } = useWizard({
     <div v-if="state.currentStepId.value === 'personal'">
       <input
         :value="state.data.value.name"
-        @input="actions.updateField('name', ($event.target as HTMLInputElement).value)"
+        @input="
+          actions.updateField('name', ($event.target as HTMLInputElement).value)
+        "
         placeholder="Name"
       />
     </div>
@@ -57,7 +59,12 @@ const { state, navigation, actions } = useWizard({
     <div v-else-if="state.currentStepId.value === 'contact'">
       <input
         :value="state.data.value.email"
-        @input="actions.updateField('email', ($event.target as HTMLInputElement).value)"
+        @input="
+          actions.updateField(
+            'email',
+            ($event.target as HTMLInputElement).value,
+          )
+        "
         placeholder="Email"
       />
     </div>
@@ -74,10 +81,7 @@ const { state, navigation, actions } = useWizard({
       Previous
     </button>
 
-    <button
-      @click="navigation.goNext"
-      :disabled="!navigation.canGoNext.value"
-    >
+    <button @click="navigation.goNext" :disabled="!navigation.canGoNext.value">
       Next
     </button>
   </div>
@@ -89,25 +93,22 @@ const { state, navigation, actions } = useWizard({
 ```vue
 <!-- App.vue -->
 <script setup lang="ts">
-import { WizardProvider } from '@wizard/vue';
-import { createLinearWizard } from '@wizard/core';
-import WizardSteps from './WizardSteps.vue';
-import WizardNavigation from './WizardNavigation.vue';
+import { WizardProvider } from "@gooonzick/wizard-vue";
+import { createLinearWizard } from "@gooonzick/wizard-core";
+import WizardSteps from "./WizardSteps.vue";
+import WizardNavigation from "./WizardNavigation.vue";
 
 const definition = createLinearWizard({
-  id: 'my-wizard',
+  id: "my-wizard",
   steps: [
-    { id: 'step1', title: 'Step 1' },
-    { id: 'step2', title: 'Step 2' },
+    { id: "step1", title: "Step 1" },
+    { id: "step2", title: "Step 2" },
   ],
 });
 </script>
 
 <template>
-  <WizardProvider
-    :definition="definition"
-    :initialData="{ name: '' }"
-  >
+  <WizardProvider :definition="definition" :initialData="{ name: '' }">
     <WizardSteps />
     <WizardNavigation />
   </WizardProvider>
@@ -117,7 +118,7 @@ const definition = createLinearWizard({
 ```vue
 <!-- WizardSteps.vue -->
 <script setup lang="ts">
-import { useWizardData, useWizardActions } from '@wizard/vue';
+import { useWizardData, useWizardActions } from "@gooonzick/wizard-vue";
 
 const { currentStepId, data } = useWizardData();
 const { updateField } = useWizardActions();
@@ -137,7 +138,7 @@ const { updateField } = useWizardActions();
 ```vue
 <!-- WizardNavigation.vue -->
 <script setup lang="ts">
-import { useWizardNavigation } from '@wizard/vue';
+import { useWizardNavigation } from "@gooonzick/wizard-vue";
 
 const { canGoNext, canGoPrevious, goNext, goPrevious } = useWizardNavigation();
 </script>
@@ -147,9 +148,7 @@ const { canGoNext, canGoPrevious, goNext, goPrevious } = useWizardNavigation();
     <button @click="goPrevious" :disabled="!canGoPrevious.value">
       Previous
     </button>
-    <button @click="goNext" :disabled="!canGoNext.value">
-      Next
-    </button>
+    <button @click="goNext" :disabled="!canGoNext.value">Next</button>
   </div>
 </template>
 ```
@@ -163,6 +162,7 @@ const { canGoNext, canGoPrevious, goNext, goPrevious } = useWizardNavigation();
 Main composable for wizard state management. Returns organized state slices.
 
 **Parameters:**
+
 - `definition: WizardDefinition<T>` - Wizard configuration
 - `initialData: T` - Initial form data
 - `context?: WizardContext` - Optional context for validators/hooks
@@ -173,6 +173,7 @@ Main composable for wizard state management. Returns organized state slices.
 - `onError?: (error) => void` - Error callback
 
 **Returns:**
+
 - `state` - Current step and data (reactive refs)
 - `validation` - Validation state and errors
 - `navigation` - Navigation state and methods
@@ -207,12 +208,12 @@ interface MyFormData {
 
 const { state, actions } = useWizard<MyFormData>({
   definition,
-  initialData: { name: '', email: '' },
+  initialData: { name: "", email: "" },
 });
 
 // TypeScript knows the shape of data
-actions.updateField('name', 'John'); // ✓ OK
-actions.updateField('invalid', 'value'); // ✗ Error
+actions.updateField("name", "John"); // ✓ OK
+actions.updateField("invalid", "value"); // ✗ Error
 ```
 
 ## License

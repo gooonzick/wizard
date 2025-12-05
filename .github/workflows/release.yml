@@ -3,10 +3,10 @@ name: Release
 on:
   push:
     tags:
-      - 'v*.*.*'
-      - '@wizard/core@*'
-      - '@wizard/react@*'
-      - '@wizard/vue@*'
+      - "v*.*.*"
+      - "@gooonzick/wizard-core@*"
+      - "@gooonzick/wizard-react@*"
+      - "@gooonzick/wizard-vue@*"
 
 jobs:
   create-release:

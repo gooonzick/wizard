@@ -1,5 +1,5 @@
+import { createLinearWizard } from "@gooonzick/wizard-core";
 import { mount } from "@vue/test-utils";
-import { createLinearWizard } from "@wizard/core";
 import { describe, expect, it } from "vitest";
 import { defineComponent } from "vue";
 import {

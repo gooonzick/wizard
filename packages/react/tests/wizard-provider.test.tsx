@@ -1,5 +1,5 @@
+import { createLinearWizard } from "@gooonzick/wizard-core";
 import { render, screen } from "@testing-library/react";
-import { createLinearWizard } from "@wizard/core";
 import { describe, expect, it } from "vitest";
 import {
 	useWizardProviderContext,

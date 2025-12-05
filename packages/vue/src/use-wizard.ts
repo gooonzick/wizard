@@ -1,5 +1,5 @@
-import type { StepId, WizardData, WizardState } from "@wizard/core";
-import { WizardMachine } from "@wizard/core";
+import type { StepId, WizardData, WizardState } from "@gooonzick/wizard-core";
+import { WizardMachine } from "@gooonzick/wizard-core";
 import {
 	type ComputedRef,
 	computed,

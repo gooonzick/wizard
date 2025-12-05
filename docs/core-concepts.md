@@ -23,10 +23,10 @@ const machine = new WizardMachine(definition, context, initialData, {
 });
 
 // Access state via getters (not methods)
-console.log(machine.snapshot);      // Get current state
-console.log(machine.currentStep);   // Get current step definition
-console.log(machine.visited);       // Get visited steps
-console.log(machine.history);       // Get navigation history
+console.log(machine.snapshot); // Get current state
+console.log(machine.currentStep); // Get current step definition
+console.log(machine.visited); // Get visited steps
+console.log(machine.history); // Get navigation history
 ```
 
 ## 2. Wizard Definition
@@ -35,14 +35,15 @@ A `WizardDefinition` is a **declarative data structure** that describes your ent
 
 ```typescript
 interface WizardDefinition<T> {
-  id: string;                           // Unique identifier
-  initialStepId: string;                // Starting step
+  id: string; // Unique identifier
+  initialStepId: string; // Starting step
   steps: Record<string, WizardStepDefinition<T>>; // All steps
-  onComplete?: (data: T) => void;       // Called when finished
+  onComplete?: (data: T) => void; // Called when finished
 }
 ```
 
 The definition is just **data**, not imperative code. This means:
+
 - It's serializable (can be sent from a server)
 - It's easy to test
 - UI frameworks don't get coupled to it
@@ -89,6 +90,7 @@ const personalInfoStep: WizardStepDefinition<SignupData> = {
 A transition tells the wizard **how to navigate** between steps. There are three types:
 
 ### Static Transition
+
 Always go to the same next step:
 
 ```typescript
@@ -98,6 +100,7 @@ next: { type: "static", to: "billing-info" }
 Use when: There's only one logical next step.
 
 ### Conditional Transition
+
 Branch based on data:
 
 ```typescript
@@ -114,6 +117,7 @@ next: {
 Use when: The next step depends on user choices or data state.
 
 ### Resolver Transition
+
 Dynamically resolve using async logic:
 
 ```typescript
@@ -150,25 +154,26 @@ interface ValidationResult {
 validate: (data) => ({
   valid: data.email?.includes("@"),
   errors: !data.email?.includes("@") ? { email: "Invalid email" } : undefined,
-})
+});
 ```
 
 ### Using Validator Utilities
 
 ```typescript
-import { combineValidators, requiredFields, createValidator } from "@wizard/core";
+import {
+  combineValidators,
+  requiredFields,
+  createValidator,
+} from "@gooonzick/wizard-core";
 
 const emailValidator = createValidator(
   (data) => data.email?.includes("@"),
   "Invalid email format",
-  "email"
+  "email",
 );
 
 const step = {
-  validate: combineValidators(
-    requiredFields("email", "name"),
-    emailValidator
-  ),
+  validate: combineValidators(requiredFields("email", "name"), emailValidator),
 };
 ```
 
@@ -177,7 +182,7 @@ const step = {
 Use validators from Valibot, ArkType, or any Standard Schema implementation:
 
 ```typescript
-import { createStandardSchemaValidator } from "@wizard/core";
+import { createStandardSchemaValidator } from "@gooonzick/wizard-core";
 
 const step = {
   validate: createStandardSchemaValidator(myValibotSchema),
@@ -193,7 +198,7 @@ validate: async (data, ctx) => {
     valid: isAvailable,
     errors: isAvailable ? undefined : { email: "Email already taken" },
   };
-}
+};
 ```
 
 ## 6. Guards
@@ -209,6 +214,7 @@ const invoiceStep: WizardStepDefinition<SignupData> = {
 ```
 
 Guards can be:
+
 - **Boolean**: `enabled: true`
 - **Predicate**: `enabled: (data) => data.isDeveloper`
 - **Async**: `enabled: async (data, ctx) => await ctx.api.checkAccess()`
@@ -218,7 +224,7 @@ Guards can be:
 Combine multiple guards:
 
 ```typescript
-import { andGuards, orGuards, notGuard } from "@wizard/core";
+import { andGuards, orGuards, notGuard } from "@gooonzick/wizard-core";
 
 const isPremium = (data) => data.plan === "premium";
 const hasInvoice = (data) => data.needsInvoice;
@@ -238,6 +244,7 @@ enabled: notGuard((data) => data.testMode);
 Steps can execute code at key moments:
 
 ### onEnter
+
 Called when the step becomes active:
 
 ```typescript
@@ -246,27 +253,29 @@ onEnter: async (data, ctx) => {
   const defaultValues = await ctx.api.getDefaults();
   // Track analytics
   ctx.logger?.log(`Entered step ${data.step}`);
-}
+};
 ```
 
 ### onLeave
+
 Called before leaving the step:
 
 ```typescript
 onLeave: async (data, ctx) => {
   // Auto-save progress
   await ctx.api.saveProgress(data);
-}
+};
 ```
 
 ### onSubmit
+
 Called when the step is submitted:
 
 ```typescript
 onSubmit: async (data, ctx) => {
   // Send data to server
   await ctx.api.submitStep(data);
-}
+};
 ```
 
 **Important**: Lifecycle order is: **onEnter → validation/submission → onLeave**
@@ -317,7 +326,7 @@ validate: async (data, ctx) => {
   const myCtx = ctx as MyContext;
   const isValid = await myCtx.api.validate(data);
   return { valid: isValid };
-}
+};
 ```
 
 ## 9. Events and State
@@ -385,7 +394,7 @@ This prevents data mismatches and provides IDE autocomplete.
 Here's how these concepts work together:
 
 ```typescript
-import { createWizard } from "@wizard/core";
+import { createWizard } from "@gooonzick/wizard-core";
 
 type OnboardingData = {
   name: string;
@@ -398,10 +407,7 @@ const wizard = createWizard<OnboardingData>("onboarding")
 
   // Step 1: Get user name (static next)
   .step("name", (s) =>
-    s
-      .title("What's your name?")
-      .required("name")
-      .next("company")
+    s.title("What's your name?").required("name").next("company"),
   )
 
   // Step 2: Get company size (conditional next)
@@ -412,7 +418,7 @@ const wizard = createWizard<OnboardingData>("onboarding")
       .nextWhen([
         { when: (d) => d.wantsTraining, to: "training" },
         { when: () => true, to: "summary" },
-      ])
+      ]),
   )
 
   // Step 3: Training (conditionally shown, resolver previous)
@@ -422,18 +428,16 @@ const wizard = createWizard<OnboardingData>("onboarding")
       .enabled((d) => d.wantsTraining)
       .previous({
         type: "resolver",
-        resolve: (d) => d.wantsTraining ? "company" : null,
+        resolve: (d) => (d.wantsTraining ? "company" : null),
       })
-      .next("summary")
+      .next("summary"),
   )
 
   // Step 4: Summary (async submit)
   .step("summary", (s) =>
-    s
-      .title("Review")
-      .onSubmit(async (data, ctx) => {
-        await ctx.api.submitOnboarding(data);
-      })
+    s.title("Review").onSubmit(async (data, ctx) => {
+      await ctx.api.submitOnboarding(data);
+    }),
   )
 
   .onComplete(async (data, ctx) => {
@@ -444,6 +448,7 @@ const wizard = createWizard<OnboardingData>("onboarding")
 ```
 
 This wizard demonstrates:
+
 - **Static transitions** (name → company)
 - **Conditional transitions** (company → training or summary based on `wantsTraining`)
 - **Step guards** (training step only shows if `wantsTraining`)

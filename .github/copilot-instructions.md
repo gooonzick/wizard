@@ -6,8 +6,8 @@
 
 ```
 packages/
-├── core/   # @wizard/core - State machine, types, builders, validators
-└── react/  # @wizard/react - useWizard hook + granular hooks (useWizardData, useWizardNavigation, etc.)
+├── core/   # @gooonzick/wizard-core - State machine, types, builders, validators
+└── react/  # @gooonzick/wizard-react - useWizard hook + granular hooks (useWizardData, useWizardNavigation, etc.)
 examples/   # React example apps consuming the packages
 ```
 
@@ -21,7 +21,7 @@ pnpm test                               # Run all tests once
 pnpm typecheck                          # TypeScript checks
 pnpm lint:fix                           # Auto-fix Biome issues
 pnpm knip                               # Detect unused code/deps
-turbo run test --filter=@wizard/core    # Single package
+turbo run test --filter=@gooonzick/wizard-core    # Single package
 ```
 
 ## Core Concepts

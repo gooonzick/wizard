@@ -1,12 +1,13 @@
 # API Reference
 
-Complete reference for all public types and functions in `@wizard/core` and `@wizard/react`.
+Complete reference for all public types and functions in `@gooonzick/wizard-core` and `@gooonzick/wizard-react`.
 
-## Core Package (`@wizard/core`)
+## Core Package (`@gooonzick/wizard-core`)
 
 ### Base Types
 
 #### `WizardDefinition<T>`
+
 Complete wizard configuration.
 
 ```typescript
@@ -19,16 +20,22 @@ interface WizardDefinition<T> {
 ```
 
 **Example:**
+
 ```typescript
 const definition: WizardDefinition<MyData> = {
   id: "my-wizard",
   initialStepId: "step1",
-  steps: { /* ... */ },
-  onComplete: async (data, ctx) => { /* ... */ },
+  steps: {
+    /* ... */
+  },
+  onComplete: async (data, ctx) => {
+    /* ... */
+  },
 };
 ```
 
 #### `WizardStepDefinition<T>`
+
 Configuration for a single step.
 
 ```typescript
@@ -46,6 +53,7 @@ interface WizardStepDefinition<T> {
 ```
 
 **Example:**
+
 ```typescript
 const step: WizardStepDefinition<MyData> = {
   id: "personal",
@@ -59,6 +67,7 @@ const step: WizardStepDefinition<MyData> = {
 ```
 
 #### `WizardState<T>`
+
 Current snapshot of wizard state.
 
 ```typescript
@@ -72,6 +81,7 @@ interface WizardState<T> {
 ```
 
 #### `ValidationResult`
+
 Result of validation.
 
 ```typescript
@@ -82,6 +92,7 @@ interface ValidationResult {
 ```
 
 #### `WizardContext`
+
 Context passed to validators, hooks, and transitions. Extensible.
 
 ```typescript
@@ -93,6 +104,7 @@ interface WizardContext {
 ```
 
 #### `StepMeta`
+
 Metadata for step display.
 
 ```typescript
@@ -102,6 +114,7 @@ interface StepMeta {
 ```
 
 #### `SyncOrAsync<T>`
+
 Type alias for sync or async operations.
 
 ```typescript
@@ -113,28 +126,31 @@ type SyncOrAsync<T> = T | Promise<T>;
 ### Validator Types
 
 #### `Validator<T>`
+
 Function that validates step data.
 
 ```typescript
 type Validator<T> = (
   data: T,
-  ctx: WizardContext
+  ctx: WizardContext,
 ) => SyncOrAsync<ValidationResult>;
 ```
 
 #### `Validator Utilities`
 
 ##### `combineValidators(...validators)`
+
 Combine multiple validators (all must pass).
 
 ```typescript
 const combined = combineValidators(
   requiredFields("name", "email"),
-  createValidator((data) => data.age >= 18, "Must be 18+", "age")
+  createValidator((data) => data.age >= 18, "Must be 18+", "age"),
 );
 ```
 
 ##### `requiredFields(...fields, options?)`
+
 Create validator for required fields.
 
 ```typescript
@@ -142,6 +158,7 @@ const validator = requiredFields("name", "email");
 ```
 
 **Options:**
+
 ```typescript
 interface RequiredFieldsOptions<T> {
   /** Custom error messages per field */
@@ -152,6 +169,7 @@ interface RequiredFieldsOptions<T> {
 ```
 
 **Example:**
+
 ```typescript
 // Default messages
 requiredFields("name", "email");
@@ -171,17 +189,19 @@ requiredFields("name", "email", {
 ```
 
 ##### `createValidator(predicate, errorMsg, fieldName?)`
+
 Create a simple predicate-based validator.
 
 ```typescript
 const emailValidator = createValidator(
   (data) => data.email?.includes("@"),
   "Invalid email format",
-  "email"
+  "email",
 );
 ```
 
 ##### `alwaysValid`
+
 Validator that always passes.
 
 ```typescript
@@ -191,10 +211,11 @@ const step = {
 ```
 
 ##### `createStandardSchemaValidator(schema, options?)`
+
 Wrap Standard Schema validators (Valibot, ArkType, etc.).
 
 ```typescript
-import { createStandardSchemaValidator } from "@wizard/core";
+import { createStandardSchemaValidator } from "@gooonzick/wizard-core";
 
 const validator = createStandardSchemaValidator(mySchema);
 
@@ -205,6 +226,7 @@ const custom = createStandardSchemaValidator(mySchema, {
 ```
 
 **Options:**
+
 ```typescript
 interface StandardSchemaValidatorOptions {
   mapIssueToField?: (issue: any) => string | undefined;
@@ -216,6 +238,7 @@ interface StandardSchemaValidatorOptions {
 ### Transition Types
 
 #### `StepTransition<T>`
+
 Union of transition types.
 
 ```typescript
@@ -227,6 +250,7 @@ type StepTransition<T> =
 ```
 
 #### `StaticTransition`
+
 Direct transition to a step.
 
 ```typescript
@@ -237,11 +261,13 @@ interface StaticTransition {
 ```
 
 **Example:**
+
 ```typescript
 next: { type: "static", to: "contact-info" }
 ```
 
 #### `ConditionalTransition<T>`
+
 Branch based on conditions.
 
 ```typescript
@@ -257,6 +283,7 @@ interface ConditionalBranch<T> {
 ```
 
 **Example:**
+
 ```typescript
 next: {
   type: "conditional",
@@ -268,6 +295,7 @@ next: {
 ```
 
 #### `ResolverTransition<T>`
+
 Dynamic resolution via async function.
 
 ```typescript
@@ -278,11 +306,12 @@ interface ResolverTransition<T> {
 
 type StepTransitionResolver<T> = (
   data: T,
-  ctx: WizardContext
+  ctx: WizardContext,
 ) => SyncOrAsync<StepId | null>;
 ```
 
 **Example:**
+
 ```typescript
 next: {
   type: "resolver",
@@ -294,13 +323,11 @@ next: {
 ```
 
 #### `StepGuard<T>`
+
 Predicate for step availability.
 
 ```typescript
-type StepGuard<T> = (
-  data: T,
-  ctx: WizardContext
-) => SyncOrAsync<boolean>;
+type StepGuard<T> = (data: T, ctx: WizardContext) => SyncOrAsync<boolean>;
 ```
 
 ---
@@ -308,28 +335,23 @@ type StepGuard<T> = (
 ### Transition Utilities
 
 #### `resolveTransition(transition, data, ctx)`
+
 Resolve a transition to a step ID.
 
 ```typescript
-const nextStepId = await resolveTransition(
-  step.next,
-  data,
-  context
-);
+const nextStepId = await resolveTransition(step.next, data, context);
 ```
 
 #### `evaluateGuard(guard, data, ctx)`
+
 Evaluate a guard (handles boolean or function).
 
 ```typescript
-const isEnabled = await evaluateGuard(
-  step.enabled,
-  data,
-  context
-);
+const isEnabled = await evaluateGuard(step.enabled, data, context);
 ```
 
 #### `andGuards(...guards)`
+
 Combine guards with AND logic.
 
 ```typescript
@@ -340,6 +362,7 @@ enabled: andGuards(isPremium, hasAccess);
 ```
 
 #### `orGuards(...guards)`
+
 Combine guards with OR logic.
 
 ```typescript
@@ -350,6 +373,7 @@ enabled: orGuards(isPremium, isAdmin);
 ```
 
 #### `notGuard(guard)`
+
 Negate a guard.
 
 ```typescript
@@ -422,6 +446,7 @@ interface WizardEvents<T> {
 ```
 
 **Example:**
+
 ```typescript
 const machine = new WizardMachine(definition, context, initialData, {
   onStateChange: (state) => {
@@ -438,6 +463,7 @@ const machine = new WizardMachine(definition, context, initialData, {
 ### Builders
 
 #### `createStep(id)`
+
 Create a step using fluent API.
 
 ```typescript
@@ -446,11 +472,14 @@ const step = createStep<MyData>("personal")
   .description("Tell us about yourself")
   .required("name", "email")
   .next("contact")
-  .onEnter(async (data, ctx) => { /* ... */ })
+  .onEnter(async (data, ctx) => {
+    /* ... */
+  })
   .build();
 ```
 
 **Methods:**
+
 - `.title(string)` - Set step title (metadata)
 - `.description(string)` - Set step description (metadata)
 - `.icon(string)` - Set step icon (metadata)
@@ -469,6 +498,7 @@ const step = createStep<MyData>("personal")
 - `.build()` - Return WizardStepDefinition<T>
 
 #### `createWizard(id)`
+
 Create a wizard using fluent API.
 
 ```typescript
@@ -476,11 +506,14 @@ const wizard = createWizard<MyData>("signup")
   .initialStep("personal")
   .step("personal", (s) => s.title("Personal").next("contact"))
   .step("contact", (s) => s.title("Contact").previous("personal"))
-  .onComplete(async (data) => { /* ... */ })
+  .onComplete(async (data) => {
+    /* ... */
+  })
   .build();
 ```
 
 **Methods:**
+
 - `.initialStep(stepId)` - Set starting step
 - `.step(stepId, configFn)` - Add/configure step
 - `.addStep(definition)` - Add existing step definition
@@ -489,6 +522,7 @@ const wizard = createWizard<MyData>("signup")
 - `.build()` - Return WizardDefinition<T>
 
 #### `createLinearWizard(config)`
+
 Create a linear wizard (no branching).
 
 ```typescript
@@ -506,11 +540,14 @@ const wizard = createLinearWizard<MyData>({
       validate: (data) => ({ valid: Boolean(data.email) }),
     },
   ],
-  onComplete: async (data) => { /* ... */ },
+  onComplete: async (data) => {
+    /* ... */
+  },
 });
 ```
 
 **Config:**
+
 ```typescript
 interface LinearWizardConfig<T> {
   id: string;
@@ -535,6 +572,7 @@ interface LinearStep<T> {
 ### Context Utilities
 
 #### `createWizardContext(values?)`
+
 Create a base context with optional extensions.
 
 ```typescript
@@ -545,6 +583,7 @@ const ctx = createWizardContext({
 ```
 
 #### `ExtendContext`
+
 Helper type for extending context.
 
 ```typescript
@@ -554,6 +593,7 @@ interface ExtendContext extends WizardContext {
 ```
 
 #### `LoggerContext`
+
 Helper interface for logger context.
 
 ```typescript
@@ -566,6 +606,7 @@ interface LoggerContext extends WizardContext {
 ```
 
 #### `RouterContext`
+
 Helper interface for router context.
 
 ```typescript
@@ -577,6 +618,7 @@ interface RouterContext extends WizardContext {
 ```
 
 #### `ApiContext`
+
 Helper interface for API context.
 
 ```typescript
@@ -592,6 +634,7 @@ interface ApiContext extends WizardContext {
 ### Error Classes
 
 #### `WizardError`
+
 Base error class.
 
 ```typescript
@@ -601,6 +644,7 @@ class WizardError extends Error {
 ```
 
 #### `WizardValidationError`
+
 Validation failed.
 
 ```typescript
@@ -612,6 +656,7 @@ class WizardValidationError extends WizardError {
 ```
 
 #### `WizardNavigationError`
+
 Navigation failed.
 
 ```typescript
@@ -624,6 +669,7 @@ class WizardNavigationError extends WizardError {
 ```
 
 #### `WizardConfigurationError`
+
 Invalid configuration.
 
 ```typescript
@@ -633,6 +679,7 @@ class WizardConfigurationError extends WizardError {
 ```
 
 #### `WizardAbortError`
+
 Operation aborted via signal.
 
 ```typescript
@@ -643,13 +690,13 @@ class WizardAbortError extends WizardError {
 
 ---
 
-## React Package (`@wizard/react`)
+## React Package (`@gooonzick/wizard-react`)
 
 ### useWizard Hook
 
 ```typescript
 function useWizard<T extends Record<string, unknown>>(
-  options: UseWizardOptions<T>
+  options: UseWizardOptions<T>,
 ): UseWizardReturn<T>;
 ```
 
@@ -727,8 +774,9 @@ interface UseWizardActions<T> {
 ```
 
 **Example:**
+
 ```typescript
-import { useWizard } from "@wizard/react";
+import { useWizard } from "@gooonzick/wizard-react";
 
 const { state, navigation, actions, validation, loading } = useWizard({
   definition: myWizard,
@@ -785,6 +833,7 @@ interface WizardProviderProps<T> {
 ## Type Aliases
 
 ### `StepId`
+
 Unique identifier for a step.
 
 ```typescript
@@ -792,33 +841,27 @@ type StepId = string;
 ```
 
 ### `CompleteHandler<T>`
+
 Handler called when wizard completes.
 
 ```typescript
-type CompleteHandler<T> = (
-  data: T,
-  ctx: WizardContext
-) => SyncOrAsync<void>;
+type CompleteHandler<T> = (data: T, ctx: WizardContext) => SyncOrAsync<void>;
 ```
 
 ### `SubmitHandler<T>`
+
 Handler called when step is submitted.
 
 ```typescript
-type SubmitHandler<T> = (
-  data: T,
-  ctx: WizardContext
-) => SyncOrAsync<void>;
+type SubmitHandler<T> = (data: T, ctx: WizardContext) => SyncOrAsync<void>;
 ```
 
 ### `LifecycleHook<T>`
+
 Hook called at step lifecycle events.
 
 ```typescript
-type LifecycleHook<T> = (
-  data: T,
-  ctx: WizardContext
-) => SyncOrAsync<void>;
+type LifecycleHook<T> = (data: T, ctx: WizardContext) => SyncOrAsync<void>;
 ```
 
 ---
@@ -826,6 +869,7 @@ type LifecycleHook<T> = (
 ## Common Usage Patterns
 
 ### Query Step Information
+
 ```typescript
 const machine = new WizardMachine(definition, context, initialData);
 
@@ -846,6 +890,7 @@ const available = await machine.getAvailableSteps();
 ```
 
 ### Update Data and Validate
+
 ```typescript
 // Update one field
 machine.updateData((d) => ({ ...d, name: "John" }));
@@ -861,6 +906,7 @@ if (result.valid) {
 ```
 
 ### Navigate Between Steps
+
 ```typescript
 // Go forward
 await machine.goNext();
@@ -876,6 +922,7 @@ await machine.goToStep("step-id");
 ```
 
 ### Handle Events
+
 ```typescript
 const machine = new WizardMachine(definition, context, initialData, {
   onStateChange: (state) => {

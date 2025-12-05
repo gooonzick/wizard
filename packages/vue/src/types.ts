@@ -5,7 +5,7 @@ import type {
 	WizardDefinition,
 	WizardState,
 	WizardStepDefinition,
-} from "@wizard/core";
+} from "@gooonzick/wizard-core";
 import type { ComputedRef } from "vue";
 
 /**

@@ -1,5 +1,5 @@
 {
-	"name": "@wizard/react-example",
+	"name": "@gooonzick/wizard-react-example",
 	"private": true,
 	"version": "0.0.1",
 	"type": "module",
@@ -18,8 +18,8 @@
 		"@radix-ui/react-select": "^2.2.6",
 		"@radix-ui/react-slot": "^1.2.4",
 		"@tailwindcss/vite": "^4.1.17",
-		"@wizard/core": "workspace:*",
-		"@wizard/react": "workspace:*",
+		"@gooonzick/wizard-core": "workspace:*",
+		"@gooonzick/wizard-react": "workspace:*",
 		"class-variance-authority": "^0.7.1",
 		"clsx": "^2.1.1",
 		"lucide-react": "^0.555.0",

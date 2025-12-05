@@ -57,9 +57,9 @@ Creates GitHub releases from git tags.
 **Tag Formats:**
 
 - `v*.*.*` - Release all packages
-- `@wizard/core@*` - Release core package only
-- `@wizard/react@*` - Release React package only
-- `@wizard/vue@*` - Release Vue package only
+- `@gooonzick/wizard-core@*` - Release core package only
+- `@gooonzick/wizard-react@*` - Release React package only
+- `@gooonzick/wizard-vue@*` - Release Vue package only
 
 **Features:**
 
@@ -113,8 +113,8 @@ Ensure GitHub Actions is enabled in repository Settings → Actions → General.
    git push origin v1.2.3
 
    # For specific package
-   git tag @wizard/core@1.2.3
-   git push origin @wizard/core@1.2.3
+   git tag @gooonzick/wizard-core@1.2.3
+   git push origin @gooonzick/wizard-core@1.2.3
    ```
 
 3. Create a GitHub Release from the tag

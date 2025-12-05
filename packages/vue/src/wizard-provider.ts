@@ -4,7 +4,7 @@ import type {
 	WizardData,
 	WizardDefinition,
 	WizardState,
-} from "@wizard/core";
+} from "@gooonzick/wizard-core";
 import {
 	defineComponent,
 	type InjectionKey,

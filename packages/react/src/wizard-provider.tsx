@@ -4,8 +4,8 @@ import type {
 	WizardData,
 	WizardDefinition,
 	WizardState,
-} from "@wizard/core";
-import { WizardMachine } from "@wizard/core";
+} from "@gooonzick/wizard-core";
+import { WizardMachine } from "@gooonzick/wizard-core";
 import {
 	createContext,
 	type ReactNode,

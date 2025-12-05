@@ -1,4 +1,4 @@
-import { createLinearWizard, WizardMachine } from "@wizard/core";
+import { createLinearWizard, WizardMachine } from "@gooonzick/wizard-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { WizardStateManager } from "../../src/internal/wizard-state-manager";
 

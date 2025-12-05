@@ -13,12 +13,13 @@ You can define wizards in three ways:
 ## 1. Declarative Definition
 
 Write the raw `WizardDefinition` object directly. Use this for:
+
 - Complex wizards with lots of conditional logic
 - When you want to serialize/deserialize the definition (e.g., from a server)
 - When you need the clearest representation of wizard structure
 
 ```typescript
-import type { WizardDefinition } from "@wizard/core";
+import type { WizardDefinition } from "@gooonzick/wizard-core";
 
 type CheckoutData = {
   email: string;
@@ -55,9 +56,10 @@ const checkoutWizard: WizardDefinition<CheckoutData> = {
       },
       validate: (data) => ({
         valid: data.cardNumber?.length === 16 ?? false,
-        errors: data.cardNumber?.length === 16
-          ? undefined
-          : { cardNumber: "Card number must be 16 digits" },
+        errors:
+          data.cardNumber?.length === 16
+            ? undefined
+            : { cardNumber: "Card number must be 16 digits" },
       }),
       previous: { type: "static", to: "email" },
       next: {
@@ -111,12 +113,13 @@ const checkoutWizard: WizardDefinition<CheckoutData> = {
 ## 2. Builder Pattern
 
 Use `createWizard()` for a fluent, chainable API. Use this for:
+
 - Building wizards programmatically
 - When you prefer method chaining
 - Most everyday use cases
 
 ```typescript
-import { createWizard, requiredFields } from "@wizard/core";
+import { createWizard, requiredFields } from "@gooonzick/wizard-core";
 
 type CheckoutData = {
   email: string;
@@ -139,7 +142,7 @@ const checkoutWizard = createWizard<CheckoutData>("checkout")
           ? undefined
           : { email: "Invalid email address" },
       }))
-      .next("payment")
+      .next("payment"),
   )
 
   // Second step: payment
@@ -150,14 +153,15 @@ const checkoutWizard = createWizard<CheckoutData>("checkout")
       .previous("email")
       .validate((data) => ({
         valid: data.cardNumber?.length === 16 ?? false,
-        errors: data.cardNumber?.length === 16
-          ? undefined
-          : { cardNumber: "Card number must be 16 digits" },
+        errors:
+          data.cardNumber?.length === 16
+            ? undefined
+            : { cardNumber: "Card number must be 16 digits" },
       }))
       .nextWhen([
         { when: (d) => d.needsInvoice, to: "invoice" },
         { when: () => true, to: "summary" },
-      ])
+      ]),
   )
 
   // Optional step: invoice (conditionally shown)
@@ -168,7 +172,7 @@ const checkoutWizard = createWizard<CheckoutData>("checkout")
       .enabled((data) => data.needsInvoice)
       .required("invoiceCompany")
       .previous("payment")
-      .next("summary")
+      .next("summary"),
   )
 
   // Final step: summary
@@ -181,7 +185,7 @@ const checkoutWizard = createWizard<CheckoutData>("checkout")
         if (!response.success) {
           throw new Error("Payment failed");
         }
-      })
+      }),
   )
 
   .onComplete(async (data, ctx) => {
@@ -195,6 +199,7 @@ const checkoutWizard = createWizard<CheckoutData>("checkout")
 ### Builder Method Reference
 
 #### Step Configuration
+
 ```typescript
 .step("step-id", (step) =>
   step
@@ -233,12 +238,13 @@ const checkoutWizard = createWizard<CheckoutData>("checkout")
 ## 3. Linear Wizard Helper
 
 Use `createLinearWizard()` for simple step-by-step flows with no branching. Use this for:
+
 - Simple questionnaires
 - Linear registration flows
 - Forms that go straight through with no conditional logic
 
 ```typescript
-import { createLinearWizard } from "@wizard/core";
+import { createLinearWizard } from "@gooonzick/wizard-core";
 
 type SignupData = {
   name: string;
@@ -291,31 +297,35 @@ const signupWizard = createLinearWizard<SignupData>({
 
 ## Comparison: Which Approach?
 
-| Use Case | Approach | Reason |
-|----------|----------|--------|
-| Simple 2-3 step flow | Linear Helper | Less boilerplate, clear intent |
-| Standard multi-step form | Builder Pattern | Good balance of clarity and control |
-| Server-side definition | Declarative | Can be serialized and sent from API |
-| Complex branching logic | Declarative or Builder | Both work, but declarative may be clearer for complex logic |
-| Building wizards dynamically | Builder or Declarative | Both support programmatic construction |
+| Use Case                     | Approach               | Reason                                                      |
+| ---------------------------- | ---------------------- | ----------------------------------------------------------- |
+| Simple 2-3 step flow         | Linear Helper          | Less boilerplate, clear intent                              |
+| Standard multi-step form     | Builder Pattern        | Good balance of clarity and control                         |
+| Server-side definition       | Declarative            | Can be serialized and sent from API                         |
+| Complex branching logic      | Declarative or Builder | Both work, but declarative may be clearer for complex logic |
+| Building wizards dynamically | Builder or Declarative | Both support programmatic construction                      |
 
 ## Advanced Patterns
 
 ### Combining Validators
 
 ```typescript
-import { combineValidators, requiredFields, createValidator } from "@wizard/core";
+import {
+  combineValidators,
+  requiredFields,
+  createValidator,
+} from "@gooonzick/wizard-core";
 
 const emailValidator = createValidator(
   (data) => data.email?.includes("@"),
   "Invalid email format",
-  "email"
+  "email",
 );
 
 const ageValidator = createValidator(
   (data) => (data.age ?? 0) >= 18,
   "Must be 18 or older",
-  "age"
+  "age",
 );
 
 const step = (s) =>
@@ -325,15 +335,15 @@ const step = (s) =>
       combineValidators(
         requiredFields("email", "age"),
         emailValidator,
-        ageValidator
-      )
+        ageValidator,
+      ),
     );
 ```
 
 ### Using Schema Validation
 
 ```typescript
-import { createStandardSchemaValidator } from "@wizard/core";
+import { createStandardSchemaValidator } from "@gooonzick/wizard-core";
 import * as v from "valibot"; // or any Standard Schema library
 
 const schema = v.object({
@@ -342,10 +352,7 @@ const schema = v.object({
   name: v.string(),
 });
 
-const step = (s) =>
-  s
-    .title("Account Setup")
-    .validateWithSchema(schema);
+const step = (s) => s.title("Account Setup").validateWithSchema(schema);
 ```
 
 ### Conditional Step Availability
@@ -412,6 +419,7 @@ const step = (s) =>
 If you start with one approach and need another:
 
 ### Linear → Builder
+
 ```typescript
 // From linear...
 const linear = createLinearWizard({ ... });
@@ -425,6 +433,7 @@ const builder = createWizard("same-id")
 ```
 
 ### Builder → Declarative
+
 The builder returns a `WizardDefinition`, so you can inspect it:
 
 ```typescript

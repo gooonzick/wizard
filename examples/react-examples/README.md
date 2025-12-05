@@ -74,7 +74,7 @@ export default defineConfig([
 
 ## Wizard Example
 
-This project includes an example of how to use the `@wizard/core` and `@wizard/react` packages to create a multi-step wizard.
+This project includes an example of how to use the `@gooonzick/wizard-core` and `@gooonzick/wizard-react` packages to create a multi-step wizard.
 
 The example is located in `src/WizardExample.tsx` and is rendered in `src/App.tsx`.
 

@@ -1,5 +1,5 @@
+import { createLinearWizard } from "@gooonzick/wizard-core";
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { createLinearWizard } from "@wizard/core";
 import type React from "react";
 import { describe, expect, it, vi } from "vitest";
 import {
