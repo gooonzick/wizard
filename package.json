@@ -1,7 +1,7 @@
 {
 	"name": "wizard-monorepo",
 	"private": true,
-	"version": "0.0.0",
+	"version": "0.0.1",
 	"type": "module",
 	"description": "A monorepo for the WizardForm framework with core and framework-specific integrations",
 	"scripts": {
@@ -20,9 +20,9 @@
 	"devDependencies": {
 		"@types/node": "^24.10.1",
 		"knip": "^5.70.2",
-		"syncpack": "13.0.4",
-		"turbo": "2.6.1",
-		"typescript": "~5.9.3"
+		"syncpack": "^13.0.4",
+		"turbo": "^2.6.1",
+		"typescript": "^5.9.3"
 	},
 	"packageManager": "pnpm@10.23.0"
 }
