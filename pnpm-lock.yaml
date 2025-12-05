@@ -15,13 +15,13 @@ importers:
         specifier: ^5.70.2
         version: 5.70.2(@types/node@24.10.1)(typescript@5.9.3)
       syncpack:
-        specifier: 13.0.4
+        specifier: ^13.0.4
         version: 13.0.4(typescript@5.9.3)
       turbo:
-        specifier: 2.6.1
+        specifier: ^2.6.1
         version: 2.6.1
       typescript:
-        specifier: ~5.9.3
+        specifier: ^5.9.3
         version: 5.9.3
 
   examples/react-examples:
@@ -76,7 +76,7 @@ importers:
         version: 5.1.4(rolldown-vite@7.2.5(@types/node@24.10.1)(esbuild@0.25.12)(jiti@2.6.1))(typescript@5.9.3)
     devDependencies:
       '@biomejs/biome':
-        specifier: 2.3.8
+        specifier: ^2.3.8
         version: 2.3.8
       '@types/node':
         specifier: ^24.10.1
@@ -94,10 +94,10 @@ importers:
         specifier: ^1.4.0
         version: 1.4.0
       typescript:
-        specifier: ~5.9.3
+        specifier: ^5.9.3
         version: 5.9.3
       vite:
-        specifier: npm:rolldown-vite@7.2.5
+        specifier: npm:rolldown-vite@^7.2.5
         version: rolldown-vite@7.2.5(@types/node@24.10.1)(esbuild@0.25.12)(jiti@2.6.1)
 
   packages/core:
@@ -107,13 +107,13 @@ importers:
         version: 1.0.0
     devDependencies:
       '@biomejs/biome':
-        specifier: 2.3.8
+        specifier: ^2.3.8
         version: 2.3.8
       typescript:
-        specifier: ~5.9.3
+        specifier: ^5.9.3
         version: 5.9.3
       vite:
-        specifier: npm:rolldown-vite@7.2.5
+        specifier: npm:rolldown-vite@^7.2.5
         version: rolldown-vite@7.2.5(@types/node@24.10.1)(esbuild@0.25.12)(jiti@2.6.1)
       vite-plugin-dts:
         specifier: ^4.5.4
@@ -129,7 +129,7 @@ importers:
         version: link:../core
     devDependencies:
       '@biomejs/biome':
-        specifier: 2.3.8
+        specifier: ^2.3.8
         version: 2.3.8
       '@testing-library/react':
         specifier: ^16.3.0
@@ -153,10 +153,10 @@ importers:
         specifier: ^19.2.0
         version: 19.2.0(react@19.2.0)
       typescript:
-        specifier: ~5.9.3
+        specifier: ^5.9.3
         version: 5.9.3
       vite:
-        specifier: npm:rolldown-vite@7.2.5
+        specifier: npm:rolldown-vite@^7.2.5
         version: rolldown-vite@7.2.5(@types/node@24.10.1)(esbuild@0.25.12)(jiti@2.6.1)
       vite-plugin-dts:
         specifier: ^4.5.4
@@ -172,7 +172,7 @@ importers:
         version: link:../core
     devDependencies:
       '@biomejs/biome':
-        specifier: 2.3.8
+        specifier: ^2.3.8
         version: 2.3.8
       '@types/node':
         specifier: ^24.10.1
@@ -187,10 +187,10 @@ importers:
         specifier: ^20.0.11
         version: 20.0.11
       typescript:
-        specifier: ~5.9.3
+        specifier: ^5.9.3
         version: 5.9.3
       vite:
-        specifier: npm:rolldown-vite@7.2.5
+        specifier: npm:rolldown-vite@^7.2.5
         version: rolldown-vite@7.2.5(@types/node@24.10.1)(esbuild@0.25.12)(jiti@2.6.1)
       vite-plugin-dts:
         specifier: ^4.5.4

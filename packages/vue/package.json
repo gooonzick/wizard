@@ -28,7 +28,7 @@
 		"vue": "^3.5.0"
 	},
 	"dependencies": {
-		"@wizard/core": "^0.0.0"
+		"@wizard/core": "workspace:*"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.3.8",
