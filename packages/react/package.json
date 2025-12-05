@@ -58,6 +58,5 @@
 		"hook",
 		"form",
 		"multi-step"
-	],
-	"packageManager": "pnpm@10.23.0"
+	]
 }
