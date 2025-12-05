@@ -33,5 +33,13 @@
 	},
 	"dependencies": {
 		"@standard-schema/spec": "^1.0.0"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/gooonzick/wizard",
+		"directory": "packages/core"
+	},
+	"publishConfig": {
+		"access": "public"
 	}
 }
