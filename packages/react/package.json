@@ -1,7 +1,7 @@
 {
 	"name": "@gooonzick/wizard-react",
 	"version": "0.0.1",
-	"description": "React integration for WizardForm framework",
+	"description": "React integration for Wizard framework",
 	"type": "module",
 	"main": "./dist/index.js",
 	"module": "./dist/index.js",
