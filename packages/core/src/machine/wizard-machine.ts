@@ -448,7 +448,7 @@ export class WizardMachine<T extends WizardData> {
 	/**
 	 * Resolves the next step ID (with infinite loop protection)
 	 */
-	async resolveNextStep(): Promise<StepId | null> {
+	private async resolveNextStep(): Promise<StepId | null> {
 		const currentStep = this.currentStep;
 		if (!currentStep.next) {
 			return null;
