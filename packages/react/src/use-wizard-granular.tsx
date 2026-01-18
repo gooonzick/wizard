@@ -212,7 +212,7 @@ export function useWizardLoading(): UseWizardLoading {
  * ```
  */
 export function useWizardActions<T extends WizardData>(): UseWizardActions<T> {
-	const { manager } = useWizardProviderContext<T>();
+	const { manager, initialData } = useWizardProviderContext<T>();
 
 	const updateData = useCallback(
 		(updater: (data: T) => T) => {
@@ -262,11 +262,15 @@ export function useWizardActions<T extends WizardData>(): UseWizardActions<T> {
 
 	const reset = useCallback(
 		(data?: T) => {
-			// Reset requires recreating the machine, which is handled by the manager
-			// For now, we just reset the data
-			if (data) {
-				manager.getMachine().setData(data);
-			}
+			const resetData = data || initialData;
+			// Reset loading state
+			manager.setLoadingState({
+				isValidating: false,
+				isSubmitting: false,
+				isNavigating: false,
+			});
+			// Reset machine with new data
+			manager.getMachine().setData(resetData);
 			// Notify all channels about the reset
 			manager.notifySubscribers([
 				"state",
@@ -275,7 +279,7 @@ export function useWizardActions<T extends WizardData>(): UseWizardActions<T> {
 				"loading",
 			]);
 		},
-		[manager],
+		[manager, initialData],
 	);
 
 	return useMemo(

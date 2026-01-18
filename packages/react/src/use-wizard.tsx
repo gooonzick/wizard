@@ -14,7 +14,7 @@ import {
 	useState,
 	useSyncExternalStore,
 } from "react";
-import { WizardStateManager } from "./internal/wizard-state-manager";
+import { WizardStateManager } from "@gooonzick/wizard-state";
 
 /**
  * React hook options

@@ -13,13 +13,14 @@ import {
 	useMemo,
 	useRef,
 } from "react";
-import { WizardStateManager } from "./internal/wizard-state-manager";
+import { WizardStateManager } from "@gooonzick/wizard-state";
 
 /**
  * Context for granular hooks - holds the WizardStateManager for fine-grained subscriptions
  */
 interface WizardProviderContextValue<T extends WizardData> {
 	manager: WizardStateManager<T>;
+	initialData: T;
 }
 
 // biome-ignore lint/suspicious/noExplicitAny: skip
@@ -128,6 +129,7 @@ export function WizardProvider<T extends WizardData>({
 	const contextValue = useMemo(
 		() => ({
 			manager: managerRef.current as WizardStateManager<T>,
+			initialData: initialDataRef.current,
 		}),
 		[],
 	);

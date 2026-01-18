@@ -1,6 +1,6 @@
 import { createLinearWizard, WizardMachine } from "@gooonzick/wizard-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { WizardStateManager } from "../../src/internal/wizard-state-manager";
+import { WizardStateManager } from "@gooonzick/wizard-state";
 
 describe("WizardStateManager", () => {
 	let manager: WizardStateManager<{ name: string }>;

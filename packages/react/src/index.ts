@@ -1,12 +1,12 @@
 // Internal (for advanced use)
+// Re-export from state package for convenience
 export {
 	type LoadingState,
 	type NavigationState,
 	type StateSnapshot,
 	type SubscriptionChannel,
-	type ValidationState,
 	WizardStateManager,
-} from "./internal/wizard-state-manager";
+} from "@gooonzick/wizard-state";
 export {
 	type CanSubmitFn,
 	type ResetFn,
