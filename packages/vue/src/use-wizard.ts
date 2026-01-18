@@ -1,5 +1,6 @@
 import type { StepId, WizardData, WizardState } from "@gooonzick/wizard-core";
 import { WizardMachine } from "@gooonzick/wizard-core";
+import { WizardStateManager } from "@gooonzick/wizard-state";
 import {
 	type ComputedRef,
 	computed,
@@ -11,7 +12,6 @@ import {
 	toRefs,
 	watch,
 } from "vue";
-import { WizardStateManager } from "./internal/wizard-state-manager";
 import type {
 	UseWizardActions,
 	UseWizardLoading,
@@ -85,7 +85,10 @@ export function useWizard<T extends WizardData>(
 
 	// Initialize machine and manager immediately (not as shallowRef with null)
 	const initialMachine = createMachine();
-	const initialManager = new WizardStateManager(initialMachine);
+	const initialManager = new WizardStateManager(
+		initialMachine,
+		definition.initialStepId,
+	);
 
 	// Create wizard machine and manager in shallow refs to avoid deep reactivity on functions
 	const machine = shallowRef<WizardMachine<T>>(initialMachine);
@@ -110,9 +113,9 @@ export function useWizard<T extends WizardData>(
 	});
 
 	// Update navigation state
-	const updateNavigationState = async () => {
+	const updateNavigationState = () => {
 		try {
-			const nav = await manager.value.getNavigationState();
+			const nav = manager.value.getNavigationSnapshot();
 			navigationState.canGoNext = nav.canGoNext ?? false;
 			navigationState.canGoPrevious = nav.canGoPrevious ?? false;
 			navigationState.availableSteps = nav.availableSteps ?? [];
@@ -244,7 +247,10 @@ export function useWizard<T extends WizardData>(
 	const reset = (data?: T) => {
 		// Create new machine and manager instances
 		machine.value = createMachine(data);
-		manager.value = new WizardStateManager(machine.value);
+		manager.value = new WizardStateManager(
+			machine.value,
+			definition.initialStepId,
+		);
 
 		// Update state and navigation
 		state.value = machine.value.snapshot;

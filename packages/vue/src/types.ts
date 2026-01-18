@@ -6,7 +6,16 @@ import type {
 	WizardState,
 	WizardStepDefinition,
 } from "@gooonzick/wizard-core";
+import type {
+	LoadingState,
+	NavigationState,
+	StateSnapshot,
+	ValidationState,
+} from "@gooonzick/wizard-state";
 import type { ComputedRef } from "vue";
+
+// Re-export state package types for convenience
+export type { LoadingState, NavigationState, StateSnapshot, ValidationState };
 
 /**
  * Vue composable options
@@ -39,7 +48,7 @@ export interface UseWizardState<T extends WizardData> {
  */
 export interface UseWizardValidation {
 	isValid: ComputedRef<boolean>;
-	validationErrors: ComputedRef<Record<string, string> | undefined>;
+	validationErrors: ComputedRef<ValidationState["validationErrors"]>;
 }
 
 /**

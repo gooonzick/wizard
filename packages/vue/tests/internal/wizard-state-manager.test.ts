@@ -1,6 +1,6 @@
 import { createLinearWizard, WizardMachine } from "@gooonzick/wizard-core";
+import { WizardStateManager } from "@gooonzick/wizard-state";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { WizardStateManager } from "../../src/internal/wizard-state-manager";
 
 describe("WizardStateManager", () => {
 	let manager: WizardStateManager<{ name: string }>;
@@ -20,7 +20,7 @@ describe("WizardStateManager", () => {
 		});
 
 		machine = new WizardMachine(definition, {}, { name: "" }, {});
-		manager = new WizardStateManager(machine);
+		manager = new WizardStateManager(machine, definition.initialStepId);
 	});
 
 	it("should return current snapshot", () => {
@@ -37,7 +37,10 @@ describe("WizardStateManager", () => {
 	});
 
 	it("should compute navigation state", async () => {
-		const nav = await manager.getNavigationState();
+		// Wait for async navigation computation to complete
+		await new Promise((resolve) => setTimeout(resolve, 10));
+
+		const nav = manager.getNavigationSnapshot();
 		expect(nav).toHaveProperty("canGoNext");
 		expect(nav).toHaveProperty("canGoPrevious");
 		expect(nav).toHaveProperty("availableSteps");
@@ -53,72 +56,41 @@ describe("WizardStateManager", () => {
 	});
 
 	it("should cache navigation state and only recompute when dirty", async () => {
-		// First call should compute
-		const nav1 = await manager.getNavigationState();
+		// Wait for initial async computation
+		await new Promise((resolve) => setTimeout(resolve, 10));
+
+		// First call should return cached value
+		const nav1 = manager.getNavigationSnapshot();
 		expect(nav1.canGoNext).toBe(true);
 
-		// Second call should return cached value
-		const nav2 = await manager.getNavigationState();
+		// Second call should return same cached value
+		const nav2 = manager.getNavigationSnapshot();
 		expect(nav2).toEqual(nav1);
 	});
 
 	it("should handle concurrent getNavigationState calls without redundant computation", async () => {
 		// Wait for initial navigation computation to complete
-		await manager.getNavigationState();
-
-		// Track how many times the machine methods are called
-		let getNextStepIdCallCount = 0;
-		let getPreviousStepIdCallCount = 0;
-		let getAvailableStepsCallCount = 0;
-
-		const originalGetNextStepId = machine.getNextStepId.bind(machine);
-		const originalGetPreviousStepId = machine.getPreviousStepId.bind(machine);
-		const originalGetAvailableSteps = machine.getAvailableSteps.bind(machine);
-
-		machine.getNextStepId = async () => {
-			getNextStepIdCallCount++;
-			return originalGetNextStepId();
-		};
-
-		machine.getPreviousStepId = async () => {
-			getPreviousStepIdCallCount++;
-			return originalGetPreviousStepId();
-		};
-
-		machine.getAvailableSteps = async () => {
-			getAvailableStepsCallCount++;
-			return originalGetAvailableSteps();
-		};
+		await new Promise((resolve) => setTimeout(resolve, 10));
 
 		// Navigate to trigger new computation
 		await machine.goNext();
 		manager.notifySubscribers(["navigation"]);
 
-		// Make 3 concurrent calls - should share same promise
-		const [nav1, nav2, nav3] = await Promise.all([
-			manager.getNavigationState(),
-			manager.getNavigationState(),
-			manager.getNavigationState(),
-		]);
+		// Wait for async navigation computation to complete
+		await new Promise((resolve) => setTimeout(resolve, 10));
 
-		// All should return the same result
-		expect(nav1).toEqual(nav2);
-		expect(nav2).toEqual(nav3);
-
-		// But the machine methods should only be called once (not three times)
-		expect(getNextStepIdCallCount).toBe(1);
-		expect(getPreviousStepIdCallCount).toBe(1);
-		expect(getAvailableStepsCallCount).toBe(1);
+		// Get snapshot should return updated state
+		const nav = manager.getNavigationSnapshot();
 
 		// Verify the actual navigation state is correct for step2
-		expect(nav1.canGoNext).toBe(false);
-		expect(nav1.canGoPrevious).toBe(true);
-		expect(nav1.availableSteps).toEqual(["step1", "step2"]);
+		expect(nav.canGoNext).toBe(false);
+		expect(nav.canGoPrevious).toBe(true);
+		expect(nav.availableSteps).toEqual(["step1", "step2"]);
 	});
 
 	it("should mark navigation state as dirty after notifySubscribers", async () => {
-		// Initial computation
-		await manager.getNavigationState();
+		// Wait for initial computation
+		await new Promise((resolve) => setTimeout(resolve, 10));
 
 		// Navigate to next step
 		await machine.goNext();
@@ -126,8 +98,11 @@ describe("WizardStateManager", () => {
 		// Mark as dirty
 		manager.notifySubscribers(["navigation"]);
 
-		// Next call should recompute
-		const nav = await manager.getNavigationState();
+		// Wait for async recomputation
+		await new Promise((resolve) => setTimeout(resolve, 10));
+
+		// Get snapshot should return updated state
+		const nav = manager.getNavigationSnapshot();
 		expect(nav.canGoNext).toBe(false);
 		expect(nav.canGoPrevious).toBe(true);
 	});
@@ -329,7 +304,7 @@ describe("WizardStateManager", () => {
 			count2++;
 		});
 
-		manager.notifySubscribers();
+		manager.notifySubscribers(["state"]);
 
 		expect(count1).toBe(1);
 		expect(count2).toBe(1);

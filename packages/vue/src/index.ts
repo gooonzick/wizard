@@ -1,8 +1,11 @@
 // Internal (for advanced use)
+// Re-export from state package for convenience
 export {
+	type LoadingState,
 	type NavigationState,
+	type StateSnapshot,
 	WizardStateManager,
-} from "./internal/wizard-state-manager";
+} from "@gooonzick/wizard-state";
 
 // Types from types.ts
 export type {

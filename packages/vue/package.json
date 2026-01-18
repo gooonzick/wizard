@@ -28,7 +28,8 @@
 		"vue": "^3.5.0"
 	},
 	"dependencies": {
-		"@gooonzick/wizard-core": "workspace:*"
+		"@gooonzick/wizard-core": "workspace:*",
+		"@gooonzick/wizard-state": "workspace:*"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.3.8",
