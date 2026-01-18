@@ -16,10 +16,8 @@
 		"knip": "knip",
 		"syncpack:lint": "syncpack lint",
 		"syncpack:fix": "syncpack fix-mismatches",
-		"docs": "turbo run docs:dev",
-		"docs:dev": "turbo run docs:dev",
-		"docs:build": "turbo run docs:build",
-		"docs:preview": "turbo run docs:preview"
+		"docs:dev": "turbo run dev --filter=@gooonzick/wizard-docs",
+		"docs:build": "turbo run build --filter=@gooonzick/wizard-docs"
 	},
 	"devDependencies": {
 		"@types/node": "^24.10.1",

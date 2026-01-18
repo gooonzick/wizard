@@ -2,7 +2,7 @@
 	"$schema": "https://turbo.build/schema.json",
 	"tasks": {
 		"build": {
-			"outputs": ["dist/**", "*.d.ts"],
+			"outputs": ["dist/**", "*.d.ts", ".vitepress/dist/**"],
 			"cache": true,
 			"dependsOn": ["^build"],
 			"inputs": ["src/**", "tsconfig.json", "vite.config.ts"]
@@ -35,15 +35,6 @@
 			"outputs": [],
 			"cache": true,
 			"inputs": ["**/*.{ts,tsx,js,jsx,json,css,md}"]
-		},
-		"docs:dev": {
-			"persistent": true,
-			"cache": false
-		},
-		"docs:build": {
-			"outputs": [".vitepress/dist/**"],
-			"dependsOn": ["^build"],
-			"cache": true
 		}
 	}
 }
