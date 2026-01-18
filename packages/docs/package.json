@@ -1,0 +1,17 @@
+{
+	"name": "@gooonzick/wizard-docs",
+	"version": "0.0.0",
+	"description": "Documentation for WizardForm framework",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "vitepress dev .",
+		"build": "vitepress build .",
+		"preview": "vitepress preview .",
+		"typecheck": "tsc --build --verbose"
+	},
+	"devDependencies": {
+		"typescript": "^5.9.3",
+		"vitepress": "^1.0.0"
+	}
+}

@@ -15,6 +15,7 @@ dist-ssr
 **/.tsbuild/
 *.local
 .worktrees/
+**/.vitepress/cache
 
 # Editor directories and files
 .vscode/*

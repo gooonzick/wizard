@@ -15,7 +15,11 @@
 		"lint:fix": "turbo run lint:fix",
 		"knip": "knip",
 		"syncpack:lint": "syncpack lint",
-		"syncpack:fix": "syncpack fix-mismatches"
+		"syncpack:fix": "syncpack fix-mismatches",
+		"docs": "turbo run docs:dev",
+		"docs:dev": "turbo run docs:dev",
+		"docs:build": "turbo run docs:build",
+		"docs:preview": "turbo run docs:preview"
 	},
 	"devDependencies": {
 		"@types/node": "^24.10.1",

@@ -23,7 +23,7 @@
 			"dependsOn": ["build"]
 		},
 		"dev": {
-			"cache": true,
+			"cache": false,
 			"persistent": true
 		},
 		"lint": {
@@ -35,6 +35,15 @@
 			"outputs": [],
 			"cache": true,
 			"inputs": ["**/*.{ts,tsx,js,jsx,json,css,md}"]
+		},
+		"docs:dev": {
+			"persistent": true,
+			"cache": false
+		},
+		"docs:build": {
+			"outputs": [".vitepress/dist/**"],
+			"dependsOn": ["^build"],
+			"cache": true
 		}
 	}
 }
