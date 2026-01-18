@@ -1,11 +1,27 @@
-import type { WizardData, WizardMachine, WizardState } from "@gooonzick/wizard-core";
+import type {
+	WizardData,
+	WizardMachine,
+	WizardState,
+	WizardStepDefinition,
+} from "@gooonzick/wizard-core";
 import { describe, expect, test, vi } from "vitest";
 import { WizardStateManager } from "../src/manager";
 
 /**
  * Mock WizardMachine for testing
+ * Uses Partial type for proper typing instead of `as any`
  */
-function createMockMachine<T extends WizardData>(): WizardMachine<T> {
+function createMockMachine<T extends WizardData>(): Partial<
+	WizardMachine<T>
+> & {
+	snapshot: WizardState<T>;
+	currentStep: WizardStepDefinition<T>;
+	visited: string[];
+	history: string[];
+	getNextStepId: ReturnType<typeof vi.fn>;
+	getPreviousStepId: ReturnType<typeof vi.fn>;
+	getAvailableSteps: ReturnType<typeof vi.fn>;
+} {
 	return {
 		snapshot: {
 			currentStepId: "step-1",
@@ -16,13 +32,13 @@ function createMockMachine<T extends WizardData>(): WizardMachine<T> {
 		},
 		currentStep: {
 			id: "step-1",
-		} as any,
+		} as unknown as WizardStepDefinition<T>,
 		visited: ["step-1"],
 		history: ["step-1"],
 		getNextStepId: vi.fn().mockResolvedValue("step-2"),
 		getPreviousStepId: vi.fn().mockResolvedValue(null),
 		getAvailableSteps: vi.fn().mockResolvedValue(["step-1", "step-2"]),
-	} as any;
+	};
 }
 
 describe("WizardStateManager", () => {
