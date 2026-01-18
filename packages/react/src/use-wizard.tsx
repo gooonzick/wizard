@@ -7,6 +7,7 @@ import type {
 	WizardStepDefinition,
 } from "@gooonzick/wizard-core";
 import { WizardMachine } from "@gooonzick/wizard-core";
+import { WizardStateManager } from "@gooonzick/wizard-state";
 import {
 	useCallback,
 	useMemo,
@@ -14,7 +15,6 @@ import {
 	useState,
 	useSyncExternalStore,
 } from "react";
-import { WizardStateManager } from "@gooonzick/wizard-state";
 
 /**
  * React hook options

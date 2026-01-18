@@ -6,6 +6,7 @@ import type {
 	WizardState,
 } from "@gooonzick/wizard-core";
 import { WizardMachine } from "@gooonzick/wizard-core";
+import { WizardStateManager } from "@gooonzick/wizard-state";
 import {
 	createContext,
 	type ReactNode,
@@ -13,7 +14,6 @@ import {
 	useMemo,
 	useRef,
 } from "react";
-import { WizardStateManager } from "@gooonzick/wizard-state";
 
 /**
  * Context for granular hooks - holds the WizardStateManager for fine-grained subscriptions
