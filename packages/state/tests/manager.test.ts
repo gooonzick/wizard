@@ -1,7 +1,6 @@
 import type { WizardData, WizardMachine, WizardState } from "@gooonzick/wizard-core";
 import { describe, expect, test, vi } from "vitest";
 import { WizardStateManager } from "../src/manager";
-import type { LoadingState, NavigationState, ValidationState } from "../src/types";
 
 /**
  * Mock WizardMachine for testing
