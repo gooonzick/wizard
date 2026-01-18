@@ -12,7 +12,8 @@ import type {
 } from "../types/base";
 import type { WizardDefinition } from "../types/definition";
 import type { WizardStepDefinition } from "../types/step";
-import { evaluateGuard, resolveTransition } from "./transitions";
+import { evaluateGuard } from "./transitions";
+import { resolveStepInDirection } from "./step-resolver";
 import { alwaysValid } from "./validators";
 
 /**
@@ -449,124 +450,34 @@ export class WizardMachine<T extends WizardData> {
 	 * Resolves the next step ID (with infinite loop protection)
 	 */
 	private async resolveNextStep(): Promise<StepId | null> {
-		const currentStep = this.currentStep;
-		if (!currentStep.next) {
-			return null;
-		}
-
-		const visited = new Set<StepId>();
-		let nextStepId = await resolveTransition(
-			currentStep.next,
+		return resolveStepInDirection(
+			this.currentStep,
+			this.definition.steps,
 			this.state.data,
 			this.context,
+			{
+				direction: "next",
+				getTransition: (step) => step.next,
+				getNextTransition: (step) => step.next,
+			},
 		);
-
-		// Skip disabled steps (with circular dependency protection)
-		while (nextStepId) {
-			// Check for circular dependency
-			if (visited.has(nextStepId)) {
-				throw new WizardNavigationError(
-					`Circular step dependency detected at step "${nextStepId}"`,
-					nextStepId,
-					"circular",
-				);
-			}
-			visited.add(nextStepId);
-
-			const nextStep = this.definition.steps[nextStepId];
-			if (!nextStep) {
-				throw new WizardNavigationError(
-					`Step "${nextStepId}" not found`,
-					nextStepId,
-					"not-found",
-				);
-			}
-
-			const isEnabled = await evaluateGuard(
-				nextStep.enabled,
-				this.state.data,
-				this.context,
-			);
-
-			if (isEnabled) {
-				return nextStepId;
-			}
-
-			// Try to get the next step after the disabled one
-			if (nextStep.next) {
-				nextStepId = await resolveTransition(
-					nextStep.next,
-					this.state.data,
-					this.context,
-				);
-			} else {
-				return null;
-			}
-		}
-
-		return null;
 	}
 
 	/**
 	 * Resolves the previous step ID (with infinite loop protection)
 	 */
 	private async resolvePreviousStep(): Promise<StepId | null> {
-		const currentStep = this.currentStep;
-		if (!currentStep.previous) {
-			return null;
-		}
-
-		const visited = new Set<StepId>();
-		let previousStepId = await resolveTransition(
-			currentStep.previous,
+		return resolveStepInDirection(
+			this.currentStep,
+			this.definition.steps,
 			this.state.data,
 			this.context,
+			{
+				direction: "previous",
+				getTransition: (step) => step.previous,
+				getNextTransition: (step) => step.previous,
+			},
 		);
-
-		// Skip disabled steps (with circular dependency protection)
-		while (previousStepId) {
-			// Check for circular dependency
-			if (visited.has(previousStepId)) {
-				throw new WizardNavigationError(
-					`Circular step dependency detected at step "${previousStepId}"`,
-					previousStepId,
-					"circular",
-				);
-			}
-			visited.add(previousStepId);
-
-			const previousStep = this.definition.steps[previousStepId];
-			if (!previousStep) {
-				throw new WizardNavigationError(
-					`Step "${previousStepId}" not found`,
-					previousStepId,
-					"not-found",
-				);
-			}
-
-			const isEnabled = await evaluateGuard(
-				previousStep.enabled,
-				this.state.data,
-				this.context,
-			);
-
-			if (isEnabled) {
-				return previousStepId;
-			}
-
-			// Try to get the previous step before the disabled one
-			if (previousStep.previous) {
-				previousStepId = await resolveTransition(
-					previousStep.previous,
-					this.state.data,
-					this.context,
-				);
-			} else {
-				return null;
-			}
-		}
-
-		return null;
 	}
 
 	/**
