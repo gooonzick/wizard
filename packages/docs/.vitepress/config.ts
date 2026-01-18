@@ -10,7 +10,7 @@ export default defineConfig({
 	cleanUrls: true,
 
 	themeConfig: {
-		logo: { src: "/logo.svg", width: 24, height: 24 },
+		logo: "🧙",
 
 		nav: [
 			{ text: "Guide", link: "/guide/getting-started" },

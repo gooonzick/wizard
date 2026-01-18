@@ -2,13 +2,12 @@
 layout: home
 
 hero:
-  name: WizardForm
+  name: 🧙 WizardForm
   text: Declarative, type-safe wizard framework for TypeScript
   tagline: Build powerful multi-step forms with confidence
   image:
     src: /wizard-logo.png
     alt: WizardForm Logo
-    height: 300px
   actions:
     - theme: brand
       text: Get Started
