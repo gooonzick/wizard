@@ -127,4 +127,14 @@ describe("WizardBuilder", () => {
 			createWizard<WizardData>("empty").build();
 		}).toThrow("Initial step is required");
 	});
+
+	test("should throw when building with non-existent initial step", () => {
+		const builder = createWizard<{ name: string }>("test");
+		builder.initialStep("nonexistent");
+		builder.addStep(createStep("step1").build());
+
+		expect(() => builder.build()).toThrow(
+			'Initial step "nonexistent" not found in steps',
+		);
+	});
 });

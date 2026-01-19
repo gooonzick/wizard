@@ -97,6 +97,11 @@ export class WizardBuilder<T extends WizardData> {
 			throw new Error("At least one step is required");
 		}
 
+		// Validate that initial step exists
+		if (!this.steps.has(this.initialStepId)) {
+			throw new Error(`Initial step "${this.initialStepId}" not found in steps`);
+		}
+
 		const stepsRecord: Record<StepId, WizardStepDefinition<T>> = {};
 		for (const [id, step] of this.steps) {
 			stepsRecord[id] = step;
