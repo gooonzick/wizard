@@ -249,11 +249,7 @@ export class WizardMachine<T extends WizardData> {
 	 * Goes to next step
 	 */
 	async goNext(): Promise<void> {
-		this.checkAborted();
-		this.ensureNotBusy();
-
-		this.isTransitioning = true;
-		try {
+		return this.withTransition(async () => {
 			if (this.state.isCompleted) {
 				throw new WizardNavigationError("Wizard is already completed");
 			}
@@ -282,23 +278,14 @@ export class WizardMachine<T extends WizardData> {
 			// Navigate to next step
 			await this.navigateToStep(nextStepId);
 			this.debug(`Navigated to next step: ${nextStepId}`);
-		} catch (error) {
-			this.handleError(error);
-			throw error;
-		} finally {
-			this.isTransitioning = false;
-		}
+		});
 	}
 
 	/**
 	 * Goes to previous step
 	 */
 	async goPrevious(): Promise<void> {
-		this.checkAborted();
-		this.ensureNotBusy();
-
-		this.isTransitioning = true;
-		try {
+		return this.withTransition(async () => {
 			const previousStepId = await this.resolvePreviousStep();
 			if (!previousStepId) {
 				throw new WizardNavigationError("No previous step available");
@@ -306,12 +293,7 @@ export class WizardMachine<T extends WizardData> {
 
 			await this.navigateToStep(previousStepId);
 			this.debug(`Navigated to previous step: ${previousStepId}`);
-		} catch (error) {
-			this.handleError(error);
-			throw error;
-		} finally {
-			this.isTransitioning = false;
-		}
+		});
 	}
 
 	/**
@@ -319,11 +301,7 @@ export class WizardMachine<T extends WizardData> {
 	 * @param steps Number of steps to go back (default: 1)
 	 */
 	async goBack(steps = 1): Promise<void> {
-		this.checkAborted();
-		this.ensureNotBusy();
-
-		this.isTransitioning = true;
-		try {
+		return this.withTransition(async () => {
 			const currentIndex = this.stepHistory.lastIndexOf(
 				this.state.currentStepId,
 			);
@@ -363,23 +341,14 @@ export class WizardMachine<T extends WizardData> {
 
 			await this.navigateToStep(targetStepId);
 			this.debug(`Went back ${steps} steps to: ${targetStepId}`);
-		} catch (error) {
-			this.handleError(error);
-			throw error;
-		} finally {
-			this.isTransitioning = false;
-		}
+		});
 	}
 
 	/**
 	 * Jumps directly to a specific step (if enabled)
 	 */
 	async goToStep(stepId: StepId): Promise<void> {
-		this.checkAborted();
-		this.ensureNotBusy();
-
-		this.isTransitioning = true;
-		try {
+		return this.withTransition(async () => {
 			const targetStep = this.definition.steps[stepId];
 			if (!targetStep) {
 				throw new WizardNavigationError(
@@ -406,12 +375,7 @@ export class WizardMachine<T extends WizardData> {
 
 			await this.navigateToStep(stepId);
 			this.debug(`Jumped to step: ${stepId}`);
-		} catch (error) {
-			this.handleError(error);
-			throw error;
-		} finally {
-			this.isTransitioning = false;
-		}
+		});
 	}
 
 	/**
@@ -578,5 +542,28 @@ export class WizardMachine<T extends WizardData> {
 	private handleError(error: unknown): void {
 		const err = error instanceof Error ? error : new Error(String(error));
 		this.events.onError?.(err);
+	}
+
+	/**
+	 * Helper to wrap navigation operations with proper state management
+	 * @param operation Async operation to execute
+	 * @returns Result of the operation
+	 * @throws Error from operation after calling handleError
+	 */
+	private async withTransition<R>(
+		operation: () => Promise<R>,
+	): Promise<R> {
+		this.checkAborted();
+		this.ensureNotBusy();
+
+		this.isTransitioning = true;
+		try {
+			return await operation();
+		} catch (error) {
+			this.handleError(error);
+			throw error;
+		} finally {
+			this.isTransitioning = false;
+		}
 	}
 }
