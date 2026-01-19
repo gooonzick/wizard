@@ -1,6 +1,5 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { createWizard } from "../src/index";
-import { WizardMachine } from "../src/machine/wizard-machine";
 import { resolveStepInDirection } from "../src/machine/step-resolver";
 
 describe("resolveStepInDirection", () => {
@@ -35,7 +34,7 @@ describe("resolveStepInDirection", () => {
 				b.next({ type: "static", to: "step3" });
 				b.enabled(false); // disabled
 			})
-			.step("step3", (b) => {})
+			.step("step3", () => {})
 			.build();
 
 		const step1 = definition.steps["step1"];
@@ -57,7 +56,7 @@ describe("resolveStepInDirection", () => {
 
 	it("should skip disabled steps when going previous", async () => {
 		const definition = createWizard<{ skip: boolean }>("test")
-			.step("step1", (b) => {})
+			.step("step1", () => {})
 			.step("step2", (b) => {
 				b.previous({ type: "static", to: "step1" });
 			})
@@ -87,7 +86,7 @@ describe("resolveStepInDirection", () => {
 
 	it("should return null when no transition defined", async () => {
 		const definition = createWizard<{ value: string }>("test")
-			.step("step1", (b) => {
+			.step("step1", () => {
 				// No next defined
 			})
 			.build();
@@ -142,8 +141,8 @@ describe("resolveStepInDirection", () => {
 					{ when: () => true, to: "step3" },
 				]);
 			})
-			.step("step2", (b) => {})
-			.step("step3", (b) => {})
+			.step("step2", () => {})
+			.step("step3", () => {})
 			.build();
 
 		const step1 = definition.steps["step1"];
@@ -188,7 +187,7 @@ describe("resolveStepInDirection", () => {
 				b.next({ type: "static", to: "step3" });
 				b.enabled((_, ctx) => !!(ctx as any).allowStep2);
 			})
-			.step("step3", (b) => {})
+			.step("step3", () => {})
 			.build();
 
 		const step1 = definition.steps["step1"];

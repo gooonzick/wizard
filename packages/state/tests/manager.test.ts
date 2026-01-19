@@ -9,19 +9,9 @@ import { WizardStateManager } from "../src/manager";
 
 /**
  * Mock WizardMachine for testing
- * Uses Partial type for proper typing instead of `as any`
+ * Uses type assertion for proper typing
  */
-function createMockMachine<T extends WizardData>(): Partial<
-	WizardMachine<T>
-> & {
-	snapshot: WizardState<T>;
-	currentStep: WizardStepDefinition<T>;
-	visited: string[];
-	history: string[];
-	getNextStepId: ReturnType<typeof vi.fn>;
-	getPreviousStepId: ReturnType<typeof vi.fn>;
-	getAvailableSteps: ReturnType<typeof vi.fn>;
-} {
+function createMockMachine<T extends WizardData>(): WizardMachine<T> {
 	return {
 		snapshot: {
 			currentStepId: "step-1",
@@ -38,7 +28,7 @@ function createMockMachine<T extends WizardData>(): Partial<
 		getNextStepId: vi.fn().mockResolvedValue("step-2"),
 		getPreviousStepId: vi.fn().mockResolvedValue(null),
 		getAvailableSteps: vi.fn().mockResolvedValue(["step-1", "step-2"]),
-	};
+	} as unknown as WizardMachine<T>;
 }
 
 describe("WizardStateManager", () => {

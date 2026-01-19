@@ -12,8 +12,8 @@ import type {
 } from "../types/base";
 import type { WizardDefinition } from "../types/definition";
 import type { WizardStepDefinition } from "../types/step";
-import { evaluateGuard } from "./transitions";
 import { resolveStepInDirection } from "./step-resolver";
+import { evaluateGuard } from "./transitions";
 import { alwaysValid } from "./validators";
 
 /**
@@ -550,9 +550,7 @@ export class WizardMachine<T extends WizardData> {
 	 * @returns Result of the operation
 	 * @throws Error from operation after calling handleError
 	 */
-	private async withTransition<R>(
-		operation: () => Promise<R>,
-	): Promise<R> {
+	private async withTransition<R>(operation: () => Promise<R>): Promise<R> {
 		this.checkAborted();
 		this.ensureNotBusy();
 

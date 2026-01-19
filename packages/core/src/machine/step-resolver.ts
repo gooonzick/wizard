@@ -1,16 +1,20 @@
+import { WizardNavigationError } from "../errors";
 import type { StepId, WizardContext, WizardData } from "../types/base";
 import type { WizardStepDefinition } from "../types/step";
 import type { StepTransition } from "../types/transitions";
 import { evaluateGuard, resolveTransition } from "./transitions";
-import { WizardNavigationError } from "../errors";
 
 /**
  * Configuration for step resolution
  */
 interface StepResolutionConfig {
 	direction: "next" | "previous";
-	getTransition: (step: WizardStepDefinition<any>) => StepTransition<any> | undefined;
-	getNextTransition: (step: WizardStepDefinition<any>) => StepTransition<any> | undefined;
+	getTransition: (
+		step: WizardStepDefinition<any>,
+	) => StepTransition<any> | undefined;
+	getNextTransition: (
+		step: WizardStepDefinition<any>,
+	) => StepTransition<any> | undefined;
 }
 
 /**
