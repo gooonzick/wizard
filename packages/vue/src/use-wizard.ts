@@ -120,8 +120,10 @@ export function useWizard<T extends WizardData>(
 			navigationState.canGoPrevious = nav.canGoPrevious ?? false;
 			navigationState.availableSteps = nav.availableSteps ?? [];
 		} catch (error) {
-			// Log error for debugging, optionally call onError callback
-			console.error("[useWizard] Failed to update navigation state:", error);
+			// Log error for debugging when debug flag is enabled
+			if (context.debug) {
+				console.error("[useWizard] Failed to update navigation state:", error);
+			}
 			callbacksRef.value.onError?.(
 				error instanceof Error ? error : new Error(String(error)),
 			);
