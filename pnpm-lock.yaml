@@ -100,6 +100,55 @@ importers:
         specifier: npm:rolldown-vite@^7.2.5
         version: rolldown-vite@7.2.5(@types/node@24.10.1)(esbuild@0.25.12)(jiti@2.6.1)
 
+  examples/vue-examples:
+    dependencies:
+      '@gooonzick/wizard-core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@gooonzick/wizard-vue':
+        specifier: workspace:*
+        version: link:../../packages/vue
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
+      lucide-vue-next:
+        specifier: ^0.555.0
+        version: 0.555.0(vue@3.5.25(typescript@5.9.3))
+      tailwind-merge:
+        specifier: ^3.4.0
+        version: 3.4.0
+      vue:
+        specifier: ^3.5.0
+        version: 3.5.25(typescript@5.9.3)
+    devDependencies:
+      '@biomejs/biome':
+        specifier: ^2.3.8
+        version: 2.3.8
+      '@tailwindcss/vite':
+        specifier: ^4.1.17
+        version: 4.1.17(rolldown-vite@7.2.5(@types/node@24.10.1)(esbuild@0.25.12)(jiti@2.6.1))
+      '@types/node':
+        specifier: ^24.10.1
+        version: 24.10.1
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.2
+        version: 6.0.2(rolldown-vite@7.2.5(@types/node@24.10.1)(esbuild@0.25.12)(jiti@2.6.1))(vue@3.5.25(typescript@5.9.3))
+      tailwindcss:
+        specifier: ^4.1.17
+        version: 4.1.17
+      tw-animate-css:
+        specifier: ^1.4.0
+        version: 1.4.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vite:
+        specifier: npm:rolldown-vite@^7.2.5
+        version: rolldown-vite@7.2.5(@types/node@24.10.1)(esbuild@0.25.12)(jiti@2.6.1)
+      vite-tsconfig-paths:
+        specifier: ^5.1.4
+        version: 5.1.4(rolldown-vite@7.2.5(@types/node@24.10.1)(esbuild@0.25.12)(jiti@2.6.1))(typescript@5.9.3)
+
   packages/core:
     dependencies:
       '@standard-schema/spec':
@@ -2657,6 +2706,11 @@ packages:
     resolution: {integrity: sha512-D8FvHUGbxWBRQM90NZeIyhAvkFfsh3u9ekrMvJ30Z6gnpBHS6HC6ldLg7tL45hwiIz/u66eKDtdA23gwwGsAHA==}
     peerDependencies:
       react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
+
+  lucide-vue-next@0.555.0:
+    resolution: {integrity: sha512-7hczPsiMD/y+VNLpal5Q5Wv09kQxlHS0l/cM1xagrd+MA3i5umMm+PUXqllvsbgwAl3PHv27fo59h4PN02GM5A==}
+    peerDependencies:
+      vue: '>=3.0.1'
 
   lz-string@1.5.0:
     resolution: {integrity: sha512-h5bgJWpxJNswbU7qCrV0tIKQCaS3blPDrqKWx+QxzuzL1zGUzij9XCWLrSLsJPu5t+eWA/ycetzYAO5IOMcWAQ==}
@@ -5767,6 +5821,10 @@ snapshots:
   lucide-react@0.555.0(react@19.2.0):
     dependencies:
       react: 19.2.0
+
+  lucide-vue-next@0.555.0(vue@3.5.25(typescript@5.9.3)):
+    dependencies:
+      vue: 3.5.25(typescript@5.9.3)
 
   lz-string@1.5.0: {}
 
