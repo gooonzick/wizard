@@ -1,10 +1,13 @@
 <script setup lang="ts">
+import { cn } from "@/lib/utils";
+import Button from "./ui/button.vue";
+
 interface Props {
 	modelValue: "use-wizard" | "provider";
 	class?: string;
 }
 
-const _props = withDefaults(defineProps<Props>(), {
+const props = withDefaults(defineProps<Props>(), {
 	class: "",
 });
 

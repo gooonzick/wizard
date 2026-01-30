@@ -1,4 +1,6 @@
+<!-- eslint-disable vue/multi-word-component-names -->
 <script setup lang="ts">
+import { CheckCircle, Circle } from "lucide-vue-next";
 import { ref, watch } from "vue";
 
 interface Props {
@@ -25,7 +27,7 @@ watch(
 	},
 );
 
-const _handleClick = () => {
+const handleClick = () => {
 	if (props.disabled) return;
 	isChecked.value = !isChecked.value;
 	emit("update:modelValue", isChecked.value);

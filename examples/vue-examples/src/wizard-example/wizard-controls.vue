@@ -4,13 +4,14 @@ import {
 	useWizardLoading,
 	useWizardNavigation,
 } from "@gooonzick/wizard-vue";
+import Button from "@/components/ui/button.vue";
 
 const { canGoNext, canGoPrevious, isLastStep, goNext, goPrevious } =
 	useWizardNavigation();
 const { isNavigating, isSubmitting } = useWizardLoading();
 const { submit } = useWizardActions();
 
-const _handleSubmit = async () => {
+const handleSubmit = async () => {
 	await submit();
 };
 </script>
@@ -20,15 +21,15 @@ const _handleSubmit = async () => {
 		<Button
 			variant="outline"
 			@click="goPrevious"
-			:disabled="!canGoPrevious.value || isNavigating.value"
+			:disabled="!canGoPrevious || isNavigating"
 		>
 			Previous
 		</Button>
 
-		<template v-if="!isLastStep.value">
+		<template v-if="!isLastStep">
 			<Button
 				@click="goNext"
-				:disabled="!canGoNext.value || isNavigating.value"
+				:disabled="!canGoNext || isNavigating"
 			>
 				Next
 			</Button>
@@ -36,7 +37,7 @@ const _handleSubmit = async () => {
 		<template v-else>
 			<Button
 				@click="handleSubmit"
-				:disabled="isNavigating.value || isSubmitting.value"
+				:disabled="isNavigating || isSubmitting"
 				class="bg-green-600 hover:bg-green-700"
 			>
 				Submit

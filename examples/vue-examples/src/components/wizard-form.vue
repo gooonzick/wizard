@@ -71,6 +71,18 @@ const getFieldError = (field: string): string => {
 	return props.validationErrors?.[field] || "";
 };
 
+const filteredFields = computed(() =>
+	currentStepConfig.value.fields.filter(
+		(f) =>
+			!["newsletter", "notifications", "theme", "companySize", "plan"].includes(
+				f,
+			),
+	),
+);
+
+type ModelValue = string | number | readonly string[] | null | undefined;
+type StringOrUndefined = string | undefined;
+
 const getFieldType = (field: string): string => {
 	if (field === "email") return "email";
 	if (field === "phone") return "tel";
@@ -237,20 +249,14 @@ const getSelectOptions = (field: string): string[] => {
 			</div>
 
 			<!-- Text/Password Inputs -->
-			<div
-				v-for="field in currentStepConfig.fields.filter(f => 
-!['newsletter', 'notifications', 'theme', 'companySize', 'plan'].includes(f)
-)"
-				:key="field"
-				class="space-y-2"
-			>
+			<div v-for="field in filteredFields" :key="field" class="space-y-2">
 				<Label :for="field">{{ fieldLabels[field] }}</Label>
 
 				<!-- Message Textarea -->
 				<textarea
 					v-if="field === 'message'"
 					:id="field"
-					:value="data[field]"
+					:value="data[field] as ModelValue"
 					@input="(e: Event) => onFieldChange(field, (e.target as HTMLTextAreaElement).value)"
 					class="flex min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
 					placeholder="Enter your message for our sales team"
@@ -261,7 +267,7 @@ const getSelectOptions = (field: string): string[] => {
 					v-else
 					:id="field"
 					:type="getFieldType(field)"
-					:model-value="data[field]"
+					:model-value="data[field] as StringOrUndefined"
 					@update:model-value="(newValue: unknown) => onFieldChange(field, newValue)"
 				/>
 

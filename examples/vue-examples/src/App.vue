@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from "vue";
-import UseWizardExample from "./wizard-example/use-wizard-example.vue";
+import ApproachToggle from "./components/approach-toggle.vue";
 import ProviderExample from "./wizard-example/provider-example.vue";
+import UseWizardExample from "./wizard-example/use-wizard-example.vue";
 
 const approach = ref<"use-wizard" | "provider">("use-wizard");
 

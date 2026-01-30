@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { CheckCircle2 } from "lucide-vue-next";
 import { computed } from "vue";
 
 interface Props {
@@ -10,11 +11,8 @@ interface Props {
 const props = defineProps<Props>();
 
 const currentIndex = computed(() => props.stepIds.indexOf(props.currentStepId));
-const _progressPercent = computed(
-	() => ((currentIndex.value + 1) / props.stepIds.length) * 100,
-);
 
-const _getStepStatus = (stepId: string) => {
+const getStepStatus = (stepId: string) => {
 	const index = props.stepIds.indexOf(stepId);
 	if (index < currentIndex.value) return "completed";
 	if (index === currentIndex.value) return "current";

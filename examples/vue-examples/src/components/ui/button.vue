@@ -1,5 +1,7 @@
+<!-- eslint-disable vue/multi-word-component-names -->
 <script setup lang="ts">
 import { computed, type HTMLAttributes } from "vue";
+import { cn } from "@/lib/utils";
 
 interface Props {
 	variant?:
@@ -22,7 +24,7 @@ const props = withDefaults(defineProps<Props>(), {
 	asChild: false,
 });
 
-const _variantClasses = computed(() => {
+const variantClasses = computed(() => {
 	const variants = {
 		default: "bg-primary text-primary-foreground hover:bg-primary/90",
 		destructive:
@@ -36,7 +38,7 @@ const _variantClasses = computed(() => {
 	return variants[props.variant];
 });
 
-const _sizeClasses = computed(() => {
+const sizeClasses = computed(() => {
 	const sizes = {
 		default: "h-10 px-4 py-2",
 		sm: "h-9 rounded-md px-3",

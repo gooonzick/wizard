@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { useWizardData, useWizardNavigation } from "@gooonzick/wizard-vue";
+import { useWizardData } from "@gooonzick/wizard-vue";
+import { CheckCircle2, Circle } from "lucide-vue-next";
 import { computed } from "vue";
+import Card from "@/components/ui/card.vue";
 
 const { data, currentStepId } = useWizardData();
-const { steps } = useWizardNavigation();
 
 const stepIds = [
 	"personal",
@@ -15,7 +16,7 @@ const stepIds = [
 	"review",
 ] as const;
 
-const _stepTitles: Record<string, string> = {
+const stepTitles: Record<string, string> = {
 	personal: "Personal",
 	preferences: "Preferences",
 	account: "Account",
@@ -25,7 +26,7 @@ const _stepTitles: Record<string, string> = {
 	review: "Review",
 };
 
-const _fieldLabels: Record<string, string> = {
+const fieldLabels: Record<string, string> = {
 	firstName: "First Name",
 	lastName: "Last Name",
 	email: "Email",
@@ -42,7 +43,9 @@ const _fieldLabels: Record<string, string> = {
 	message: "Message",
 };
 
-const _currentIndex = computed(() => stepIds.indexOf(currentStepId.value));
+const currentIndex = computed(() =>
+	stepIds.indexOf(currentStepId.value as (typeof stepIds)[number]),
+);
 </script>
 
 <template>
@@ -52,7 +55,7 @@ const _currentIndex = computed(() => stepIds.indexOf(currentStepId.value));
 			<div>
 				<h3 class="font-semibold text-lg mb-3">Summary</h3>
 				<div class="space-y-2">
-					<div v-for="[key, value] in Object.entries(data.value)" :key="key" class="text-sm">
+					<div v-for="[key, value] in Object.entries(data)" :key="key" class="text-sm">
 						<span v-if="typeof value !== 'object' && (typeof value !== 'string' || value !== '')" class="flex justify-between items-start">
 							<span class="text-gray-600">
 								{{ fieldLabels[key] || key }}:
@@ -82,13 +85,13 @@ const _currentIndex = computed(() => stepIds.indexOf(currentStepId.value));
 							v-else
 							:class="[
 								'w-4 h-4 shrink-0',
-								stepId === currentStepId.value ? 'text-blue-500' : 'text-gray-300',
+								stepId === currentStepId ? 'text-blue-500' : 'text-gray-300',
 							]"
 						/>
 						<span
 							:class="[
 								'text-sm',
-								stepId === currentStepId.value
+								stepId === currentStepId
 									? 'font-semibold text-blue-600'
 									: index < currentIndex
 										? 'text-gray-600'

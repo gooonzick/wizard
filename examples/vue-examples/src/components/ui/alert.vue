@@ -1,5 +1,8 @@
+<!-- eslint-disable vue/multi-word-component-names -->
 <script setup lang="ts">
+import { AlertCircle } from "lucide-vue-next";
 import { computed, type HTMLAttributes } from "vue";
+import { cn } from "@/lib/utils";
 
 interface Props {
 	variant?: "default" | "destructive";
@@ -10,7 +13,12 @@ const props = withDefaults(defineProps<Props>(), {
 	variant: "default",
 });
 
-const _variantClasses = computed(() => {
+const slots = defineSlots<{
+	default?: () => unknown;
+	title?: () => unknown;
+}>();
+
+const variantClasses = computed(() => {
 	const variants = {
 		default: "border bg-background text-foreground",
 		destructive: "border-destructive/50 text-destructive",
@@ -18,7 +26,7 @@ const _variantClasses = computed(() => {
 	return variants[props.variant];
 });
 
-const _hasTitle = computed(() => !!$slots.title);
+const hasTitle = computed(() => !!slots.title);
 </script>
 
 <template>

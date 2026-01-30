@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { useWizard } from "@gooonzick/wizard-vue";
-import { initialData } from "./initial-data";
-import { advancedWizard } from "./wizard-definition";
+import Button from "@/components/ui/button.vue";
 import Card from "@/components/ui/card.vue";
 import WizardForm from "@/components/wizard-form.vue";
-import Button from "@/components/ui/button.vue";
-import WizardSidebar from "./wizard-sidebar.vue";
+import WizardProgress from "@/components/wizard-progress.vue";
+import WizardSidebar from "@/components/wizard-sidebar.vue";
+import { initialData } from "./initial-data";
+import { advancedWizard } from "./wizard-definition";
 
 const { navigation, actions, state, validation } = useWizard({
 	definition: advancedWizard,

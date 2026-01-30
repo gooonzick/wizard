@@ -11,8 +11,9 @@ import Checkbox from "@/components/ui/checkbox.vue";
 import Input from "@/components/ui/input.vue";
 import Label from "@/components/ui/label.vue";
 import ValidationMessage from "@/components/ui/validation-message.vue";
+import type { RegistrationData } from "../types/wizard-data";
 
-const { data, currentStepId } = useWizardData();
+const { data, currentStepId } = useWizardData<RegistrationData>();
 const { validationErrors } = useWizardValidation();
 const { updateField } = useWizardActions();
 
@@ -68,7 +69,7 @@ const fieldLabels: Record<string, string> = {
 };
 
 const getFieldError = (field: string): string => {
-	return validationErrors.value[field] || "";
+	return validationErrors.value?.[field] || "";
 };
 
 const getFieldType = (field: string): string => {
@@ -86,6 +87,18 @@ const getSelectOptions = (field: string): string[] => {
 		return ["free", "starter", "professional", "enterprise"];
 	return [];
 };
+
+const filteredFields = computed(() =>
+	currentStepConfig.value.fields.filter(
+		(f) =>
+			!["newsletter", "notifications", "theme", "companySize", "plan"].includes(
+				f,
+			),
+	),
+);
+
+type ModelValue = string | number | readonly string[] | null | undefined;
+type StringOrUndefined = string | undefined;
 </script>
 
 <template>
@@ -95,7 +108,7 @@ const getSelectOptions = (field: string): string[] => {
 		</h2>
 
 		<!-- Review Step -->
-		<div v-if="currentStepId.value === 'review'">
+		<div v-if="currentStepId === 'review'">
 			<Card>
 				<div class="p-6">
 					<Alert>
@@ -108,51 +121,51 @@ const getSelectOptions = (field: string): string[] => {
 					<div class="grid grid-cols-2 gap-4 py-4">
 						<div>
 							<p class="text-sm text-gray-600">First Name</p>
-							<p class="font-semibold">{{ data.value.firstName || "-" }}</p>
+							<p class="font-semibold">{{ data.firstName || "-" }}</p>
 						</div>
 						<div>
 							<p class="text-sm text-gray-600">Last Name</p>
-							<p class="font-semibold">{{ data.value.lastName || "-" }}</p>
+							<p class="font-semibold">{{ data.lastName || "-" }}</p>
 						</div>
 						<div>
 							<p class="text-sm text-gray-600">Email</p>
-							<p class="font-semibold">{{ data.value.email || "-" }}</p>
+							<p class="font-semibold">{{ data.email || "-" }}</p>
 						</div>
 						<div>
 							<p class="text-sm text-gray-600">Phone</p>
-							<p class="font-semibold">{{ data.value.phone || "-" }}</p>
+							<p class="font-semibold">{{ data.phone || "-" }}</p>
 						</div>
 						<div>
 							<p class="text-sm text-gray-600">Newsletter</p>
-							<p class="font-semibold">{{ data.value.newsletter ? "Subscribed" : "Not subscribed" }}</p>
+							<p class="font-semibold">{{ data.newsletter ? "Subscribed" : "Not subscribed" }}</p>
 						</div>
 						<div>
 							<p class="text-sm text-gray-600">Notifications</p>
-							<p class="font-semibold capitalize">{{ data.value.notifications || "-" }}</p>
+							<p class="font-semibold capitalize">{{ data.notifications || "-" }}</p>
 						</div>
 						<div>
 							<p class="text-sm text-gray-600">Theme</p>
-							<p class="font-semibold capitalize">{{ data.value.theme || "-" }}</p>
+							<p class="font-semibold capitalize">{{ data.theme || "-" }}</p>
 						</div>
 						<div>
 							<p class="text-sm text-gray-600">Username</p>
-							<p class="font-semibold">{{ data.value.username || "-" }}</p>
+							<p class="font-semibold">{{ data.username || "-" }}</p>
 						</div>
 						<div>
 							<p class="text-sm text-gray-600">Company Name</p>
-							<p class="font-semibold">{{ data.value.companyName || "-" }}</p>
+							<p class="font-semibold">{{ data.companyName || "-" }}</p>
 						</div>
 						<div>
 							<p class="text-sm text-gray-600">Company Size</p>
-							<p class="font-semibold">{{ data.value.companySize || "-" }}</p>
+							<p class="font-semibold">{{ data.companySize || "-" }}</p>
 						</div>
 						<div>
 							<p class="text-sm text-gray-600">Plan</p>
-							<p class="font-semibold capitalize">{{ data.value.plan || "-" }}</p>
+							<p class="font-semibold capitalize">{{ data.plan || "-" }}</p>
 						</div>
-						<div v-if="data.value.plan === 'enterprise'" class="col-span-2">
+						<div v-if="data.plan === 'enterprise'" class="col-span-2">
 							<p class="text-sm text-gray-600">Message</p>
-							<p class="font-semibold">{{ data.value.message || "-" }}</p>
+							<p class="font-semibold">{{ data.message || "-" }}</p>
 						</div>
 					</div>
 				</div>
@@ -165,7 +178,7 @@ const getSelectOptions = (field: string): string[] => {
 			<div v-if="currentStepConfig.fields.includes('newsletter')" class="flex items-center gap-3">
 				<Checkbox
 					id="newsletter"
-					:checked="data.value.newsletter === true"
+					:checked="data.newsletter === true"
 					@update:checked="(checked: boolean) => updateField('newsletter', checked)"
 				/>
 				<Label for="newsletter">{{ fieldLabels.newsletter }}</Label>
@@ -177,7 +190,7 @@ const getSelectOptions = (field: string): string[] => {
 				<Label for="notifications">{{ fieldLabels.notifications }}</Label>
 				<select
 					id="notifications"
-					:value="data.value.notifications"
+					:value="data.notifications"
 					@change="(e: Event) => updateField('notifications', (e.target as HTMLSelectElement).value)"
 					class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
 				>
@@ -193,7 +206,7 @@ const getSelectOptions = (field: string): string[] => {
 				<Label for="theme">{{ fieldLabels.theme }}</Label>
 				<select
 					id="theme"
-					:value="data.value.theme"
+					:value="data.theme"
 					@change="(e: Event) => updateField('theme', (e.target as HTMLSelectElement).value)"
 					class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
 				>
@@ -209,7 +222,7 @@ const getSelectOptions = (field: string): string[] => {
 				<Label for="companySize">{{ fieldLabels.companySize }}</Label>
 				<select
 					id="companySize"
-					:value="data.value.companySize"
+					:value="data.companySize"
 					@change="(e: Event) => updateField('companySize', (e.target as HTMLSelectElement).value)"
 					class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
 				>
@@ -225,7 +238,7 @@ const getSelectOptions = (field: string): string[] => {
 				<Label for="plan">{{ fieldLabels.plan }}</Label>
 				<select
 					id="plan"
-					:value="data.value.plan"
+					:value="data.plan"
 					@change="(e: Event) => updateField('plan', (e.target as HTMLSelectElement).value)"
 					class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
 				>
@@ -237,20 +250,14 @@ const getSelectOptions = (field: string): string[] => {
 			</div>
 
 			<!-- Text/Password Inputs -->
-			<div
-				v-for="field in currentStepConfig.fields.filter(f => 
-!['newsletter', 'notifications', 'theme', 'companySize', 'plan'].includes(f)
-)"
-				:key="field"
-				class="space-y-2"
-			>
+			<div v-for="field in filteredFields" :key="field" class="space-y-2">
 				<Label :for="field">{{ fieldLabels[field] }}</Label>
 
 				<!-- Message Textarea -->
 				<textarea
 					v-if="field === 'message'"
 					:id="field"
-					:value="data.value[field]"
+					:value="data[field] as ModelValue"
 					@input="(e: Event) => updateField(field, (e.target as HTMLTextAreaElement).value)"
 					class="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
 					placeholder="Enter your message for our sales team"
@@ -261,7 +268,7 @@ const getSelectOptions = (field: string): string[] => {
 					v-else
 					:id="field"
 					:type="getFieldType(field)"
-					:model-value="data.value[field]"
+					:model-value="data[field] as StringOrUndefined"
 					@update:model-value="(newValue: unknown) => updateField(field, newValue)"
 				/>
 

@@ -1,8 +1,14 @@
 <script setup lang="ts">
-import { WizardProvider } from '@gooonzick/wizard-vue';
+import { WizardProvider } from "@gooonzick/wizard-vue";
+import type { RegistrationData } from "../types/wizard-data";
+import { initialData } from "./initial-data";
+import WizardControls from "./wizard-controls.vue";
+import { advancedWizard } from "./wizard-definition";
+import WizardSidebar from "./wizard-sidebar.vue";
+import WizardStepForm from "./wizard-step-form.vue";
 
 const handleComplete = (finalData: unknown) => {
-	console.log("Wizard Completed (Provider)!", finalData);
+	console.log("Wizard Completed (Provider)!", finalData as RegistrationData);
 	alert("Wizard completed! Check console for data.");
 };
 </script>
@@ -21,9 +27,9 @@ const handleComplete = (finalData: unknown) => {
 			</div>
 
 			<WizardProvider
-				:definition="advancedWizard"
-				:initial-data="initialData"
-				@on-complete="handleComplete"
+				:definition="advancedWizard as any"
+				:initial-data="initialData as any"
+				:on-complete="handleComplete"
 			>
 				<div class="grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-6">
 					<!-- Left Column -->

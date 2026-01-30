@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { CheckCircle2, Circle } from "lucide-vue-next";
 import { computed } from "vue";
+import Card from "./ui/card.vue";
 
 interface Props {
 	data: Record<string, unknown>;
@@ -11,22 +13,7 @@ interface Props {
 
 const props = defineProps<Props>();
 
-const _currentIndex = computed(() =>
-	props.stepIds.indexOf(props.currentStepId),
-);
-
-const _stepFields = computed(() => {
-	const fields: Record<string, string[]> = {
-		personal: ["firstName", "lastName", "email", "phone"],
-		preferences: ["newsletter", "notifications", "theme"],
-		account: ["username", "password"],
-		business: ["companyName", "companySize"],
-		plan: ["plan"],
-		contact: ["message"],
-		review: [],
-	};
-	return fields;
-});
+const currentIndex = computed(() => props.stepIds.indexOf(props.currentStepId));
 </script>
 
 <template>
