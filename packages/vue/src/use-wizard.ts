@@ -6,10 +6,8 @@ import {
 	computed,
 	onScopeDispose,
 	reactive,
-	readonly,
 	ref,
 	shallowRef,
-	toRefs,
 	watch,
 } from "vue";
 import type {
@@ -48,15 +46,6 @@ export function useWizard<T extends WizardData>(
 		onComplete,
 		onError,
 	});
-
-	// Update callbacks synchronously when options change
-	callbacksRef.value = {
-		onStateChange,
-		onStepEnter,
-		onStepLeave,
-		onComplete,
-		onError,
-	};
 
 	// Forward reference for state - needed for createMachine callback
 	let stateRef: { value: WizardState<T> };
@@ -146,19 +135,20 @@ export function useWizard<T extends WizardData>(
 		stopStepWatcher();
 	});
 
-	// Computed values - depend on state.value to ensure reactivity
+	// Computed values derived from reactive state
+	// These access state.value.currentStepId to establish a reactive dependency,
+	// then delegate to manager for the actual lookup (manager methods are not reactive).
 	const currentStep = computed(() => {
-		// Access state.value.currentStepId to track dependency (void to suppress unused warning)
-		void state.value.currentStepId;
-		return manager.value.getCurrentStep();
+		const stepId = state.value.currentStepId;
+		return definition.steps[stepId];
 	});
 	const visitedSteps = computed(() => {
-		// Access state.value.currentStepId to track dependency
+		// Re-evaluate when step changes; manager tracks visited set internally
 		void state.value.currentStepId;
 		return manager.value.getVisitedSteps();
 	});
 	const stepHistory = computed(() => {
-		// Access state.value.currentStepId to track dependency
+		// Re-evaluate when step changes; manager tracks history internally
 		void state.value.currentStepId;
 		return manager.value.getStepHistory();
 	});
@@ -273,18 +263,12 @@ export function useWizard<T extends WizardData>(
 	};
 
 	const navigationSlice: UseWizardNavigation = {
-		canGoNext: readonly(
-			toRefs(navigationState).canGoNext,
-		) as ComputedRef<boolean>,
-		canGoPrevious: readonly(
-			toRefs(navigationState).canGoPrevious,
-		) as ComputedRef<boolean>,
+		canGoNext: computed(() => navigationState.canGoNext),
+		canGoPrevious: computed(() => navigationState.canGoPrevious),
 		isFirstStep,
 		isLastStep,
 		visitedSteps,
-		availableSteps: readonly(
-			toRefs(navigationState).availableSteps,
-		) as ComputedRef<StepId[]>,
+		availableSteps: computed(() => navigationState.availableSteps),
 		stepHistory,
 		goNext,
 		goPrevious,
@@ -293,15 +277,9 @@ export function useWizard<T extends WizardData>(
 	};
 
 	const loadingSlice: UseWizardLoading = {
-		isValidating: readonly(
-			toRefs(loadingState).isValidating,
-		) as ComputedRef<boolean>,
-		isSubmitting: readonly(
-			toRefs(loadingState).isSubmitting,
-		) as ComputedRef<boolean>,
-		isNavigating: readonly(
-			toRefs(loadingState).isNavigating,
-		) as ComputedRef<boolean>,
+		isValidating: computed(() => loadingState.isValidating),
+		isSubmitting: computed(() => loadingState.isSubmitting),
+		isNavigating: computed(() => loadingState.isNavigating),
 	};
 
 	const actionsSlice: UseWizardActions<T> = {
