@@ -17,7 +17,7 @@ const { submit } = useWizardActions();
 		<Button
 			variant="outline"
 			@click="goPrevious"
-			:disabled="!canGoPrevious || isNavigating"
+			:disabled="!canGoPrevious.value || isNavigating.value"
 		>
 			Previous
 		</Button>
@@ -25,7 +25,7 @@ const { submit } = useWizardActions();
 		<template v-if="!isLastStep">
 			<Button
 				@click="goNext"
-				:disabled="!canGoNext || isNavigating"
+				:disabled="!canGoNext.value || isNavigating.value"
 			>
 				Next
 			</Button>
@@ -33,7 +33,7 @@ const { submit } = useWizardActions();
 		<template v-else>
 			<Button
 				@click="submit"
-				:disabled="isNavigating || isSubmitting"
+				:disabled="isNavigating.value || isSubmitting.value"
 				class="bg-green-600 hover:bg-green-700"
 			>
 				Submit

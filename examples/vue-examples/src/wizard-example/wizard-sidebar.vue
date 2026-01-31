@@ -50,13 +50,13 @@ const currentIndex = computed(() =>
 							v-else
 							:class="[
 								'w-4 h-4 shrink-0',
-								stepId === currentStepId ? 'text-blue-500' : 'text-gray-300',
+								stepId === currentStepId.value ? 'text-blue-500' : 'text-gray-300',
 							]"
 						/>
 						<span
 							:class="[
 								'text-sm',
-								stepId === currentStepId
+								stepId === currentStepId.value
 									? 'font-semibold text-blue-600'
 									: index < currentIndex
 										? 'text-gray-600'
