@@ -61,7 +61,9 @@ describe("WizardProvider", () => {
 	});
 
 	it("should work with createTypedWizardProvider", () => {
-		interface FormData { name: string }
+		interface FormData extends Record<string, unknown> {
+			name: string;
+		}
 
 		const { Provider, useData } = createTypedWizardProvider<FormData>();
 

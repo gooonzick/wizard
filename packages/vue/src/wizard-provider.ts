@@ -13,6 +13,8 @@ import {
 	provide,
 	toRaw,
 } from "vue";
+import type { UseWizardReturn } from "./types";
+import { useWizard } from "./use-wizard";
 import {
 	useWizardActions,
 	useWizardData,
@@ -20,8 +22,6 @@ import {
 	useWizardNavigation,
 	useWizardValidation,
 } from "./use-wizard-granular";
-import type { UseWizardReturn } from "./types";
-import { useWizard } from "./use-wizard";
 
 /**
  * Context for granular hooks - holds the wizard instance
