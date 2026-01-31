@@ -138,6 +138,8 @@ export function useWizardProviderContext<
  */
 export function createTypedWizardProvider<T extends WizardData>() {
 	return {
+		// Cast needed: Vue's defineComponent erases generics from props,
+		// so we centralize the cast here instead of requiring `as any` at every usage site.
 		Provider: WizardProvider as unknown as DefineComponent<
 			WizardProviderProps<T>
 		>,

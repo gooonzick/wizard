@@ -6,7 +6,6 @@ import {
 	computed,
 	onScopeDispose,
 	reactive,
-	ref,
 	shallowRef,
 	watch,
 } from "vue";
@@ -38,14 +37,14 @@ export function useWizard<T extends WizardData>(
 		onError,
 	} = options;
 
-	// Store callbacks in a ref for stable references (simpler than reactive + watchEffect)
-	const callbacksRef = ref({
+	// Callbacks captured once at setup time (composables run once per component)
+	const callbacks = {
 		onStateChange,
 		onStepEnter,
 		onStepLeave,
 		onComplete,
 		onError,
-	});
+	};
 
 	// Forward reference for state - needed for createMachine callback
 	let stateRef: { value: WizardState<T> };
@@ -55,19 +54,19 @@ export function useWizard<T extends WizardData>(
 		return new WizardMachine(definition, context, data || initialData, {
 			onStateChange: (newState: WizardState<T>) => {
 				stateRef.value = newState;
-				callbacksRef.value.onStateChange?.(newState);
+				callbacks.onStateChange?.(newState);
 			},
 			onStepEnter: (stepId: StepId, d: T) => {
-				callbacksRef.value.onStepEnter?.(stepId, d);
+				callbacks.onStepEnter?.(stepId, d);
 			},
 			onStepLeave: (stepId: StepId, d: T) => {
-				callbacksRef.value.onStepLeave?.(stepId, d);
+				callbacks.onStepLeave?.(stepId, d);
 			},
 			onComplete: (d: T) => {
-				callbacksRef.value.onComplete?.(d);
+				callbacks.onComplete?.(d);
 			},
 			onError: (error: Error) => {
-				callbacksRef.value.onError?.(error);
+				callbacks.onError?.(error);
 			},
 		});
 	};
@@ -113,7 +112,7 @@ export function useWizard<T extends WizardData>(
 			if (context.debug) {
 				console.error("[useWizard] Failed to update navigation state:", error);
 			}
-			callbacksRef.value.onError?.(
+			callbacks.onError?.(
 				error instanceof Error ? error : new Error(String(error)),
 			);
 		}
