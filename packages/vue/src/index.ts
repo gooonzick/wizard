@@ -41,6 +41,7 @@ export {
 
 // Provider for context sharing
 export {
+	createTypedWizardProvider,
 	useWizardProviderContext,
 	WizardProvider,
 	type WizardProviderProps,

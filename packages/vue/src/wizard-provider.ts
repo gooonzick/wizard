@@ -6,12 +6,20 @@ import type {
 	WizardState,
 } from "@gooonzick/wizard-core";
 import {
+	type DefineComponent,
 	defineComponent,
 	type InjectionKey,
 	inject,
 	provide,
 	toRaw,
 } from "vue";
+import {
+	useWizardActions,
+	useWizardData,
+	useWizardLoading,
+	useWizardNavigation,
+	useWizardValidation,
+} from "./use-wizard-granular";
 import type { UseWizardReturn } from "./types";
 import { useWizard } from "./use-wizard";
 
@@ -105,4 +113,38 @@ export function useWizardProviderContext<
 		);
 	}
 	return context as unknown as WizardContextValue<T>;
+}
+
+/**
+ * Creates a pre-typed provider component and granular composables for a specific data type.
+ * This avoids `as any` casts at usage sites by returning already-typed versions.
+ *
+ * @example
+ * ```ts
+ * interface MyFormData extends WizardData {
+ *   name: string;
+ *   email: string;
+ * }
+ *
+ * const {
+ *   Provider,
+ *   useData,
+ *   useActions,
+ *   useNavigation,
+ *   useValidation,
+ *   useLoading,
+ * } = createTypedWizardProvider<MyFormData>();
+ * ```
+ */
+export function createTypedWizardProvider<T extends WizardData>() {
+	return {
+		Provider: WizardProvider as unknown as DefineComponent<
+			WizardProviderProps<T>
+		>,
+		useData: () => useWizardData<T>(),
+		useActions: () => useWizardActions<T>(),
+		useNavigation: () => useWizardNavigation(),
+		useValidation: () => useWizardValidation(),
+		useLoading: () => useWizardLoading(),
+	};
 }
