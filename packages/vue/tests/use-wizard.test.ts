@@ -1,8 +1,38 @@
 import { createLinearWizard } from "@gooonzick/wizard-core";
 import { mount } from "@vue/test-utils";
 import { describe, expect, it, vi } from "vitest";
-import { defineComponent, nextTick } from "vue";
+import { defineComponent } from "vue";
+import type { UseWizardReturn } from "../src/types";
 import { useWizard } from "../src/use-wizard";
+
+/**
+ * Helper: mounts a component that calls useWizard and returns both the
+ * wrapper and a direct reference to the composable return value.
+ * We capture the composable ref so we can call async methods directly
+ * (avoiding the issue where Vue template @click handlers don't await
+ * async return values) and assert on reactive computed values.
+ */
+function mountWizard<T extends Record<string, unknown>>(options: {
+	definition: ReturnType<typeof createLinearWizard<T>>;
+	initialData: T;
+	onStateChange?: (state: unknown) => void;
+	onStepEnter?: (stepId: string, data: T) => void;
+	onStepLeave?: (stepId: string, data: T) => void;
+	onComplete?: (data: T) => void;
+	onError?: (error: Error) => void;
+}) {
+	let wizardRef!: UseWizardReturn<T>;
+	const TestComponent = defineComponent({
+		setup() {
+			const wizard = useWizard(options);
+			wizardRef = wizard;
+			return { wizard };
+		},
+		template: "<div></div>",
+	});
+	const wrapper = mount(TestComponent);
+	return { wrapper, wizard: wizardRef };
+}
 
 describe("useWizard", () => {
 	it("should initialize with first step", () => {
@@ -40,26 +70,13 @@ describe("useWizard", () => {
 
 		const onStateChange = vi.fn();
 
-		const TestComponent = defineComponent({
-			setup() {
-				const wizard = useWizard({
-					definition,
-					initialData: { name: "" },
-					onStateChange,
-				});
-				return { wizard };
-			},
-			template: `
-				<div>
-					<button @click="wizard.navigation.goNext">Next</button>
-				</div>
-			`,
+		const { wizard } = mountWizard({
+			definition,
+			initialData: { name: "" },
+			onStateChange,
 		});
 
-		const wrapper = mount(TestComponent);
-		await wrapper.find("button").trigger("click");
-		await wrapper.vm.$nextTick();
-
+		await wizard.navigation.goNext();
 		expect(onStateChange).toHaveBeenCalled();
 	});
 
@@ -69,25 +86,13 @@ describe("useWizard", () => {
 			steps: [{ id: "step1", title: "Step 1" }],
 		});
 
-		const TestComponent = defineComponent({
-			setup() {
-				const wizard = useWizard({
-					definition,
-					initialData: { name: "John", age: 30 },
-				});
-				return { wizard };
-			},
-			template: `
-				<div>
-					<span class="name">{{ wizard.state.data.value.name }}</span>
-					<span class="age">{{ wizard.state.data.value.age }}</span>
-				</div>
-			`,
+		const { wizard } = mountWizard({
+			definition,
+			initialData: { name: "John", age: 30 },
 		});
 
-		const wrapper = mount(TestComponent);
-		expect(wrapper.find(".name").text()).toBe("John");
-		expect(wrapper.find(".age").text()).toBe("30");
+		expect(wizard.state.data.value.name).toBe("John");
+		expect(wizard.state.data.value.age).toBe(30);
 	});
 
 	it("should update data with updateField", async () => {
@@ -96,29 +101,16 @@ describe("useWizard", () => {
 			steps: [{ id: "step1", title: "Step 1" }],
 		});
 
-		const TestComponent = defineComponent({
-			setup() {
-				const wizard = useWizard({
-					definition,
-					initialData: { name: "" },
-				});
-				return { wizard };
-			},
-			template: `
-				<div>
-					<span class="name">{{ wizard.state.data.value.name }}</span>
-					<button @click="wizard.actions.updateField('name', 'Updated')">Update</button>
-				</div>
-			`,
+		const { wizard } = mountWizard({
+			definition,
+			initialData: { name: "" },
 		});
 
-		const wrapper = mount(TestComponent);
-		expect(wrapper.find(".name").text()).toBe("");
+		expect(wizard.state.data.value.name).toBe("");
 
-		await wrapper.find("button").trigger("click");
-		await nextTick();
+		wizard.actions.updateField("name", "Updated");
 
-		expect(wrapper.find(".name").text()).toBe("Updated");
+		expect(wizard.state.data.value.name).toBe("Updated");
 	});
 
 	it("should navigate between steps", async () => {
@@ -131,41 +123,21 @@ describe("useWizard", () => {
 			],
 		});
 
-		const TestComponent = defineComponent({
-			setup() {
-				const wizard = useWizard({
-					definition,
-					initialData: { name: "" },
-				});
-				return { wizard };
-			},
-			template: `
-				<div>
-					<span class="step">{{ wizard.state.currentStepId.value }}</span>
-					<button class="next" @click="wizard.navigation.goNext">Next</button>
-					<button class="prev" @click="wizard.navigation.goPrevious">Previous</button>
-				</div>
-			`,
+		const { wizard } = mountWizard({
+			definition,
+			initialData: { name: "" },
 		});
 
-		const wrapper = mount(TestComponent);
-		expect(wrapper.find(".step").text()).toBe("step1");
+		expect(wizard.state.currentStepId.value).toBe("step1");
 
-		await wrapper.find(".next").trigger("click");
-		// Wait for async navigation to complete
-		await new Promise((resolve) => setTimeout(resolve, 10));
-		await nextTick();
-		expect(wrapper.find(".step").text()).toBe("step2");
+		await wizard.navigation.goNext();
+		expect(wizard.state.currentStepId.value).toBe("step2");
 
-		await wrapper.find(".next").trigger("click");
-		await new Promise((resolve) => setTimeout(resolve, 10));
-		await nextTick();
-		expect(wrapper.find(".step").text()).toBe("step3");
+		await wizard.navigation.goNext();
+		expect(wizard.state.currentStepId.value).toBe("step3");
 
-		await wrapper.find(".prev").trigger("click");
-		await new Promise((resolve) => setTimeout(resolve, 10));
-		await nextTick();
-		expect(wrapper.find(".step").text()).toBe("step2");
+		await wizard.navigation.goPrevious();
+		expect(wizard.state.currentStepId.value).toBe("step2");
 	});
 
 	it("should reset wizard state", async () => {
@@ -177,42 +149,23 @@ describe("useWizard", () => {
 			],
 		});
 
-		const TestComponent = defineComponent({
-			setup() {
-				const wizard = useWizard({
-					definition,
-					initialData: { name: "initial" },
-				});
-				return { wizard };
-			},
-			template: `
-				<div>
-					<span class="step">{{ wizard.state.currentStepId.value }}</span>
-					<span class="name">{{ wizard.state.data.value.name }}</span>
-					<button class="next" @click="wizard.navigation.goNext">Next</button>
-					<button class="update" @click="wizard.actions.updateField('name', 'updated')">Update</button>
-					<button class="reset" @click="wizard.actions.reset({ name: 'reset' })">Reset</button>
-				</div>
-			`,
+		const { wizard } = mountWizard({
+			definition,
+			initialData: { name: "initial" },
 		});
 
-		const wrapper = mount(TestComponent);
-
 		// Navigate and update
-		await wrapper.find(".next").trigger("click");
-		await nextTick();
-		await wrapper.find(".update").trigger("click");
-		await nextTick();
+		await wizard.navigation.goNext();
+		wizard.actions.updateField("name", "updated");
 
-		expect(wrapper.find(".step").text()).toBe("step2");
-		expect(wrapper.find(".name").text()).toBe("updated");
+		expect(wizard.state.currentStepId.value).toBe("step2");
+		expect(wizard.state.data.value.name).toBe("updated");
 
 		// Reset
-		await wrapper.find(".reset").trigger("click");
-		await nextTick();
+		wizard.actions.reset({ name: "reset" });
 
-		expect(wrapper.find(".step").text()).toBe("step1");
-		expect(wrapper.find(".name").text()).toBe("reset");
+		expect(wizard.state.currentStepId.value).toBe("step1");
+		expect(wizard.state.data.value.name).toBe("reset");
 	});
 
 	it("should call lifecycle callbacks", async () => {
@@ -227,32 +180,17 @@ describe("useWizard", () => {
 		const onStepEnter = vi.fn();
 		const onStepLeave = vi.fn();
 
-		const TestComponent = defineComponent({
-			setup() {
-				const wizard = useWizard({
-					definition,
-					initialData: { name: "" },
-					onStepEnter,
-					onStepLeave,
-				});
-				return { wizard };
-			},
-			template: `
-				<div>
-					<button @click="wizard.navigation.goNext">Next</button>
-				</div>
-			`,
+		const { wizard } = mountWizard({
+			definition,
+			initialData: { name: "" },
+			onStepEnter,
+			onStepLeave,
 		});
-
-		const wrapper = mount(TestComponent);
 
 		// Initial enter callback
 		expect(onStepEnter).toHaveBeenCalledWith("step1", { name: "" });
 
-		await wrapper.find("button").trigger("click");
-		// Wait for async navigation to complete
-		await new Promise((resolve) => setTimeout(resolve, 10));
-		await nextTick();
+		await wizard.navigation.goNext();
 
 		expect(onStepLeave).toHaveBeenCalledWith("step1", { name: "" });
 		expect(onStepEnter).toHaveBeenCalledWith("step2", { name: "" });
@@ -264,27 +202,14 @@ describe("useWizard", () => {
 			steps: [{ id: "step1", title: "Step 1" }],
 		});
 
-		const TestComponent = defineComponent({
-			setup() {
-				const wizard = useWizard({
-					definition,
-					initialData: { name: "" },
-				});
-				return { wizard };
-			},
-			template: `
-				<div>
-					<span class="validating">{{ wizard.loading.isValidating.value }}</span>
-					<span class="submitting">{{ wizard.loading.isSubmitting.value }}</span>
-					<span class="navigating">{{ wizard.loading.isNavigating.value }}</span>
-				</div>
-			`,
+		const { wizard } = mountWizard({
+			definition,
+			initialData: { name: "" },
 		});
 
-		const wrapper = mount(TestComponent);
-		expect(wrapper.find(".validating").text()).toBe("false");
-		expect(wrapper.find(".submitting").text()).toBe("false");
-		expect(wrapper.find(".navigating").text()).toBe("false");
+		expect(wizard.loading.isValidating.value).toBe(false);
+		expect(wizard.loading.isSubmitting.value).toBe(false);
+		expect(wizard.loading.isNavigating.value).toBe(false);
 	});
 
 	it("should expose validation state", async () => {
@@ -293,23 +218,12 @@ describe("useWizard", () => {
 			steps: [{ id: "step1", title: "Step 1" }],
 		});
 
-		const TestComponent = defineComponent({
-			setup() {
-				const wizard = useWizard({
-					definition,
-					initialData: { name: "" },
-				});
-				return { wizard };
-			},
-			template: `
-				<div>
-					<span class="valid">{{ wizard.validation.isValid.value }}</span>
-				</div>
-			`,
+		const { wizard } = mountWizard({
+			definition,
+			initialData: { name: "" },
 		});
 
-		const wrapper = mount(TestComponent);
-		expect(wrapper.find(".valid").text()).toBe("true");
+		expect(wizard.validation.isValid.value).toBe(true);
 	});
 
 	it("should cleanup watchers on unmount", async () => {
@@ -347,20 +261,13 @@ describe("useWizard", () => {
 			.spyOn(console, "error")
 			.mockImplementation(() => {});
 
-		const TestComponent = defineComponent({
-			setup() {
-				const wizard = useWizard({
-					definition,
-					initialData: { name: "" },
-					onError,
-				});
-				return { wizard };
-			},
-			template: "<div>{{ wizard.state.currentStepId.value }}</div>",
+		const { wizard } = mountWizard({
+			definition,
+			initialData: { name: "" },
+			onError,
 		});
 
-		const wrapper = mount(TestComponent);
-		expect(wrapper.text()).toBe("step1");
+		expect(wizard.state.currentStepId.value).toBe("step1");
 
 		consoleError.mockRestore();
 	});
@@ -371,23 +278,13 @@ describe("useWizard", () => {
 			steps: [{ id: "step1", title: "Step 1" }],
 		});
 
-		const TestComponent = defineComponent({
-			setup() {
-				const wizard = useWizard({
-					definition,
-					initialData: { name: "" },
-				});
-				return { wizard };
-			},
-			template:
-				"<div>{{ wizard.state.currentStepId.value }} - {{ wizard.state.currentStep.value?.id }}</div>",
+		const { wizard } = mountWizard({
+			definition,
+			initialData: { name: "" },
 		});
 
-		const wrapper = mount(TestComponent);
-		await nextTick();
-		// The currentStepId is always available, currentStep.value.id matches
-		expect(wrapper.text()).toContain("step1");
-		expect(wrapper.text()).toContain("step1 - step1");
+		expect(wizard.state.currentStepId.value).toBe("step1");
+		expect(wizard.state.currentStep.value?.id).toBe("step1");
 	});
 
 	it("should return navigation helpers", async () => {
@@ -399,32 +296,70 @@ describe("useWizard", () => {
 			],
 		});
 
-		const TestComponent = defineComponent({
-			setup() {
-				const wizard = useWizard({
-					definition,
-					initialData: { name: "" },
-				});
-				return { wizard };
-			},
-			template: `
-				<div>
-					<span class="first">{{ wizard.navigation.isFirstStep.value }}</span>
-					<span class="last">{{ wizard.navigation.isLastStep.value }}</span>
-					<button @click="wizard.navigation.goNext">Next</button>
-				</div>
-			`,
+		const { wizard } = mountWizard({
+			definition,
+			initialData: { name: "" },
 		});
 
-		const wrapper = mount(TestComponent);
-		expect(wrapper.find(".first").text()).toBe("true");
+		expect(wizard.navigation.isFirstStep.value).toBe(true);
 
-		await wrapper.find("button").trigger("click");
-		// Wait for async navigation to complete
-		await new Promise((resolve) => setTimeout(resolve, 10));
-		await nextTick();
+		await wizard.navigation.goNext();
 
-		// After navigating to last step
-		expect(wrapper.find(".first").text()).toBe("false");
+		// isFirstStep is a computed based on currentStepId (updates synchronously)
+		expect(wizard.navigation.isFirstStep.value).toBe(false);
+		expect(wizard.state.currentStepId.value).toBe("step2");
+	});
+
+	it("should navigate back multiple steps with goBack", async () => {
+		const definition = createLinearWizard<{ name: string }>({
+			id: "test-wizard",
+			steps: [
+				{ id: "step1", title: "Step 1" },
+				{ id: "step2", title: "Step 2" },
+				{ id: "step3", title: "Step 3" },
+			],
+		});
+
+		const { wizard } = mountWizard({
+			definition,
+			initialData: { name: "" },
+		});
+
+		expect(wizard.state.currentStepId.value).toBe("step1");
+
+		// Navigate to step3
+		await wizard.navigation.goNext();
+		await wizard.navigation.goNext();
+		expect(wizard.state.currentStepId.value).toBe("step3");
+
+		// Go back 2 steps
+		await wizard.navigation.goBack(2);
+		expect(wizard.state.currentStepId.value).toBe("step1");
+	});
+
+	it("should navigate to a specific step with goToStep", async () => {
+		const definition = createLinearWizard<{ name: string }>({
+			id: "test-wizard",
+			steps: [
+				{ id: "step1", title: "Step 1" },
+				{ id: "step2", title: "Step 2" },
+				{ id: "step3", title: "Step 3" },
+			],
+		});
+
+		const { wizard } = mountWizard({
+			definition,
+			initialData: { name: "" },
+		});
+
+		expect(wizard.state.currentStepId.value).toBe("step1");
+
+		// Jump to step3
+		await wizard.navigation.goToStep("step3");
+		expect(wizard.state.currentStepId.value).toBe("step3");
+
+		// Jump back to step1
+		await wizard.navigation.goToStep("step1");
+		expect(wizard.state.currentStepId.value).toBe("step1");
 	});
 });
