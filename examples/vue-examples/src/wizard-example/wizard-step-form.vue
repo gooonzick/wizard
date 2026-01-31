@@ -12,10 +12,11 @@ import Input from "@/components/ui/input.vue";
 import Label from "@/components/ui/label.vue";
 import ValidationMessage from "@/components/ui/validation-message.vue";
 import type { RegistrationData } from "../types/wizard-data";
+import { fieldLabels } from "./constants";
 
 const { data, currentStepId } = useWizardData<RegistrationData>();
 const { validationErrors } = useWizardValidation();
-const { updateField } = useWizardActions();
+const { updateField } = useWizardActions<RegistrationData>();
 
 const currentStepConfig = computed(() => {
 	const stepConfig: Record<string, { fields: string[]; title: string }> = {
@@ -50,23 +51,6 @@ const currentStepConfig = computed(() => {
 	};
 	return stepConfig[currentStepId.value] || { fields: [], title: "" };
 });
-
-const fieldLabels: Record<string, string> = {
-	firstName: "First Name",
-	lastName: "Last Name",
-	email: "Email",
-	phone: "Phone",
-	newsletter: "Newsletter",
-	notifications: "Notifications",
-	theme: "Theme",
-	username: "Username",
-	password: "Password",
-	confirmPassword: "Confirm Password",
-	companyName: "Company Name",
-	companySize: "Company Size",
-	plan: "Plan",
-	message: "Message",
-};
 
 const getFieldError = (field: string): string => {
 	return validationErrors.value?.[field] || "";

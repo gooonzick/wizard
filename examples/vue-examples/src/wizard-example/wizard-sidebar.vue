@@ -3,45 +3,10 @@ import { useWizardData } from "@gooonzick/wizard-vue";
 import { CheckCircle2, Circle } from "lucide-vue-next";
 import { computed } from "vue";
 import Card from "@/components/ui/card.vue";
+import type { RegistrationData } from "../types/wizard-data";
+import { fieldLabels, stepIds, stepTitles } from "./constants";
 
-const { data, currentStepId } = useWizardData();
-
-const stepIds = [
-	"personal",
-	"preferences",
-	"account",
-	"business",
-	"plan",
-	"contact",
-	"review",
-] as const;
-
-const stepTitles: Record<string, string> = {
-	personal: "Personal",
-	preferences: "Preferences",
-	account: "Account",
-	business: "Business",
-	plan: "Plan",
-	contact: "Contact",
-	review: "Review",
-};
-
-const fieldLabels: Record<string, string> = {
-	firstName: "First Name",
-	lastName: "Last Name",
-	email: "Email",
-	phone: "Phone",
-	newsletter: "Newsletter",
-	notifications: "Notifications",
-	theme: "Theme",
-	username: "Username",
-	password: "Password",
-	confirmPassword: "Confirm Password",
-	companyName: "Company Name",
-	companySize: "Company Size",
-	plan: "Plan",
-	message: "Message",
-};
+const { data, currentStepId } = useWizardData<RegistrationData>();
 
 const currentIndex = computed(() =>
 	stepIds.indexOf(currentStepId.value as (typeof stepIds)[number]),

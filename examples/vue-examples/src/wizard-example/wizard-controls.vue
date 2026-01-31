@@ -10,10 +10,6 @@ const { canGoNext, canGoPrevious, isLastStep, goNext, goPrevious } =
 	useWizardNavigation();
 const { isNavigating, isSubmitting } = useWizardLoading();
 const { submit } = useWizardActions();
-
-const handleSubmit = async () => {
-	await submit();
-};
 </script>
 
 <template>
@@ -36,7 +32,7 @@ const handleSubmit = async () => {
 		</template>
 		<template v-else>
 			<Button
-				@click="handleSubmit"
+				@click="submit"
 				:disabled="isNavigating || isSubmitting"
 				class="bg-green-600 hover:bg-green-700"
 			>

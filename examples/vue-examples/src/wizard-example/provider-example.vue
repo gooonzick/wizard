@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { WizardProvider } from "@gooonzick/wizard-vue";
+import { createTypedWizardProvider } from "@gooonzick/wizard-vue";
 import type { RegistrationData } from "../types/wizard-data";
 import { initialData } from "./initial-data";
 import WizardControls from "./wizard-controls.vue";
@@ -7,8 +7,10 @@ import { advancedWizard } from "./wizard-definition";
 import WizardSidebar from "./wizard-sidebar.vue";
 import WizardStepForm from "./wizard-step-form.vue";
 
-const handleComplete = (finalData: unknown) => {
-	console.log("Wizard Completed (Provider)!", finalData as RegistrationData);
+const { Provider } = createTypedWizardProvider<RegistrationData>();
+
+const handleComplete = (finalData: RegistrationData) => {
+	console.log("Wizard Completed (Provider)!", finalData);
 	alert("Wizard completed! Check console for data.");
 };
 </script>
@@ -26,9 +28,9 @@ const handleComplete = (finalData: unknown) => {
 				</p>
 			</div>
 
-			<WizardProvider
-				:definition="advancedWizard as any"
-				:initial-data="initialData as any"
+			<Provider
+				:definition="advancedWizard"
+				:initial-data="initialData"
 				:on-complete="handleComplete"
 			>
 				<div class="grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-6">
@@ -45,7 +47,7 @@ const handleComplete = (finalData: unknown) => {
 						<WizardSidebar />
 					</div>
 				</div>
-			</WizardProvider>
+			</Provider>
 		</div>
 	</div>
 </template>

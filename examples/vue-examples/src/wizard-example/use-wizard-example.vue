@@ -5,6 +5,7 @@ import Card from "@/components/ui/card.vue";
 import WizardForm from "@/components/wizard-form.vue";
 import WizardProgress from "@/components/wizard-progress.vue";
 import WizardSidebar from "@/components/wizard-sidebar.vue";
+import { fieldLabels, stepIds, stepTitles } from "./constants";
 import { initialData } from "./initial-data";
 import { advancedWizard } from "./wizard-definition";
 
@@ -16,43 +17,6 @@ const { navigation, actions, state, validation } = useWizard({
 		alert("Wizard completed! Check console for data.");
 	},
 });
-
-const stepIds = [
-	"personal",
-	"preferences",
-	"account",
-	"business",
-	"plan",
-	"contact",
-	"review",
-] as const;
-
-const stepTitles: Record<string, string> = {
-	personal: "Personal",
-	preferences: "Preferences",
-	account: "Account",
-	business: "Business",
-	plan: "Plan",
-	contact: "Contact",
-	review: "Review",
-};
-
-const fieldLabels: Record<string, string> = {
-	firstName: "First Name",
-	lastName: "Last Name",
-	email: "Email",
-	phone: "Phone",
-	newsletter: "Newsletter",
-	notifications: "Notifications",
-	theme: "Theme",
-	username: "Username",
-	password: "Password",
-	confirmPassword: "Confirm Password",
-	companyName: "Company Name",
-	companySize: "Company Size",
-	plan: "Plan",
-	message: "Message",
-};
 </script>
 
 <template>
