@@ -72,14 +72,15 @@ const getSelectOptions = (field: string): string[] => {
 	return [];
 };
 
-const filteredFields = computed(() =>
-	currentStepConfig.value.fields.filter(
+const filteredFields = computed(() => {
+	if (!data.value) return [];
+	return currentStepConfig.value.fields.filter(
 		(f) =>
 			!["newsletter", "notifications", "theme", "companySize", "plan"].includes(
 				f,
 			),
-	),
-);
+	);
+});
 
 type ModelValue = string | number | readonly string[] | null | undefined;
 type StringOrUndefined = string | undefined;
@@ -241,7 +242,7 @@ type StringOrUndefined = string | undefined;
 				<textarea
 					v-if="field === 'message'"
 					:id="field"
-					:value="data.value[field] as ModelValue"
+					:value="data.value?.[field] as ModelValue"
 					@input="(e: Event) => updateField(field, (e.target as HTMLTextAreaElement).value)"
 					class="flex min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
 					placeholder="Enter your message for our sales team"
@@ -252,7 +253,7 @@ type StringOrUndefined = string | undefined;
 					v-else
 					:id="field"
 					:type="getFieldType(field)"
-					:model-value="data.value[field] as StringOrUndefined"
+					:model-value="data.value?.[field] as StringOrUndefined"
 					@update:model-value="(newValue: unknown) => updateField(field, newValue)"
 				/>
 
