@@ -1,6 +1,6 @@
 {
 	"name": "@gooonzick/wizard-vue",
-	"version": "0.0.1",
+	"version": "1.0.0",
 	"description": "Vue 3 integration for Wizard framework",
 	"type": "module",
 	"main": "./dist/index.js",
