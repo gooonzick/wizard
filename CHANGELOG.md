@@ -7,47 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- GitHub Actions CI/CD workflows
-- Comprehensive documentation fixes
-- Vue 3 integration support
+This section is intentionally left blank. Use Changesets instead of editing this file directly.
 
-### Changed
-- Updated React hook API to use organized return structure with slices
-- Improved documentation accuracy across all packages
+Run:
 
-### Fixed
-- Documentation examples now match actual API implementation
-- Fixed `createLinearWizard` API documentation in Vue package
-- Corrected `useWizard` return type documentation
+- `pnpm changeset` to add a change entry
+- `pnpm version` to apply version bumps and generate package changelogs
+- `pnpm release` to publish the updated packages
 
-## Instructions
+## Changesets
 
-When preparing a release:
-
-1. Move items from `[Unreleased]` to a new version section
-2. Add a release date
-3. Update version numbers in package.json files
-4. Create a git tag and push
-
-Example version section:
-
-```markdown
-## [1.0.0] - 2025-01-15
-
-### Added
-- Initial stable release
-- Core state machine implementation
-- React integration package
-- Vue integration package
-
-### Changed
-- Improved type safety across all APIs
-
-### Fixed
-- Various bug fixes and improvements
-```
-
-## Version History
-
-<!-- Releases will be documented here -->
+This repository uses Changesets to manage semantic versioning and generate per-package changelogs.
+Versioned changelogs will be written to packages/*/CHANGELOG.md when `pnpm version` runs.

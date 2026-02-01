@@ -26,7 +26,7 @@ jobs:
           TAG=${GITHUB_REF#refs/tags/}
           echo "tag=$TAG" >> $GITHUB_OUTPUT
 
-          if [[ $TAG =~ ^@wizard/([a-z]+)@(.+)$ ]]; then
+          if [[ $TAG =~ ^@gooonzick/wizard-([a-z-]+)@(.+)$ ]]; then
             PACKAGE=${BASH_REMATCH[1]}
             VERSION=${BASH_REMATCH[2]}
           elif [[ $TAG =~ ^v(.+)$ ]]; then
@@ -50,7 +50,7 @@ jobs:
             TITLE="Release v${VERSION}"
             echo "title=$TITLE" >> $GITHUB_OUTPUT
           else
-            TITLE="@wizard/${PACKAGE} v${VERSION}"
+            TITLE="@gooonzick/wizard-${PACKAGE} v${VERSION}"
             echo "title=$TITLE" >> $GITHUB_OUTPUT
           fi
 
@@ -64,10 +64,10 @@ jobs:
 
           \`\`\`bash
           # Install specific package
-          npm install @wizard/${PACKAGE}@${VERSION}
+          npm install @gooonzick/wizard-${PACKAGE}@${VERSION}
 
           # Or with pnpm
-          pnpm add @wizard/${PACKAGE}@${VERSION}
+          pnpm add @gooonzick/wizard-${PACKAGE}@${VERSION}
           \`\`\`
 
           ### Documentation
