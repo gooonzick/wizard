@@ -62,7 +62,7 @@ jobs:
         run: |
           for pkg in packages/*/package.json; do
             echo "Validating $pkg"
-            node -e "require('$pkg')" || exit 1
+            node -e "require('./$pkg')" || exit 1
           done
 
   pr-labeler:
