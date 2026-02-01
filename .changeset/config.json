@@ -1,0 +1,25 @@
+{
+    "$schema": "https://unpkg.com/@changesets/config@3.0.0/schema.json",
+    "changelog": [
+        "@changesets/cli/changelog",
+        {
+            "repo": "gooonzick/wizard"
+        }
+    ],
+    "commit": false,
+    "fixed": [
+        [
+            "@gooonzick/wizard-core",
+            "@gooonzick/wizard-react",
+            "@gooonzick/wizard-vue",
+            "@gooonzick/wizard-state"
+        ]
+    ],
+    "linked": [],
+    "access": "public",
+    "baseBranch": "main",
+    "updateInternalDependencies": "patch",
+    "ignore": [
+        "@gooonzick/wizard-docs"
+    ]
+}

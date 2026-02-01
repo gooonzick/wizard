@@ -127,7 +127,11 @@ pnpm dev
 
 3. **Add or update tests** for your changes
 
-4. **Update CHANGELOG.md** under `[Unreleased]` section
+4. **Add a Changeset** describing your change:
+
+  ```bash
+  pnpm changeset
+  ```
 
 ### Commit Messages
 

@@ -15,6 +15,7 @@ on:
           - core
           - react
           - vue
+          - state
       tag:
         description: "npm dist-tag (latest, next, beta)"
         required: true
@@ -67,7 +68,7 @@ jobs:
           echo "tag=$TAG" >> $GITHUB_OUTPUT
 
           if [ "$PACKAGE" = "all" ]; then
-            echo "packages=core react vue" >> $GITHUB_OUTPUT
+            echo "packages=core react vue state" >> $GITHUB_OUTPUT
           else
             echo "packages=$PACKAGE" >> $GITHUB_OUTPUT
           fi
@@ -96,6 +97,14 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+      - name: Publish @gooonzick/wizard-state
+        if: contains(steps.packages.outputs.packages, 'state')
+        working-directory: ./packages/state
+        run: |
+          pnpm publish --access public --tag ${{ steps.packages.outputs.tag }} --no-git-checks --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       - name: Create GitHub Release Summary
         run: |
           echo "## Published Packages" >> $GITHUB_STEP_SUMMARY
@@ -103,5 +112,5 @@ jobs:
 
           for pkg in ${{ steps.packages.outputs.packages }}; do
             VERSION=$(node -p "require('./packages/$pkg/package.json').version")
-            echo "- **@wizard/$pkg@$VERSION** (tag: ${{ steps.packages.outputs.tag }})" >> $GITHUB_STEP_SUMMARY
+            echo "- **@gooonzick/wizard-$pkg@$VERSION** (tag: ${{ steps.packages.outputs.tag }})" >> $GITHUB_STEP_SUMMARY
           done
