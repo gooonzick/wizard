@@ -17,7 +17,7 @@
 		"syncpack:lint": "syncpack lint",
 		"syncpack:fix": "syncpack fix-mismatches",
 		"changeset": "changeset",
-		"version": "changeset version",
+		"changeset:version": "changeset version",
 		"release": "changeset publish",
 		"docs:dev": "turbo run dev --filter=@gooonzick/wizard-docs",
 		"docs:build": "turbo run build --filter=@gooonzick/wizard-docs"
