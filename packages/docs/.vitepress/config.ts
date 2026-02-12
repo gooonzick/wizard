@@ -1,4 +1,5 @@
 import { defineConfig } from "vitepress";
+import llmstxt from 'vitepress-plugin-llms'
 
 export default defineConfig({
 	title: "WizardForm",
@@ -8,6 +9,11 @@ export default defineConfig({
 
 	lastUpdated: true,
 	cleanUrls: true,
+
+	vite: {
+		plugins: [llmstxt() as never],
+	},
+
 
 	themeConfig: {
 		logo: "🧙",

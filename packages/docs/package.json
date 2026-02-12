@@ -12,6 +12,7 @@
 	},
 	"devDependencies": {
 		"typescript": "^5.9.3",
-		"vitepress": "^1.0.0"
+		"vitepress": "^1.0.0",
+		"vitepress-plugin-llms": "^1.11.0"
 	}
 }
