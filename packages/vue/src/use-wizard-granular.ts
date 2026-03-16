@@ -1,12 +1,24 @@
 import type { WizardData } from "@gooonzick/wizard-core";
+import { computed } from "vue";
 import type {
 	UseWizardActions,
 	UseWizardLoading,
 	UseWizardNavigation,
+	UseWizardReturn,
 	UseWizardState,
 	UseWizardValidation,
 } from "./types";
 import { useWizardProviderContext } from "./wizard-provider";
+
+function resolveWizardFieldBinding<T extends WizardData>(
+	wizard?: UseWizardReturn<T>,
+): UseWizardReturn<T> {
+	if (wizard) {
+		return wizard;
+	}
+
+	return useWizardProviderContext<T>().wizard;
+}
 
 /**
  * Composable for wizard data state
@@ -86,4 +98,55 @@ export function useWizardLoading(): UseWizardLoading {
 export function useWizardActions<T extends WizardData>(): UseWizardActions<T> {
 	const { wizard } = useWizardProviderContext<T>();
 	return wizard.actions;
+}
+
+/**
+ * Writable field binding backed by the wizard machine.
+ * Reads from wizard state and writes through `updateField()`.
+ *
+ * @example
+ * ```vue
+ * <script setup lang="ts">
+ * const email = useWizardField<{ email: string }, "email">("email");
+ * </script>
+ *
+ * <template>
+ *   <input v-model="email" />
+ * </template>
+ * ```
+ */
+export function useWizardField<T extends WizardData, K extends keyof T>(
+	field: K,
+): ReturnType<typeof computed<T[K]>>;
+
+/**
+ * Writable field binding for direct `useWizard()` consumers.
+ *
+ * @example
+ * ```ts
+ * const wizard = useWizard({ definition, initialData });
+ * const email = useWizardField(wizard, "email");
+ * ```
+ */
+export function useWizardField<T extends WizardData, K extends keyof T>(
+	wizard: UseWizardReturn<T>,
+	field: K,
+): ReturnType<typeof computed<T[K]>>;
+
+export function useWizardField<T extends WizardData, K extends keyof T>(
+	fieldOrWizard: K | UseWizardReturn<T>,
+	maybeField?: K,
+) {
+	const wizard =
+		maybeField === undefined
+			? resolveWizardFieldBinding<T>()
+			: resolveWizardFieldBinding(fieldOrWizard as UseWizardReturn<T>);
+	const field = maybeField === undefined ? (fieldOrWizard as K) : maybeField;
+
+	return computed<T[K]>({
+		get: () => wizard.state.data.value[field],
+		set: (value) => {
+			wizard.actions.updateField(field, value);
+		},
+	});
 }

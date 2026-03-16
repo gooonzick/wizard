@@ -34,6 +34,7 @@ export { useWizard, useWizard as default } from "./use-wizard";
 export {
 	useWizardActions,
 	useWizardData,
+	useWizardField,
 	useWizardLoading,
 	useWizardNavigation,
 	useWizardValidation,

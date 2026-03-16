@@ -19,7 +19,7 @@ The `useWizard()` composable connects a wizard definition to Vue reactive state 
 
 ```typescript
 <script setup lang="ts">
-import { useWizard } from "@gooonzick/wizard-vue";
+import { useWizard, useWizardField } from "@gooonzick/wizard-vue";
 import { createLinearWizard } from "@gooonzick/wizard-core";
 
 type SignupData = {
@@ -52,28 +52,33 @@ const wizardDef = createLinearWizard<SignupData>({
   },
 });
 
-const { state, navigation, actions, validation, loading } = useWizard({
+const wizard = useWizard<SignupData>({
   definition: wizardDef,
   initialData: { name: "", email: "" },
   onComplete: (data) => {
     console.log("Form completed:", data);
   },
 });
+
+const { state, navigation, validation, loading } = wizard;
+
+const name = useWizardField(wizard, "name");
+const email = useWizardField(wizard, "email");
 </script>
 
 <template>
   <div>
-    <h2>{{ state.currentStep.meta?.title }}</h2>
+    <h2>{{ state.currentStep.value?.meta?.title }}</h2>
 
     <input
       v-if="state.currentStepId.value === 'personal'"
-      v-model="state.data.value.name"
+      v-model="name"
       placeholder="Name"
     />
 
     <input
       v-if="state.currentStepId.value === 'contact'"
-      v-model="state.data.value.email"
+      v-model="email"
       placeholder="Email"
     />
 
@@ -101,6 +106,37 @@ const { state, navigation, actions, validation, loading } = useWizard({
   </div>
 </template>
 ```
+
+Use `useWizardField()` when you want `v-model` ergonomics without introducing a second reactive source of truth. The binding reads from the wizard state and writes through `actions.updateField()`.
+
+### Schema Validation
+
+You do not need to manually translate schema issues into wizard errors when your form library uses a Standard Schema compatible validator.
+
+```typescript
+<script setup lang="ts">
+import { createLinearWizard, createStandardSchemaValidator } from "@gooonzick/wizard-core";
+import * as v from "valibot";
+
+const accountSchema = v.object({
+  name: v.pipe(v.string(), v.minLength(1, "Name is required")),
+  email: v.pipe(v.string(), v.email("Email is invalid")),
+});
+
+const wizardDef = createLinearWizard({
+  id: "signup",
+  steps: [
+    {
+      id: "account",
+      title: "Account",
+      validate: createStandardSchemaValidator(accountSchema),
+    },
+  ],
+});
+</script>
+```
+
+Schema issues are mapped into `validation.validationErrors.value`, so your form UI can render the wizard errors directly.
 
 ## useWizard Composable API
 
@@ -534,14 +570,16 @@ const { isValid, validationErrors } = useWizardValidation();
 
 // Actions don't cause re-renders
 const { updateField } = useWizardActions();
+
+// Writable field bindings also write through wizard actions
+const name = useWizardField<{ name: string }, "name">("name");
 </script>
 
 <template>
   <div>
     <input
       v-if="currentStepId.value === 'personal'"
-      :value="data.value.name"
-      @input="updateField('name', ($event.target as HTMLInputElement).value)"
+      v-model="name"
     />
 
     <div v-if="!isValid.value && validationErrors.value" class="error">
@@ -555,13 +593,14 @@ const { updateField } = useWizardActions();
 
 ### Available Granular Composables
 
-| Composable                     | Returns                                  | Use Case                  |
-| ------------------------------ | ---------------------------------------- | ------------------------- |
-| `useWizardData<T>()`           | Current step, data, isCompleted          | Form inputs, step content |
-| `useWizardNavigation()`        | canGoNext, goNext, goBack, etc.          | Navigation buttons        |
-| `useWizardValidation()`        | isValid, validationErrors                | Error display             |
-| `useWizardLoading()`           | isValidating, isSubmitting, isNavigating | Loading indicators        |
-| `useWizardActions<T>()`        | updateField, submit, reset               | Form handlers             |
+| Composable              | Returns                                  | Use Case                  |
+| ----------------------- | ---------------------------------------- | ------------------------- |
+| `useWizardData<T>()`    | Current step, data, isCompleted          | Form inputs, step content |
+| `useWizardNavigation()` | canGoNext, goNext, goBack, etc.          | Navigation buttons        |
+| `useWizardValidation()` | isValid, validationErrors                | Error display             |
+| `useWizardLoading()`    | isValidating, isSubmitting, isNavigating | Loading indicators        |
+| `useWizardActions<T>()` | updateField, submit, reset               | Form handlers             |
+| `useWizardField<T>()`   | Writable computed ref for one field      | `v-model` field binding   |
 
 ### When to Use Granular Composables
 
@@ -621,6 +660,8 @@ const { updateField } = useWizardActions();
 ## Best Practices
 
 ### 1. Separate Concerns
+
+Avoid mirroring the entire wizard data object into a second reactive store with deep watchers. That creates two writers for the same state and can recurse when one watcher feeds the other.
 
 Keep the wizard logic separate from your UI component:
 
