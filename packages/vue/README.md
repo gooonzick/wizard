@@ -187,6 +187,7 @@ Main composable for wizard state management. Returns organized state slices.
 - `useWizardValidation()` - Validation slice only
 - `useWizardLoading()` - Loading slice only
 - `useWizardActions<T>()` - Actions slice only
+- `useWizardField<T>()` - Writable field binding for `v-model`
 
 ### Components
 
