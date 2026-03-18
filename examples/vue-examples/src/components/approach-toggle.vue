@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 import Button from "./ui/button.vue";
 
 interface Props {
-	modelValue: "use-wizard" | "provider";
+	modelValue: "use-wizard" | "provider" | "field-binding";
 	class?: string;
 }
 
@@ -12,7 +12,10 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 defineEmits<
-	(event: "update:modelValue", value: "use-wizard" | "provider") => void
+	(
+		event: "update:modelValue",
+		value: "use-wizard" | "provider" | "field-binding",
+	) => void
 >();
 </script>
 
@@ -29,6 +32,12 @@ defineEmits<
 			@click="$emit('update:modelValue', 'provider')"
 		>
 			Provider
+		</Button>
+		<Button
+			:variant="modelValue === 'field-binding' ? 'default' : 'outline'"
+			@click="$emit('update:modelValue', 'field-binding')"
+		>
+			useWizardField
 		</Button>
 	</div>
 </template>

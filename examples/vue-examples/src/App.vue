@@ -1,14 +1,21 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from "vue";
 import ApproachToggle from "./components/approach-toggle.vue";
+import FieldBindingExample from "./wizard-example/field-binding-example.vue";
 import ProviderExample from "./wizard-example/provider-example.vue";
 import UseWizardExample from "./wizard-example/use-wizard-example.vue";
 
-const approach = ref<"use-wizard" | "provider">("use-wizard");
+const approach = ref<"use-wizard" | "provider" | "field-binding">(
+	"use-wizard",
+);
 
 onMounted(() => {
 	const saved = localStorage.getItem("wizard-approach");
-	if (saved === "use-wizard" || saved === "provider") {
+	if (
+		saved === "use-wizard" ||
+		saved === "provider" ||
+		saved === "field-binding"
+	) {
 		approach.value = saved;
 	}
 });
@@ -31,7 +38,8 @@ watch(approach, (newVal) => {
 			<ApproachToggle v-model="approach" class="mb-6" />
 
 			<UseWizardExample v-if="approach === 'use-wizard'" />
-			<ProviderExample v-else />
+			<ProviderExample v-else-if="approach === 'provider'" />
+			<FieldBindingExample v-else />
 		</div>
 	</div>
 </template>
