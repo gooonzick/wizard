@@ -1,5 +1,13 @@
 # @gooonzick/wizard-state
 
+## 1.0.2
+
+### Patch Changes
+
+- 9cb311e: typescript fixes
+- Updated dependencies [9cb311e]
+  - @gooonzick/wizard-core@1.0.2
+
 ## 1.0.1
 
 ### Patch Changes

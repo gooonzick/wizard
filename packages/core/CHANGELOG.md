@@ -1,5 +1,11 @@
 # @gooonzick/wizard-core
 
+## 1.0.2
+
+### Patch Changes
+
+- 9cb311e: typescript fixes
+
 ## 1.0.1
 
 ### Patch Changes
