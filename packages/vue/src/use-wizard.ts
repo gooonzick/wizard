@@ -121,6 +121,12 @@ export function useWizard<T extends WizardData>(
 	// Initialize navigation state
 	updateNavigationState();
 
+	// Subscribe to navigation channel so we pick up async computation results
+	// (the manager resolves canGoNext/canGoPrevious asynchronously)
+	const unsubscribeNavigation = manager.value.subscribe(() => {
+		updateNavigationState();
+	}, "navigation");
+
 	// Watch for step changes and update navigation (with cleanup)
 	const stopStepWatcher = watch(
 		() => state.value.currentStepId,
@@ -132,6 +138,7 @@ export function useWizard<T extends WizardData>(
 	// Cleanup on scope dispose (component unmount)
 	onScopeDispose(() => {
 		stopStepWatcher();
+		unsubscribeNavigation();
 	});
 
 	// Computed values derived from reactive state

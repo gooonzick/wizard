@@ -6,13 +6,14 @@ import {
   requiredFields,
 } from '@gooonzick/wizard-core'
 import { useWizard, useWizardField } from '@gooonzick/wizard-vue'
-import { computed } from 'vue'
+import { computed, watchEffect } from 'vue'
 import Alert from '@/components/ui/alert.vue'
 import Button from '@/components/ui/button.vue'
 import Card from '@/components/ui/card.vue'
 import Input from '@/components/ui/input.vue'
 import Label from '@/components/ui/label.vue'
 import Select from '@/components/ui/select.vue'
+import Textarea from '@/components/ui/textarea.vue'
 import ValidationMessage from '@/components/ui/validation-message.vue'
 
 type FieldBindingData = {
@@ -94,26 +95,9 @@ const currentStepTitle = computed(() => {
 const errorFor = (field: keyof FieldBindingData): string => {
   return validation.validationErrors.value?.[field] ?? ''
 }
-
-const updateFirstName = (value: string) => {
-  firstName.value = value
-}
-
-const updateEmail = (value: string) => {
-  email.value = value
-}
-
-const updateCompanyName = (value: string) => {
-  companyName.value = value
-}
-
-const updatePlan = (value: string) => {
-  plan.value = value as FieldBindingData['plan']
-}
-
-const updateNotes = (event: Event) => {
-  notes.value = (event.target as HTMLTextAreaElement).value
-}
+watchEffect(() => {
+	  console.log('Current Wizard Data (Field Binding):', navigation)
+})
 </script>
 
 <template>
@@ -159,10 +143,9 @@ const updateNotes = (event: Event) => {
               <Label for="first-name">First Name</Label>
               <Input
                 id="first-name"
-                :model-value="firstName"
+                v-model="firstName"
                 placeholder="Ada"
                 :error="Boolean(errorFor('firstName'))"
-                @update:model-value="updateFirstName"
               />
               <ValidationMessage v-if="errorFor('firstName')" :message="errorFor('firstName')" />
             </div>
@@ -171,11 +154,10 @@ const updateNotes = (event: Event) => {
               <Label for="email">Email</Label>
               <Input
                 id="email"
-                :model-value="email"
+                v-model="email"
                 type="email"
                 placeholder="ada@example.com"
                 :error="Boolean(errorFor('email'))"
-                @update:model-value="updateEmail"
               />
               <ValidationMessage v-if="errorFor('email')" :message="errorFor('email')" />
             </div>
@@ -186,10 +168,9 @@ const updateNotes = (event: Event) => {
               <Label for="company-name">Company Name</Label>
               <Input
                 id="company-name"
-                :model-value="companyName"
+                v-model="companyName"
                 placeholder="Analytical Engines Ltd"
                 :error="Boolean(errorFor('companyName'))"
-                @update:model-value="updateCompanyName"
               />
               <ValidationMessage
                 v-if="errorFor('companyName')"
@@ -199,24 +180,16 @@ const updateNotes = (event: Event) => {
 
             <div class="space-y-2">
               <Label for="plan">Plan</Label>
-              <Select
-                id="plan"
-                :model-value="plan"
-                :items="planOptions"
-                placeholder="Choose a plan"
-                @update:model-value="updatePlan"
-              />
+              <Select id="plan" v-model="plan" :items="planOptions" placeholder="Choose a plan" />
               <ValidationMessage v-if="errorFor('plan')" :message="errorFor('plan')" />
             </div>
 
             <div class="space-y-2">
               <Label for="notes">Notes</Label>
-              <textarea
+              <Textarea
                 id="notes"
-                :value="notes"
-                class="flex min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                v-model="notes"
                 placeholder="What do you want this wizard to prove out?"
-                @input="updateNotes"
               />
             </div>
           </div>

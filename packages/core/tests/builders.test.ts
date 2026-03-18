@@ -1,5 +1,5 @@
 import type { StandardSchemaV1 } from "@standard-schema/spec";
-import type { WizardData } from "src";
+import type { WizardData } from "../src";
 import { describe, expect, test } from "vitest";
 import { createStep } from "../src/builders/create-step";
 import { createWizard } from "../src/builders/create-wizard";
