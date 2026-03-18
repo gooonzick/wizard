@@ -1,5 +1,5 @@
 import type { WizardData } from "@gooonzick/wizard-core";
-import { computed } from "vue";
+import { computed, type Ref } from "vue";
 import type {
 	UseWizardActions,
 	UseWizardLoading,
@@ -117,7 +117,7 @@ export function useWizardActions<T extends WizardData>(): UseWizardActions<T> {
  */
 export function useWizardField<T extends WizardData, K extends keyof T>(
 	field: K,
-): ReturnType<typeof computed<T[K]>>;
+): Ref<T[K]>;
 
 /**
  * Writable field binding for direct `useWizard()` consumers.
@@ -131,7 +131,7 @@ export function useWizardField<T extends WizardData, K extends keyof T>(
 export function useWizardField<T extends WizardData, K extends keyof T>(
 	wizard: UseWizardReturn<T>,
 	field: K,
-): ReturnType<typeof computed<T[K]>>;
+): Ref<T[K]>;
 
 export function useWizardField<T extends WizardData, K extends keyof T>(
 	fieldOrWizard: K | UseWizardReturn<T>,
