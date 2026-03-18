@@ -1,5 +1,5 @@
 import type { WizardData } from "@gooonzick/wizard-core";
-import { type Ref, computed } from "vue";
+import { computed, type Ref } from "vue";
 import type {
 	UseWizardActions,
 	UseWizardLoading,
