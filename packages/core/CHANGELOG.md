@@ -1,5 +1,11 @@
 # @gooonzick/wizard-core
 
+## 1.0.1
+
+### Patch Changes
+
+- 30ad8e0: add useWizardField composable for v-model bindings
+
 ## 1.0.0
 
 ### Major Changes

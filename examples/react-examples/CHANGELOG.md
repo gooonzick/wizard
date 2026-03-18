@@ -1,5 +1,13 @@
 # @gooonzick/wizard-react-example
 
+## 0.0.3
+
+### Patch Changes
+
+- Updated dependencies [30ad8e0]
+  - @gooonzick/wizard-core@1.0.1
+  - @gooonzick/wizard-react@1.0.1
+
 ## 0.0.2
 
 ### Patch Changes
