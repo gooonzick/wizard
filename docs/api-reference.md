@@ -76,6 +76,7 @@ interface WizardState<T> {
   data: T;
   isValid: boolean;
   isCompleted: boolean;
+  canGoBack: boolean; // true when history stack has > 1 entry
   validationErrors?: Record<string, string>;
 }
 ```
@@ -409,8 +410,10 @@ class WizardMachine<T> {
   // Navigation
   goNext(): Promise<void>;
   goPrevious(): Promise<void>;
+  /** @deprecated Use goPrevious() instead */
   goBack(steps?: number): Promise<void>;
   goToStep(stepId: StepId): Promise<void>;
+  clearHistory(): void;
 
   // Query
   getNextStepId(): Promise<StepId | null>;
@@ -744,6 +747,7 @@ interface UseWizardNavigation {
   // State
   canGoNext: boolean;
   canGoPrevious: boolean;
+  canGoBack: boolean; // true when history stack has > 1 entry
   isFirstStep: boolean;
   isLastStep: boolean;
   visitedSteps: StepId[];
@@ -752,6 +756,7 @@ interface UseWizardNavigation {
   // Actions
   goNext(): Promise<void>;
   goPrevious(): Promise<void>;
+  /** @deprecated Use goPrevious() instead */
   goBack(steps?: number): Promise<void>;
   goToStep(stepId: StepId): Promise<void>;
 }

@@ -389,6 +389,75 @@ const wizard: WizardDefinition<SignupData> = {
 
 This prevents data mismatches and provides IDE autocomplete.
 
+## 11. Navigation History Stack
+
+WizardForm maintains a **navigation history stack** that tracks the actual path the user took through the wizard. This solves a fundamental problem with conditional transitions: when going backward, the wizard always returns to the step the user actually came from, regardless of how transitions are configured.
+
+### The Problem
+
+Consider a wizard where the `summary` step uses a resolver for its `previous` transition:
+
+```typescript
+summary: {
+  previous: {
+    type: "resolver",
+    resolve: (data) => (data.needsInvoice ? "invoice" : "plan"),
+  },
+}
+```
+
+If the user navigated `personal → plan → invoice → summary`, then changed `needsInvoice` to `false`, pressing "Back" would take them to `plan` — skipping `invoice` even though they came from there.
+
+### The Solution
+
+The history stack records each step as you navigate forward. When `goPrevious()` is called, it pops the last step off the stack and navigates there directly, ignoring `previous` transitions entirely.
+
+```typescript
+const machine = new WizardMachine(definition, context, initialData, {
+  onStateChange: (state) => console.log(state),
+});
+
+// Navigate forward: each step is pushed onto the history stack
+await machine.goNext(); // history: ["personal", "plan"]
+await machine.goNext(); // history: ["personal", "plan", "invoice"]
+
+// Go back: pops from history, not from previous transition
+await machine.goPrevious(); // history: ["personal", "plan"] — back to "plan"
+
+// Check if history-based back navigation is possible
+console.log(machine.snapshot.canGoBack); // true
+
+// Access the full history stack
+console.log(machine.history); // ["personal", "plan"]
+
+// Clear history (useful for reset scenarios)
+machine.clearHistory(); // history: ["plan"] (keeps current step)
+```
+
+### Key Behaviors
+
+- **`goNext()`** pushes the current step onto the stack before navigating
+- **`goPrevious()`** pops from the stack (history-first), falls back to `previous` transition if history is empty
+- **`goToStep(stepId)`** pushes the current step onto the stack
+- **`clearHistory()`** resets the stack to just the current step
+- **`canGoBack`** is `true` when the history stack has more than one entry
+
+### React / Vue Integration
+
+The history stack is exposed through the navigation slice:
+
+```typescript
+// React
+const { navigation } = useWizard({ definition, initialData });
+navigation.canGoBack; // boolean — can go back via history
+navigation.stepHistory; // StepId[] — the full history stack
+
+// Vue
+const { navigation } = useWizard({ definition, initialData });
+navigation.canGoBack.value; // boolean
+navigation.stepHistory.value; // StepId[]
+```
+
 ## Putting It Together
 
 Here's how these concepts work together:

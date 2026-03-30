@@ -7,6 +7,7 @@ A framework-agnostic, type-safe state machine for building multi-step wizards in
 - **Framework Agnostic** - Use with React, Vue, Svelte, vanilla JS, or any TypeScript project
 - **Type Safe** - Full TypeScript generics support for your data types
 - **Flexible Navigation** - Static, conditional, or dynamic step transitions
+- **Navigation History** - Built-in history stack for reliable back navigation through conditional flows
 - **Validation** - Built-in validators, schema support, and custom predicates
 - **Extensible** - Context, guards, lifecycle hooks, and side effects
 - **State Machine** - Predictable behavior based on finite state machine principles
@@ -301,11 +302,16 @@ const machine = new WizardMachine(definition, context, initialData);
 // Move forward
 await machine.goNext();
 
-// Move backward
+// Move backward (uses history stack — always returns to actual previous step)
 await machine.goPrevious();
 
 // Jump to specific step
 await machine.goToStep("step-id");
+
+// Navigation history
+console.log(machine.snapshot.canGoBack); // true if history has entries
+console.log(machine.history); // full history stack
+machine.clearHistory(); // reset history to current step only
 
 // Query navigation
 const canGo = await machine.canNavigateToStep("step-id");

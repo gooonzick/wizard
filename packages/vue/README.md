@@ -2,6 +2,16 @@
 
 Vue 3 Composition API integration for the Wizard framework.
 
+## Features
+
+- **Vue 3 Composable** - `useWizard()` composable with reactive `ComputedRef` values
+- **Organized API** - State grouped into logical slices (state, validation, navigation, loading, actions)
+- **Navigation History** - `canGoBack` and `stepHistory` for history-based back navigation
+- **Granular Composables** - Fine-grained subscriptions with `useWizardData()`, `useWizardNavigation()`, etc.
+- **v-model Support** - `useWizardField()` for writable computed refs
+- **Optional Provider** - `WizardProvider` for sharing state via provide/inject
+- **Full Type Safety** - TypeScript generics for your data types
+
 ## Installation
 
 ```bash
