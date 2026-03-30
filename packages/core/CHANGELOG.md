@@ -1,5 +1,11 @@
 # @gooonzick/wizard-core
 
+## 1.1.0
+
+### Minor Changes
+
+- eea4412: feat: add history navigation to wizard
+
 ## 1.0.2
 
 ### Patch Changes
