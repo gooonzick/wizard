@@ -362,4 +362,89 @@ describe("useWizard", () => {
 		await wizard.navigation.goToStep("step1");
 		expect(wizard.state.currentStepId.value).toBe("step1");
 	});
+
+	it("should set validation errors when navigation fails validation", async () => {
+		const definition = createLinearWizard<{ name: string }>({
+			id: "validation-error-test",
+			steps: [
+				{
+					id: "step1",
+					title: "Step 1",
+					validate: async (data) => ({
+						valid: !!data.name,
+						errors: data.name ? undefined : { name: "Name is required" },
+					}),
+				},
+				{ id: "step2", title: "Step 2" },
+			],
+		});
+
+		const { wizard } = mountWizard({
+			definition,
+			initialData: { name: "" },
+		});
+
+		try {
+			await wizard.navigation.goNext();
+		} catch {
+			// expected
+		}
+
+		expect(wizard.validation.isValid.value).toBe(false);
+		expect(wizard.validation.validationErrors.value).toHaveProperty("name");
+	});
+
+	it("should call onComplete when wizard finishes", async () => {
+		const definition = createLinearWizard<{ name: string }>({
+			id: "complete-test",
+			steps: [{ id: "step1", title: "Step 1" }],
+		});
+
+		const onComplete = vi.fn();
+
+		const { wizard } = mountWizard({
+			definition,
+			initialData: { name: "done" },
+			onComplete,
+		});
+
+		await wizard.actions.submit();
+		expect(onComplete).toHaveBeenCalledWith(
+			expect.objectContaining({ name: "done" }),
+		);
+	});
+
+	it("should call onError when navigation errors occur", async () => {
+		const definition = createLinearWizard<{ name: string }>({
+			id: "error-callback-test",
+			steps: [
+				{
+					id: "step1",
+					title: "Step 1",
+					validate: () => ({
+						valid: false,
+						errors: { name: "Required" },
+					}),
+				},
+				{ id: "step2", title: "Step 2" },
+			],
+		});
+
+		const onError = vi.fn();
+
+		const { wizard } = mountWizard({
+			definition,
+			initialData: { name: "" },
+			onError,
+		});
+
+		try {
+			await wizard.navigation.goNext();
+		} catch {
+			// expected
+		}
+
+		expect(onError).toHaveBeenCalledTimes(1);
+		expect(onError).toHaveBeenCalledWith(expect.any(Error));
+	});
 });

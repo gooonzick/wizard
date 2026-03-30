@@ -101,4 +101,55 @@ describe("Guard Combinators", () => {
 		const adult = await isMinor({ age: 25 }, {});
 		expect(adult).toBe(false);
 	});
+
+	test("andGuards should work with async guards", async () => {
+		const asyncAdult: StepGuard<TestData> = async (d: TestData) => d.age >= 18;
+		const asyncHasEmail: StepGuard<TestData> = async (d: TestData) => !!d.email;
+
+		const combined = andGuards(asyncAdult, asyncHasEmail);
+
+		const allTrue = await combined({ age: 25, email: "test@example.com" }, {});
+		expect(allTrue).toBe(true);
+
+		const oneFalse = await combined({ age: 25 }, {});
+		expect(oneFalse).toBe(false);
+	});
+
+	test("orGuards should work with async guards", async () => {
+		const asyncAdult: StepGuard<TestData> = async (d: TestData) => d.age >= 18;
+		const asyncPremium: StepGuard<TestData> = async (d: TestData) =>
+			d.plan === "premium";
+
+		const combined = orGuards(asyncAdult, asyncPremium);
+
+		const oneTrue = await combined({ age: 15, plan: "premium" }, {});
+		expect(oneTrue).toBe(true);
+
+		const noneTrue = await combined({ age: 15, plan: "basic" }, {});
+		expect(noneTrue).toBe(false);
+	});
+
+	test("notGuard should work with async guard", async () => {
+		const asyncAdult: StepGuard<TestData> = async (d: TestData) => d.age >= 18;
+		const isMinor = notGuard(asyncAdult);
+
+		const minor = await isMinor({ age: 15 }, {});
+		expect(minor).toBe(true);
+
+		const adult = await isMinor({ age: 25 }, {});
+		expect(adult).toBe(false);
+	});
+
+	test("andGuards should work with mixed sync and async guards", async () => {
+		const syncAdult: StepGuard<TestData> = (d: TestData) => d.age >= 18;
+		const asyncHasEmail: StepGuard<TestData> = async (d: TestData) => !!d.email;
+
+		const combined = andGuards(syncAdult, asyncHasEmail);
+
+		const result = await combined({ age: 25, email: "test@example.com" }, {});
+		expect(result).toBe(true);
+
+		const fail = await combined({ age: 25 }, {});
+		expect(fail).toBe(false);
+	});
 });

@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import {
 	combineValidators,
 	createStandardSchemaValidator,
+	createValidator,
 	requiredFields,
 } from "../src/machine/validators";
 import type { Validator } from "../src/types/step";
@@ -138,5 +139,64 @@ describe("createStandardSchemaValidator", () => {
 
 		expect(result.valid).toBe(false);
 		expect(result.errors?.email).toBe("ERR:Invalid email");
+	});
+});
+
+describe("createValidator", () => {
+	test("returns valid when predicate passes", async () => {
+		const validator = createValidator<{ age: number }>(
+			(data) => data.age >= 18,
+			"Must be an adult",
+			"age",
+		);
+
+		const result = await validator({ age: 25 }, {});
+		expect(result.valid).toBe(true);
+		expect(result.errors).toBeUndefined();
+	});
+
+	test("returns error on specified field when predicate fails", async () => {
+		const validator = createValidator<{ age: number }>(
+			(data) => data.age >= 18,
+			"Must be an adult",
+			"age",
+		);
+
+		const result = await validator({ age: 15 }, {});
+		expect(result.valid).toBe(false);
+		expect(result.errors).toEqual({ age: "Must be an adult" });
+	});
+
+	test("defaults to 'general' field when no field specified", async () => {
+		const validator = createValidator<{ age: number }>(
+			(data) => data.age >= 18,
+			"Invalid data",
+		);
+
+		const result = await validator({ age: 10 }, {});
+		expect(result.valid).toBe(false);
+		expect(result.errors).toEqual({ general: "Invalid data" });
+	});
+
+	test("works with combineValidators", async () => {
+		const ageValidator = createValidator<{ age: number; name: string }>(
+			(data) => data.age >= 18,
+			"Must be an adult",
+			"age",
+		);
+		const nameValidator = createValidator<{ age: number; name: string }>(
+			(data) => data.name.length > 0,
+			"Name is required",
+			"name",
+		);
+
+		const combined = combineValidators(ageValidator, nameValidator);
+		const result = await combined({ age: 10, name: "" }, {});
+
+		expect(result.valid).toBe(false);
+		expect(result.errors).toEqual({
+			age: "Must be an adult",
+			name: "Name is required",
+		});
 	});
 });

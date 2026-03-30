@@ -23,12 +23,12 @@
 		"docs:build": "turbo run build --filter=@gooonzick/wizard-docs"
 	},
 	"devDependencies": {
-		"@changesets/cli": "^2.28.1",
-		"@types/node": "^24.10.1",
-		"knip": "^5.70.2",
-		"syncpack": "^13.0.4",
-		"turbo": "^2.6.1",
-		"typescript": "^5.9.3"
+		"@changesets/cli": "^2.30.0",
+		"@types/node": "^24.10.9",
+		"knip": "^6.1.0",
+		"syncpack": "^14.3.0",
+		"turbo": "^2.8.21",
+		"typescript": "^6.0.2"
 	},
 	"packageManager": "pnpm@10.23.0"
 }

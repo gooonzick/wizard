@@ -8,8 +8,14 @@ export class WizardError extends Error {
 		super(message);
 		this.name = "WizardError";
 		// Maintains proper stack trace for where error was thrown (V8 engines)
-		if (Error.captureStackTrace) {
-			Error.captureStackTrace(this, this.constructor);
+		const ErrorCtor = Error as typeof Error & {
+			captureStackTrace?: (
+				target: object,
+				constructorOpt?: NewableFunction,
+			) => void;
+		};
+		if (ErrorCtor.captureStackTrace) {
+			ErrorCtor.captureStackTrace(this, this.constructor);
 		}
 	}
 }

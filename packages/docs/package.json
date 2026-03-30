@@ -11,7 +11,7 @@
 		"typecheck": "tsc --build --verbose"
 	},
 	"devDependencies": {
-		"typescript": "^5.9.3",
+		"typescript": "^6.0.2",
 		"vitepress": "^1.0.0",
 		"vitepress-plugin-llms": "^1.11.0"
 	}

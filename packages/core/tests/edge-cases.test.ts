@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import { WizardNavigationError } from "../src/errors";
 import { WizardMachine } from "../src/machine/wizard-machine";
 import type { WizardData } from "../src/types/base";
 import type { WizardDefinition } from "../src/types/definition";
@@ -69,23 +70,20 @@ describe("Edge Case: Async Race Conditions", () => {
 			machine.goNext(),
 		]);
 
-		// Only first should succeed (or maybe all succeed but end up in same state)
-		// The machine might throw if transitioning while transitioning
-		// Or it might queue them.
-		// Based on TEST_CASES.md, it expects only one to succeed if it throws on busy?
-		// Or maybe it expects all to resolve but only one transition to happen.
-
 		const successes = results.filter((r) => r.status === "fulfilled");
-		expect(successes.length).toBeGreaterThan(0);
-		// If the machine doesn't block concurrent transitions, all might succeed.
-		// If it blocks, some might fail.
-		// Let's assume it handles it gracefully or throws.
-		// The test case in docs says: expect(successes).toHaveLength(1);
-		// This implies the machine should prevent concurrent transitions.
+		const failures = results.filter((r) => r.status === "rejected");
 
-		// If the machine implementation doesn't support this, the test will fail.
-		// I will check the machine implementation later.
-		// For now I will comment out the assertion or adjust it.
+		// Only the first navigation should succeed; subsequent ones should throw
+		// because the machine is busy (navigation lock).
+		expect(successes).toHaveLength(1);
+		expect(failures).toHaveLength(2);
+
+		for (const failure of failures) {
+			expect((failure as PromiseRejectedResult).reason).toBeInstanceOf(
+				WizardNavigationError,
+			);
+			expect((failure as PromiseRejectedResult).reason.reason).toBe("busy");
+		}
 
 		expect(machine.snapshot.currentStepId).toBe("step2");
 	});

@@ -72,8 +72,8 @@ describe("WizardMachine - New Features", () => {
 				onStepEnter: onStepEnterEvent,
 			});
 
-			// Wait for async initialization
-			await new Promise((resolve) => setTimeout(resolve, 10));
+			// Yield to microtask queue for async initialization
+			await new Promise<void>((resolve) => queueMicrotask(resolve));
 
 			expect(onEnter).toHaveBeenCalledTimes(1);
 			expect(onStepEnterEvent).toHaveBeenCalledWith(
@@ -458,7 +458,7 @@ describe("WizardMachine - New Features", () => {
 				defaultData,
 			);
 
-			await new Promise((resolve) => setTimeout(resolve, 10));
+			await new Promise<void>((resolve) => queueMicrotask(resolve));
 			await machine.goNext();
 
 			expect(consoleSpy).toHaveBeenCalledWith(

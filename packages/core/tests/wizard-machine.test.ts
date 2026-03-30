@@ -219,4 +219,131 @@ describe("WizardMachine", () => {
 		await machine.goNext();
 		expect(machine.snapshot.currentStepId).toBe("end");
 	});
+
+	describe("getAvailableSteps", () => {
+		it("returns only enabled steps based on current data", async () => {
+			const definition: WizardDefinition<TestWizardData> = {
+				id: "available-test",
+				initialStepId: "start",
+				steps: {
+					start: { id: "start", next: { type: "static", to: "middle" } },
+					middle: {
+						id: "middle",
+						enabled: (data) => data.allowMiddle,
+						next: { type: "static", to: "restricted" },
+					},
+					restricted: {
+						id: "restricted",
+						enabled: (data) => data.allowRestricted,
+						next: { type: "static", to: "final" },
+					},
+					final: { id: "final" },
+				},
+			};
+
+			const machine = createMachine(definition, {
+				allowMiddle: true,
+				allowRestricted: false,
+			});
+
+			const available = await machine.getAvailableSteps();
+			expect(available).toContain("start");
+			expect(available).toContain("middle");
+			expect(available).toContain("final");
+			expect(available).not.toContain("restricted");
+		});
+
+		it("returns all steps when none have guards", async () => {
+			const definition: WizardDefinition<TestWizardData> = {
+				id: "no-guards",
+				initialStepId: "a",
+				steps: {
+					a: { id: "a", next: { type: "static", to: "b" } },
+					b: { id: "b", next: { type: "static", to: "c" } },
+					c: { id: "c" },
+				},
+			};
+
+			const machine = createMachine(definition);
+			const available = await machine.getAvailableSteps();
+			expect(available).toEqual(["a", "b", "c"]);
+		});
+
+		it("reflects data changes dynamically", async () => {
+			const definition: WizardDefinition<TestWizardData> = {
+				id: "dynamic-test",
+				initialStepId: "start",
+				steps: {
+					start: { id: "start" },
+					guarded: {
+						id: "guarded",
+						enabled: (data) => data.allowMiddle,
+					},
+				},
+			};
+
+			const machine = createMachine(definition, { allowMiddle: false });
+			expect(await machine.getAvailableSteps()).not.toContain("guarded");
+
+			machine.updateData((d) => ({ ...d, allowMiddle: true }));
+			expect(await machine.getAvailableSteps()).toContain("guarded");
+		});
+	});
+
+	describe("canNavigateToStep", () => {
+		it("returns true for enabled steps", async () => {
+			const definition: WizardDefinition<TestWizardData> = {
+				id: "can-nav-test",
+				initialStepId: "start",
+				steps: {
+					start: { id: "start" },
+					target: { id: "target", enabled: (data) => data.allowMiddle },
+				},
+			};
+
+			const machine = createMachine(definition, { allowMiddle: true });
+			expect(await machine.canNavigateToStep("target")).toBe(true);
+		});
+
+		it("returns false for disabled steps", async () => {
+			const definition: WizardDefinition<TestWizardData> = {
+				id: "disabled-nav-test",
+				initialStepId: "start",
+				steps: {
+					start: { id: "start" },
+					target: { id: "target", enabled: (data) => data.allowRestricted },
+				},
+			};
+
+			const machine = createMachine(definition, { allowRestricted: false });
+			expect(await machine.canNavigateToStep("target")).toBe(false);
+		});
+
+		it("returns false for non-existent steps", async () => {
+			const definition: WizardDefinition<TestWizardData> = {
+				id: "nonexistent-test",
+				initialStepId: "start",
+				steps: {
+					start: { id: "start" },
+				},
+			};
+
+			const machine = createMachine(definition);
+			expect(await machine.canNavigateToStep("does-not-exist")).toBe(false);
+		});
+
+		it("returns true for steps without guards", async () => {
+			const definition: WizardDefinition<TestWizardData> = {
+				id: "no-guard-test",
+				initialStepId: "start",
+				steps: {
+					start: { id: "start" },
+					unguarded: { id: "unguarded" },
+				},
+			};
+
+			const machine = createMachine(definition);
+			expect(await machine.canNavigateToStep("unguarded")).toBe(true);
+		});
+	});
 });

@@ -8,7 +8,7 @@ describe("resolveStepInDirection", () => {
 			.sequence([{ id: "step1" }, { id: "step2" }, { id: "step3" }])
 			.build();
 
-		const step1 = definition.steps["step1"];
+		const step1 = definition.steps.step1;
 
 		const nextId = await resolveStepInDirection(
 			step1,
@@ -37,7 +37,7 @@ describe("resolveStepInDirection", () => {
 			.step("step3", () => {})
 			.build();
 
-		const step1 = definition.steps["step1"];
+		const step1 = definition.steps.step1;
 
 		const nextId = await resolveStepInDirection(
 			step1,
@@ -65,9 +65,9 @@ describe("resolveStepInDirection", () => {
 			})
 			.build();
 
-		definition.steps["step2"].enabled = false; // disable step2
+		definition.steps.step2.enabled = false; // disable step2
 
-		const step3 = definition.steps["step3"];
+		const step3 = definition.steps.step3;
 
 		const previousId = await resolveStepInDirection(
 			step3,
@@ -91,7 +91,7 @@ describe("resolveStepInDirection", () => {
 			})
 			.build();
 
-		const step1 = definition.steps["step1"];
+		const step1 = definition.steps.step1;
 
 		const nextId = await resolveStepInDirection(
 			step1,
@@ -116,7 +116,7 @@ describe("resolveStepInDirection", () => {
 			})
 			.build();
 
-		const step1 = definition.steps["step1"];
+		const step1 = definition.steps.step1;
 
 		await expect(
 			resolveStepInDirection(
@@ -145,7 +145,7 @@ describe("resolveStepInDirection", () => {
 			.step("step3", () => {})
 			.build();
 
-		const step1 = definition.steps["step1"];
+		const step1 = definition.steps.step1;
 
 		// Adult path
 		const nextId1 = await resolveStepInDirection(
@@ -185,12 +185,12 @@ describe("resolveStepInDirection", () => {
 			})
 			.step("step2", (b) => {
 				b.next({ type: "static", to: "step3" });
-				b.enabled((_, ctx) => !!(ctx as any).allowStep2);
+				b.enabled((_, ctx) => !!(ctx as Record<string, unknown>).allowStep2);
 			})
 			.step("step3", () => {})
 			.build();
 
-		const step1 = definition.steps["step1"];
+		const step1 = definition.steps.step1;
 
 		// Without context flag
 		const nextId1 = await resolveStepInDirection(
@@ -212,7 +212,7 @@ describe("resolveStepInDirection", () => {
 			step1,
 			definition.steps,
 			{ value: "" },
-			{ allowStep2: true } as any,
+			{ allowStep2: true } as Record<string, unknown>,
 			{
 				direction: "next",
 				getTransition: (s) => s.next,
@@ -233,7 +233,7 @@ describe("resolveStepInDirection", () => {
 			})
 			.build();
 
-		const step1 = definition.steps["step1"];
+		const step1 = definition.steps.step1;
 
 		const nextId = await resolveStepInDirection(
 			step1,

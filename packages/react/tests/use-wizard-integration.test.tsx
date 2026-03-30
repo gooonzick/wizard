@@ -348,6 +348,125 @@ describe("useWizard hook integration", () => {
 		});
 	});
 
+	describe("validation and error handling", () => {
+		it("should set validation errors when goNext fails validation", async () => {
+			const definition = createTestDefinition();
+
+			const { result } = renderHook(() =>
+				useWizard({
+					definition,
+					initialData: { name: "", email: "" },
+				}),
+			);
+
+			await act(async () => {
+				try {
+					await result.current.navigation.goNext();
+				} catch {
+					// expected
+				}
+			});
+
+			await waitFor(() => {
+				expect(result.current.validation.isValid).toBe(false);
+				expect(result.current.validation.validationErrors).toHaveProperty(
+					"name",
+				);
+			});
+		});
+
+		it("should call onError when navigation fails", async () => {
+			const definition = createTestDefinition();
+			const onError = vi.fn();
+
+			const { result } = renderHook(() =>
+				useWizard({
+					definition,
+					initialData: { name: "", email: "" },
+					onError,
+				}),
+			);
+
+			await act(async () => {
+				try {
+					await result.current.navigation.goNext();
+				} catch {
+					// expected
+				}
+			});
+
+			await waitFor(() => {
+				expect(onError).toHaveBeenCalledTimes(1);
+				expect(onError).toHaveBeenCalledWith(expect.any(Error));
+			});
+		});
+
+		it("should call onComplete when wizard finishes", async () => {
+			const simpleDefinition = createLinearWizard<{
+				name: string;
+				email: string;
+			}>({
+				id: "complete-test",
+				steps: [{ id: "step1", title: "Step 1" }],
+			});
+			const onComplete = vi.fn();
+
+			const { result } = renderHook(() =>
+				useWizard({
+					definition: simpleDefinition,
+					initialData: { name: "John", email: "john@test.com" },
+					onComplete,
+				}),
+			);
+
+			await act(async () => {
+				await result.current.actions.submit();
+			});
+
+			await waitFor(() => {
+				expect(onComplete).toHaveBeenCalledWith(
+					expect.objectContaining({ name: "John" }),
+				);
+				expect(result.current.state.isCompleted).toBe(true);
+			});
+		});
+
+		it("should clear validation errors after successful validate call", async () => {
+			const definition = createTestDefinition();
+
+			const { result } = renderHook(() =>
+				useWizard({
+					definition,
+					initialData: { name: "", email: "" },
+				}),
+			);
+
+			// Trigger validation failure
+			await act(async () => {
+				try {
+					await result.current.navigation.goNext();
+				} catch {
+					// expected
+				}
+			});
+
+			await waitFor(() => {
+				expect(result.current.validation.isValid).toBe(false);
+			});
+
+			// Fix data and navigate
+			await act(async () => {
+				result.current.actions.updateField("name", "John");
+				await result.current.navigation.goNext();
+			});
+
+			await waitFor(() => {
+				expect(result.current.state.currentStepId).toBe("step2");
+				expect(result.current.validation.isValid).toBe(true);
+			});
+		});
+	});
+
 	describe("reset functionality", () => {
 		it("should reset wizard state", async () => {
 			const definition = createTestDefinition();
