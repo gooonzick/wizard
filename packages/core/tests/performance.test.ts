@@ -117,8 +117,9 @@ describe("Memory Management", () => {
 			await machine.goPrevious();
 		}
 
-		// History grows linearly — verify it recorded all navigations
-		expect(machine.history.length).toBe(201); // 1 initial + 200 navigations
+		// With stack semantics, back-and-forth keeps the stack bounded
+		// goNext pushes, goPrevious pops — so after each cycle we're back to [step1]
+		expect(machine.history.length).toBe(1);
 		// Visited set stays bounded to actual unique steps
 		expect(machine.visited.length).toBe(2);
 	});

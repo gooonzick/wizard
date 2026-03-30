@@ -24,6 +24,7 @@ export interface WizardState<T> {
 	data: T;
 	isValid: boolean;
 	isCompleted: boolean;
+	canGoBack: boolean;
 	validationErrors?: Record<string, string>;
 }
 
@@ -76,6 +77,7 @@ export class WizardMachine<T extends WizardData> {
 					: JSON.parse(JSON.stringify(initialData)),
 			isValid: true,
 			isCompleted: false,
+			canGoBack: false,
 		};
 		this.visitedSteps.add(definition.initialStepId);
 		this.stepHistory.push(definition.initialStepId);
@@ -282,38 +284,59 @@ export class WizardMachine<T extends WizardData> {
 	}
 
 	/**
-	 * Goes to previous step
+	 * Goes to previous step.
+	 * Uses navigation history stack when available (pops the current step),
+	 * falls back to the previous transition resolver when history is empty.
 	 */
 	async goPrevious(): Promise<void> {
 		return this.withTransition(async () => {
+			// History-first: if we have history entries beyond the current step, pop back
+			if (this.stepHistory.length > 1) {
+				// Pop the current step off the stack
+				this.stepHistory.pop();
+				// The new top is our target
+				const previousStepId = this.stepHistory[this.stepHistory.length - 1];
+
+				await this.navigateToStep(previousStepId, { pushToHistory: false });
+				this.debug(
+					`Navigated to previous step (from history): ${previousStepId}`,
+				);
+				return;
+			}
+
+			// Fallback: use transition resolver when history is empty
 			const previousStepId = await this.resolvePreviousStep();
 			if (!previousStepId) {
 				throw new WizardNavigationError("No previous step available");
 			}
 
 			await this.navigateToStep(previousStepId);
-			this.debug(`Navigated to previous step: ${previousStepId}`);
+			this.debug(
+				`Navigated to previous step (from resolver): ${previousStepId}`,
+			);
 		});
 	}
 
 	/**
-	 * Goes back a specified number of steps in history
+	 * Goes back a specified number of steps in history.
 	 * @param steps Number of steps to go back (default: 1)
+	 * @deprecated Use `goPrevious()` instead, which now uses the navigation history stack.
+	 * `goBack(1)` is equivalent to `goPrevious()`. For multiple steps, call `goPrevious()` repeatedly.
 	 */
 	async goBack(steps = 1): Promise<void> {
 		return this.withTransition(async () => {
-			const currentIndex = this.stepHistory.lastIndexOf(
-				this.state.currentStepId,
-			);
-			const targetIndex = currentIndex - steps;
-
-			if (targetIndex < 0) {
+			if (this.stepHistory.length - 1 < steps) {
 				throw new WizardNavigationError(
-					`Cannot go back ${steps} steps, only ${currentIndex} steps in history`,
+					`Cannot go back ${steps} steps, only ${this.stepHistory.length - 1} steps in history`,
 				);
 			}
 
-			const targetStepId = this.stepHistory[targetIndex];
+			// Pop `steps` entries from the stack
+			for (let i = 0; i < steps; i++) {
+				this.stepHistory.pop();
+			}
+
+			const targetStepId = this.stepHistory[this.stepHistory.length - 1];
 
 			// Check if target step is still enabled
 			const targetStep = this.definition.steps[targetStepId];
@@ -339,7 +362,7 @@ export class WizardMachine<T extends WizardData> {
 				);
 			}
 
-			await this.navigateToStep(targetStepId);
+			await this.navigateToStep(targetStepId, { pushToHistory: false });
 			this.debug(`Went back ${steps} steps to: ${targetStepId}`);
 		});
 	}
@@ -446,8 +469,15 @@ export class WizardMachine<T extends WizardData> {
 
 	/**
 	 * Navigates to a specific step
+	 * @param stepId Target step ID
+	 * @param options.pushToHistory Whether to push the target step onto the history stack (default: true).
+	 *   Set to false when navigating backward (the target is already in the stack).
 	 */
-	private async navigateToStep(stepId: StepId): Promise<void> {
+	private async navigateToStep(
+		stepId: StepId,
+		options?: { pushToHistory?: boolean },
+	): Promise<void> {
+		const { pushToHistory = true } = options ?? {};
 		const currentStep = this.currentStep;
 		const targetStep = this.definition.steps[stepId];
 
@@ -457,16 +487,21 @@ export class WizardMachine<T extends WizardData> {
 		}
 		this.events.onStepLeave?.(currentStep.id, this.state.data);
 
+		// Update history stack
+		if (pushToHistory) {
+			this.stepHistory.push(stepId);
+		}
+
 		// Update state
 		this.state = {
 			...this.state,
 			currentStepId: stepId,
 			isValid: true,
 			validationErrors: undefined,
+			canGoBack: this.stepHistory.length > 1,
 		};
 
 		this.visitedSteps.add(stepId);
-		this.stepHistory.push(stepId);
 
 		// Call onEnter for new step
 		if (targetStep.onEnter) {
@@ -474,6 +509,19 @@ export class WizardMachine<T extends WizardData> {
 		}
 		this.events.onStepEnter?.(stepId, this.state.data);
 
+		this.notifyStateChange();
+	}
+
+	/**
+	 * Clears the navigation history stack, keeping only the current step.
+	 * Useful for reset/cancel scenarios.
+	 */
+	clearHistory(): void {
+		this.stepHistory = [this.state.currentStepId];
+		this.state = {
+			...this.state,
+			canGoBack: false,
+		};
 		this.notifyStateChange();
 	}
 

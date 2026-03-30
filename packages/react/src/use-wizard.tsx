@@ -54,6 +54,7 @@ export interface UseWizardValidation {
 export interface UseWizardNavigationState {
 	canGoNext: boolean;
 	canGoPrevious: boolean;
+	canGoBack: boolean;
 	isFirstStep: boolean;
 	isLastStep: boolean;
 	visitedSteps: StepId[];
@@ -393,6 +394,7 @@ export function useWizard<T extends WizardData>(
 		() => ({
 			canGoNext: navigationSnapshot.canGoNext,
 			canGoPrevious: navigationSnapshot.canGoPrevious,
+			canGoBack: navigationSnapshot.canGoBack,
 			isFirstStep: navigationSnapshot.isFirstStep,
 			isLastStep: navigationSnapshot.isLastStep,
 			visitedSteps: navigationSnapshot.visitedSteps,
@@ -406,6 +408,7 @@ export function useWizard<T extends WizardData>(
 		[
 			navigationSnapshot.canGoNext,
 			navigationSnapshot.canGoPrevious,
+			navigationSnapshot.canGoBack,
 			navigationSnapshot.isFirstStep,
 			navigationSnapshot.isLastStep,
 			navigationSnapshot.visitedSteps,

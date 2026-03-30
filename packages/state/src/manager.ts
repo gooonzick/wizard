@@ -78,6 +78,7 @@ export class WizardStateManager<T extends WizardData> {
 		this.navigationCache = {
 			canGoNext: false,
 			canGoPrevious: false,
+			canGoBack: snapshot.canGoBack,
 			availableSteps: [],
 			isFirstStep: snapshot.currentStepId === this.initialStepId,
 			isLastStep: true,
@@ -190,6 +191,7 @@ export class WizardStateManager<T extends WizardData> {
 		const snapshot = this.machine.snapshot;
 		this.navigationCache = {
 			...this.navigationCache,
+			canGoBack: snapshot.canGoBack,
 			isFirstStep: snapshot.currentStepId === this.initialStepId,
 			visitedSteps: [...this.machine.visited],
 			stepHistory: [...this.machine.history],
@@ -248,6 +250,7 @@ export class WizardStateManager<T extends WizardData> {
 				const newNavigationState: NavigationState = {
 					canGoNext: !!nextStep,
 					canGoPrevious: !!prevStep,
+					canGoBack: machineSnapshot.canGoBack,
 					availableSteps: available,
 					isFirstStep: machineSnapshot.currentStepId === this.initialStepId,
 					isLastStep: !nextStep,

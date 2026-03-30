@@ -230,6 +230,7 @@ describe("WizardStateManager", () => {
 				data: { name: "old" },
 				isCompleted: false,
 				isValid: true,
+				canGoBack: false,
 			};
 
 			const newState: WizardState<{ name: string }> = {
@@ -237,6 +238,7 @@ describe("WizardStateManager", () => {
 				data: { name: "new" },
 				isCompleted: false,
 				isValid: true,
+				canGoBack: false,
 			};
 
 			manager.handleStateChange(newState, oldState);
@@ -256,6 +258,7 @@ describe("WizardStateManager", () => {
 				data: { name: "test" },
 				isCompleted: false,
 				isValid: true,
+				canGoBack: false,
 			};
 
 			const newState: WizardState<{ name: string }> = {
@@ -263,6 +266,7 @@ describe("WizardStateManager", () => {
 				data: { name: "test" },
 				isCompleted: false,
 				isValid: true,
+				canGoBack: false,
 			};
 
 			manager.handleStateChange(newState, oldState);
@@ -282,6 +286,7 @@ describe("WizardStateManager", () => {
 				data: { name: "test" },
 				isCompleted: false,
 				isValid: true,
+				canGoBack: false,
 			};
 
 			const newState: WizardState<{ name: string }> = {
@@ -289,6 +294,7 @@ describe("WizardStateManager", () => {
 				data: { name: "test" },
 				isCompleted: false,
 				isValid: false,
+				canGoBack: false,
 				validationErrors: { name: "Required" },
 			};
 
@@ -309,6 +315,7 @@ describe("WizardStateManager", () => {
 				data: { name: "test" },
 				isCompleted: false,
 				isValid: true,
+				canGoBack: false,
 			};
 
 			manager.handleStateChange(state, state);

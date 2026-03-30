@@ -2,8 +2,10 @@
 import { cn } from "@/lib/utils";
 import Button from "./ui/button.vue";
 
+type Approach = "use-wizard" | "provider" | "field-binding" | "history";
+
 interface Props {
-	modelValue: "use-wizard" | "provider" | "field-binding";
+	modelValue: Approach;
 	class?: string;
 }
 
@@ -12,10 +14,7 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 defineEmits<
-	(
-		event: "update:modelValue",
-		value: "use-wizard" | "provider" | "field-binding",
-	) => void
+	(event: "update:modelValue", value: Approach) => void
 >();
 </script>
 
@@ -38,6 +37,12 @@ defineEmits<
 			@click="$emit('update:modelValue', 'field-binding')"
 		>
 			useWizardField
+		</Button>
+		<Button
+			:variant="modelValue === 'history' ? 'default' : 'outline'"
+			@click="$emit('update:modelValue', 'history')"
+		>
+			History Stack
 		</Button>
 	</div>
 </template>

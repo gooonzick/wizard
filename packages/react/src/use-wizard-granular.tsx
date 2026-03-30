@@ -111,6 +111,7 @@ export function useWizardNavigation(): UseWizardNavigation {
 		() => ({
 			canGoNext: navigationSnapshot.canGoNext,
 			canGoPrevious: navigationSnapshot.canGoPrevious,
+			canGoBack: navigationSnapshot.canGoBack,
 			isFirstStep: navigationSnapshot.isFirstStep,
 			isLastStep: navigationSnapshot.isLastStep,
 			visitedSteps: navigationSnapshot.visitedSteps,
@@ -124,6 +125,7 @@ export function useWizardNavigation(): UseWizardNavigation {
 		[
 			navigationSnapshot.canGoNext,
 			navigationSnapshot.canGoPrevious,
+			navigationSnapshot.canGoBack,
 			navigationSnapshot.isFirstStep,
 			navigationSnapshot.isLastStep,
 			navigationSnapshot.visitedSteps,
