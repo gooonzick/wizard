@@ -1,5 +1,17 @@
 # @gooonzick/wizard-vue
 
+## 1.1.0
+
+### Minor Changes
+
+- eea4412: feat: add history navigation to wizard
+
+### Patch Changes
+
+- Updated dependencies [eea4412]
+  - @gooonzick/wizard-state@1.1.0
+  - @gooonzick/wizard-core@1.1.0
+
 ## 1.0.2
 
 ### Patch Changes
