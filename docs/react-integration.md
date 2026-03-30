@@ -147,16 +147,17 @@ validation.validationErrors; // Field-level errors
 // State
 navigation.canGoNext; // Can move to next step?
 navigation.canGoPrevious; // Can move to previous step?
+navigation.canGoBack; // Can go back via history stack?
 navigation.isFirstStep; // Is on first step?
 navigation.isLastStep; // Is on last step?
 navigation.visitedSteps; // Array of visited step IDs
 navigation.availableSteps; // Array of currently enabled steps
-navigation.stepHistory; // Ordered history of navigation
+navigation.stepHistory; // Navigation history stack
 
 // Actions
 navigation.goNext(); // Go to next step
-navigation.goPrevious(); // Go to previous step
-navigation.goBack(steps); // Go back N steps
+navigation.goPrevious(); // Go to previous step (pops from history)
+navigation.goBack(steps); // Go back N steps (deprecated, use goPrevious)
 navigation.goToStep(stepId); // Jump to specific step
 ```
 

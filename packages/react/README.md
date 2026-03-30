@@ -6,6 +6,7 @@ React integration for the WizardForm state machine. Provides a convenient `useWi
 
 - **React Hook** - Simple `useWizard()` hook for React components
 - **Organized API** - State grouped into logical slices (state, validation, navigation, loading, actions)
+- **Navigation History** - `canGoBack` and `stepHistory` for history-based back navigation
 - **Granular Hooks** - Fine-grained subscriptions with `useWizardData()`, `useWizardNavigation()`, etc.
 - **Optional Provider** - `WizardProvider` for performance optimization in complex UIs
 - **Full Type Safety** - TypeScript generics for your data types
@@ -140,6 +141,7 @@ validation.validationErrors;
 // Navigation slice (state + methods)
 navigation.canGoNext;
 navigation.canGoPrevious;
+navigation.canGoBack;
 navigation.isFirstStep;
 navigation.isLastStep;
 navigation.visitedSteps;
@@ -147,7 +149,7 @@ navigation.availableSteps;
 navigation.stepHistory;
 navigation.goNext();
 navigation.goPrevious();
-navigation.goBack(n);
+navigation.goBack(n); // deprecated
 navigation.goToStep(stepId);
 
 // Loading slice
@@ -208,6 +210,7 @@ interface UseWizardValidation {
 interface UseWizardNavigation {
   canGoNext: boolean;
   canGoPrevious: boolean;
+  canGoBack: boolean;
   isFirstStep: boolean;
   isLastStep: boolean;
   visitedSteps: string[];
@@ -215,6 +218,7 @@ interface UseWizardNavigation {
   stepHistory: string[];
   goNext(): Promise<void>;
   goPrevious(): Promise<void>;
+  /** @deprecated Use goPrevious() instead */
   goBack(steps?: number): Promise<void>;
   goToStep(stepId: string): Promise<void>;
 }

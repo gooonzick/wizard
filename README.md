@@ -13,6 +13,7 @@ A declarative, type-safe, and extensible framework for building multi-step wizar
 - **Declarative API**: Define wizards as data, not imperative logic
 - **State Machine Architecture**: Built on finite state machine principles
 - **Dynamic Routing**: Support for static, conditional, and resolver-based transitions
+- **Navigation History**: Built-in history stack for reliable back navigation through conditional flows
 - **Extensible**: Guards, validators, lifecycle hooks, and side effects
 - **Framework Agnostic**: Core logic works with any UI framework
 - **React Integration**: Ready-to-use React hook included

@@ -185,16 +185,17 @@ validation.validationErrors.value; // Field-level errors (ComputedRef)
 // State (all ComputedRef)
 navigation.canGoNext.value; // Can move to next step?
 navigation.canGoPrevious.value; // Can move to previous step?
+navigation.canGoBack.value; // Can go back via history stack?
 navigation.isFirstStep.value; // Is on first step?
 navigation.isLastStep.value; // Is on last step?
 navigation.visitedSteps.value; // Array of visited step IDs
 navigation.availableSteps.value; // Array of currently enabled steps
-navigation.stepHistory.value; // Ordered history of navigation
+navigation.stepHistory.value; // Navigation history stack
 
 // Actions
 await navigation.goNext(); // Go to next step
-await navigation.goPrevious(); // Go to previous step
-await navigation.goBack(n); // Go back n steps
+await navigation.goPrevious(); // Go to previous step (pops from history)
+await navigation.goBack(n); // Go back n steps (deprecated, use goPrevious)
 await navigation.goToStep(id); // Jump to specific step
 ```
 
@@ -506,16 +507,17 @@ const validationErrors = validation.validationErrors.value; // Field validation 
 // Navigation slice - state and methods
 const canGoNext = navigation.canGoNext.value; // Can move forward?
 const canGoPrevious = navigation.canGoPrevious.value; // Can move backward?
+const canGoBack = navigation.canGoBack.value; // Can go back via history stack?
 const isFirstStep = navigation.isFirstStep.value; // Is on first step?
 const isLastStep = navigation.isLastStep.value; // Is on last step?
 const visitedSteps = navigation.visitedSteps.value; // Visited step IDs
 const availableSteps = navigation.availableSteps.value; // Enabled step IDs
-const stepHistory = navigation.stepHistory.value; // Navigation history
+const stepHistory = navigation.stepHistory.value; // Navigation history stack
 
 // Navigation actions
 await navigation.goNext(); // Navigate to next
-await navigation.goPrevious(); // Navigate to previous
-await navigation.goBack(n); // Go back n steps
+await navigation.goPrevious(); // Navigate to previous (pops history)
+await navigation.goBack(n); // Go back n steps (deprecated)
 await navigation.goToStep(id); // Jump to specific step
 
 // Loading slice

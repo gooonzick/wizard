@@ -57,6 +57,7 @@ interface UseWizardNavigation {
   // State
   canGoNext: boolean;
   canGoPrevious: boolean;
+  canGoBack: boolean; // true when history stack has > 1 entry
   isFirstStep: boolean;
   isLastStep: boolean;
   visitedSteps: StepId[];
@@ -65,6 +66,7 @@ interface UseWizardNavigation {
   // Actions
   goNext(): Promise<void>;
   goPrevious(): Promise<void>;
+  /** @deprecated Use goPrevious() instead */
   goBack(steps?: number): Promise<void>;
   goToStep(stepId: StepId): Promise<void>;
 }

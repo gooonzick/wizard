@@ -152,16 +152,17 @@ validation.validationErrors; // Field-level errors
 // State
 navigation.canGoNext; // Can move to next step?
 navigation.canGoPrevious; // Can move to previous step?
+navigation.canGoBack; // Can go back via history stack?
 navigation.isFirstStep; // Is on first step?
 navigation.isLastStep; // Is on last step?
 navigation.visitedSteps; // Array of visited step IDs
 navigation.availableSteps; // Array of currently enabled steps
-navigation.stepHistory; // Ordered history of navigation
+navigation.stepHistory; // Navigation history stack
 
 // Actions
 navigation.goNext(); // Go to next step
-navigation.goPrevious(); // Go to previous step
-navigation.goBack(steps); // Go back N steps
+navigation.goPrevious(); // Go to previous step (pops from history)
+navigation.goBack(steps); // Go back N steps (deprecated, use goPrevious)
 navigation.goToStep(stepId); // Jump to specific step
 ```
 
@@ -462,14 +463,15 @@ validation.validationErrors; // Field validation errors
 // Navigation slice - state and methods
 navigation.canGoNext; // Can move forward?
 navigation.canGoPrevious; // Can move backward?
+navigation.canGoBack; // Can go back via history stack?
 navigation.isFirstStep; // Is on first step?
 navigation.isLastStep; // Is on last step?
 navigation.visitedSteps; // Visited step IDs
 navigation.availableSteps; // Enabled step IDs
-navigation.stepHistory; // Navigation history
+navigation.stepHistory; // Navigation history stack
 navigation.goNext(); // Navigate to next
-navigation.goPrevious(); // Navigate to previous
-navigation.goBack(n); // Go back n steps
+navigation.goPrevious(); // Navigate to previous (pops history)
+navigation.goBack(n); // Go back n steps (deprecated)
 navigation.goToStep(id); // Jump to specific step
 
 // Loading slice
