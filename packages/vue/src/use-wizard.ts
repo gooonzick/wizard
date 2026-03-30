@@ -90,6 +90,7 @@ export function useWizard<T extends WizardData>(
 	const navigationState = reactive({
 		canGoNext: false,
 		canGoPrevious: false,
+		canGoBack: false,
 		availableSteps: [] as StepId[],
 	});
 
@@ -106,6 +107,7 @@ export function useWizard<T extends WizardData>(
 			const nav = manager.value.getNavigationSnapshot();
 			navigationState.canGoNext = nav.canGoNext ?? false;
 			navigationState.canGoPrevious = nav.canGoPrevious ?? false;
+			navigationState.canGoBack = nav.canGoBack ?? false;
 			navigationState.availableSteps = nav.availableSteps ?? [];
 		} catch (error) {
 			// Log error for debugging when debug flag is enabled
@@ -271,6 +273,7 @@ export function useWizard<T extends WizardData>(
 	const navigationSlice: UseWizardNavigation = {
 		canGoNext: computed(() => navigationState.canGoNext),
 		canGoPrevious: computed(() => navigationState.canGoPrevious),
+		canGoBack: computed(() => navigationState.canGoBack),
 		isFirstStep,
 		isLastStep,
 		visitedSteps,

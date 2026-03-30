@@ -20,6 +20,7 @@ export type SubscriptionChannel =
 export interface NavigationState {
 	canGoNext: boolean;
 	canGoPrevious: boolean;
+	canGoBack: boolean;
 	availableSteps: StepId[];
 	isFirstStep: boolean;
 	isLastStep: boolean;

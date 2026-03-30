@@ -2,21 +2,25 @@
 import { onMounted, ref, watch } from "vue";
 import ApproachToggle from "./components/approach-toggle.vue";
 import FieldBindingExample from "./wizard-example/field-binding-example.vue";
+import HistoryExample from "./wizard-example/history-example.vue";
 import ProviderExample from "./wizard-example/provider-example.vue";
 import UseWizardExample from "./wizard-example/use-wizard-example.vue";
 
-const approach = ref<"use-wizard" | "provider" | "field-binding">(
+type Approach = "use-wizard" | "provider" | "field-binding" | "history";
+
+const approaches: Approach[] = [
 	"use-wizard",
-);
+	"provider",
+	"field-binding",
+	"history",
+];
+
+const approach = ref<Approach>("use-wizard");
 
 onMounted(() => {
 	const saved = localStorage.getItem("wizard-approach");
-	if (
-		saved === "use-wizard" ||
-		saved === "provider" ||
-		saved === "field-binding"
-	) {
-		approach.value = saved;
+	if (saved && approaches.includes(saved as Approach)) {
+		approach.value = saved as Approach;
 	}
 });
 
@@ -39,7 +43,8 @@ watch(approach, (newVal) => {
 
 			<UseWizardExample v-if="approach === 'use-wizard'" />
 			<ProviderExample v-else-if="approach === 'provider'" />
-			<FieldBindingExample v-else />
+			<FieldBindingExample v-else-if="approach === 'field-binding'" />
+			<HistoryExample v-else />
 		</div>
 	</div>
 </template>

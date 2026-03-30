@@ -58,6 +58,7 @@ export interface UseWizardValidation {
 export interface UseWizardNavigationState {
 	canGoNext: ComputedRef<boolean>;
 	canGoPrevious: ComputedRef<boolean>;
+	canGoBack: ComputedRef<boolean>;
 	isFirstStep: ComputedRef<boolean>;
 	isLastStep: ComputedRef<boolean>;
 	visitedSteps: ComputedRef<StepId[]>;

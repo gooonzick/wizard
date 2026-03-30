@@ -310,7 +310,7 @@ describe("WizardMachine - New Features", () => {
 	});
 
 	describe("goBack Method", () => {
-		it("should navigate back through history", async () => {
+		it("should navigate back through history via stack pop", async () => {
 			const machine = new WizardMachine(
 				createTestDefinition(),
 				defaultContext,
@@ -326,6 +326,7 @@ describe("WizardMachine - New Features", () => {
 			await machine.goBack(2); // Go back 2 steps to step1
 
 			expect(machine.snapshot.currentStepId).toBe("step1");
+			expect(machine.history).toEqual(["step1"]);
 		});
 
 		it("should throw when going back too many steps", async () => {
@@ -371,7 +372,7 @@ describe("WizardMachine - New Features", () => {
 	});
 
 	describe("Step History", () => {
-		it("should track navigation history", async () => {
+		it("should track navigation history as a stack", async () => {
 			const machine = new WizardMachine(
 				createTestDefinition(),
 				defaultContext,
@@ -386,8 +387,9 @@ describe("WizardMachine - New Features", () => {
 			await machine.goNext();
 			expect(machine.history).toEqual(["step1", "step2", "step3"]);
 
+			// goPrevious pops from the stack instead of appending
 			await machine.goPrevious();
-			expect(machine.history).toEqual(["step1", "step2", "step3", "step2"]);
+			expect(machine.history).toEqual(["step1", "step2"]);
 		});
 	});
 
