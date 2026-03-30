@@ -7,14 +7,14 @@ import { evaluateGuard, resolveTransition } from "./transitions";
 /**
  * Configuration for step resolution
  */
-interface StepResolutionConfig {
+interface StepResolutionConfig<T extends WizardData> {
 	direction: "next" | "previous";
 	getTransition: (
-		step: WizardStepDefinition<any>,
-	) => StepTransition<any> | undefined;
+		step: WizardStepDefinition<T>,
+	) => StepTransition<T> | undefined;
 	getNextTransition: (
-		step: WizardStepDefinition<any>,
-	) => StepTransition<any> | undefined;
+		step: WizardStepDefinition<T>,
+	) => StepTransition<T> | undefined;
 }
 
 /**
@@ -34,7 +34,7 @@ export async function resolveStepInDirection<T extends WizardData>(
 	steps: Record<StepId, WizardStepDefinition<T>>,
 	data: T,
 	ctx: WizardContext,
-	config: StepResolutionConfig,
+	config: StepResolutionConfig<T>,
 ): Promise<StepId | null> {
 	const visited = new Set<StepId>();
 	const initialTransition = config.getTransition(currentStep);

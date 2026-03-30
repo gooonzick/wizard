@@ -2,16 +2,34 @@
 	"$schema": "https://turbo.build/schema.json",
 	"tasks": {
 		"build": {
-			"outputs": ["dist/**", "*.d.ts", ".vitepress/dist/**"],
+			"outputs": [
+				"dist/**",
+				"*.d.ts",
+				".vitepress/dist/**"
+			],
 			"cache": true,
-			"dependsOn": ["^build"],
-			"inputs": ["src/**", "tsconfig.json", "vite.config.ts"]
+			"dependsOn": [
+				"^build"
+			],
+			"inputs": [
+				"src/**",
+				"tsconfig.json",
+				"vite.config.ts"
+			]
 		},
 		"test": {
-			"outputs": ["coverage/**"],
+			"outputs": [
+				"coverage/**"
+			],
 			"cache": false,
-			"dependsOn": ["^build"],
-			"inputs": ["src/**", "tests/**", "vitest.config.ts"]
+			"dependsOn": [
+				"^build"
+			],
+			"inputs": [
+				"src/**",
+				"tests/**",
+				"vitest.config.ts"
+			]
 		},
 		"test:watch": {
 			"cache": false,
@@ -19,8 +37,13 @@
 		},
 		"typecheck": {
 			"cache": false,
-			"inputs": ["src/**", "tsconfig.json"],
-			"dependsOn": ["build"]
+			"inputs": [
+				"src/**",
+				"tsconfig.json"
+			],
+			"dependsOn": [
+				"build"
+			]
 		},
 		"dev": {
 			"cache": false,
@@ -29,12 +52,16 @@
 		"lint": {
 			"outputs": [],
 			"cache": true,
-			"inputs": ["**/*.{ts,tsx,js,jsx,json,css,md}"]
+			"inputs": [
+				"**/*.{ts,tsx,js,jsx,json,css,md}"
+			]
 		},
 		"lint:fix": {
 			"outputs": [],
 			"cache": true,
-			"inputs": ["**/*.{ts,tsx,js,jsx,json,css,md}"]
+			"inputs": [
+				"**/*.{ts,tsx,js,jsx,json,css,md}"
+			]
 		}
 	}
 }

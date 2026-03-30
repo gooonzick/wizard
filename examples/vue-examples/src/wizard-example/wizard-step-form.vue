@@ -82,6 +82,10 @@ const filteredFields = computed(() => {
 	);
 });
 
+const getFieldValue = (field: string): unknown => {
+	return data.value?.[field as keyof RegistrationData];
+};
+
 type ModelValue = string | number | readonly string[] | null | undefined;
 type StringOrUndefined = string | undefined;
 </script>
@@ -93,7 +97,7 @@ type StringOrUndefined = string | undefined;
 		</h2>
 
 		<!-- Review Step -->
-		<div v-if="currentStepId.value === 'review'">
+		<div v-if="currentStepId === 'review'">
 			<Card>
 				<div class="p-6">
 					<Alert>
@@ -106,51 +110,51 @@ type StringOrUndefined = string | undefined;
 					<div class="grid grid-cols-2 gap-4 py-4">
 						<div>
 							<p class="text-sm text-gray-600">First Name</p>
-							<p class="font-semibold">{{ data.value.firstName || "-" }}</p>
+							<p class="font-semibold">{{ data.firstName || "-" }}</p>
 						</div>
 						<div>
 							<p class="text-sm text-gray-600">Last Name</p>
-							<p class="font-semibold">{{ data.value.lastName || "-" }}</p>
+							<p class="font-semibold">{{ data.lastName || "-" }}</p>
 						</div>
 						<div>
 							<p class="text-sm text-gray-600">Email</p>
-							<p class="font-semibold">{{ data.value.email || "-" }}</p>
+							<p class="font-semibold">{{ data.email || "-" }}</p>
 						</div>
 						<div>
 							<p class="text-sm text-gray-600">Phone</p>
-							<p class="font-semibold">{{ data.value.phone || "-" }}</p>
+							<p class="font-semibold">{{ data.phone || "-" }}</p>
 						</div>
 						<div>
 							<p class="text-sm text-gray-600">Newsletter</p>
-							<p class="font-semibold">{{ data.value.newsletter ? "Subscribed" : "Not subscribed" }}</p>
+							<p class="font-semibold">{{ data.newsletter ? "Subscribed" : "Not subscribed" }}</p>
 						</div>
 						<div>
 							<p class="text-sm text-gray-600">Notifications</p>
-							<p class="font-semibold capitalize">{{ data.value.notifications || "-" }}</p>
+							<p class="font-semibold capitalize">{{ data.notifications || "-" }}</p>
 						</div>
 						<div>
 							<p class="text-sm text-gray-600">Theme</p>
-							<p class="font-semibold capitalize">{{ data.value.theme || "-" }}</p>
+							<p class="font-semibold capitalize">{{ data.theme || "-" }}</p>
 						</div>
 						<div>
 							<p class="text-sm text-gray-600">Username</p>
-							<p class="font-semibold">{{ data.value.username || "-" }}</p>
+							<p class="font-semibold">{{ data.username || "-" }}</p>
 						</div>
 						<div>
 							<p class="text-sm text-gray-600">Company Name</p>
-							<p class="font-semibold">{{ data.value.companyName || "-" }}</p>
+							<p class="font-semibold">{{ data.companyName || "-" }}</p>
 						</div>
 						<div>
 							<p class="text-sm text-gray-600">Company Size</p>
-							<p class="font-semibold">{{ data.value.companySize || "-" }}</p>
+							<p class="font-semibold">{{ data.companySize || "-" }}</p>
 						</div>
 						<div>
 							<p class="text-sm text-gray-600">Plan</p>
-							<p class="font-semibold capitalize">{{ data.value.plan || "-" }}</p>
+							<p class="font-semibold capitalize">{{ data.plan || "-" }}</p>
 						</div>
-						<div v-if="data.value.plan === 'enterprise'" class="col-span-2">
+						<div v-if="data.plan === 'enterprise'" class="col-span-2">
 							<p class="text-sm text-gray-600">Message</p>
-							<p class="font-semibold">{{ data.value.message || "-" }}</p>
+							<p class="font-semibold">{{ data.message || "-" }}</p>
 						</div>
 					</div>
 				</div>
@@ -163,7 +167,7 @@ type StringOrUndefined = string | undefined;
 			<div v-if="currentStepConfig.fields.includes('newsletter')" class="flex items-center gap-3">
 				<Checkbox
 					id="newsletter"
-					:checked="data.value.newsletter === true"
+				:checked="data.newsletter === true"
 					@update:checked="(checked: boolean) => updateField('newsletter', checked)"
 				/>
 				<Label for="newsletter">{{ fieldLabels.newsletter }}</Label>
@@ -175,7 +179,7 @@ type StringOrUndefined = string | undefined;
 				<Label for="notifications">{{ fieldLabels.notifications }}</Label>
 				<select
 					id="notifications"
-					:value="data.value.notifications"
+				:value="data.notifications"
 					@change="(e) => updateField('notifications', (e.target as HTMLSelectElement).value as RegistrationData['notifications'])"
 					class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
 				>
@@ -191,7 +195,7 @@ type StringOrUndefined = string | undefined;
 				<Label for="theme">{{ fieldLabels.theme }}</Label>
 				<select
 					id="theme"
-					:value="data.value.theme"
+				:value="data.theme"
 					@change="(e) => updateField('theme', (e.target as HTMLSelectElement).value as RegistrationData['theme'])"
 					class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
 				>
@@ -207,7 +211,7 @@ type StringOrUndefined = string | undefined;
 				<Label for="companySize">{{ fieldLabels.companySize }}</Label>
 				<select
 					id="companySize"
-					:value="data.value.companySize"
+				:value="data.companySize"
 					@change="(e) => updateField('companySize', (e.target as HTMLSelectElement).value as RegistrationData['companySize'])"
 					class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
 				>
@@ -223,7 +227,7 @@ type StringOrUndefined = string | undefined;
 				<Label for="plan">{{ fieldLabels.plan }}</Label>
 				<select
 					id="plan"
-					:value="data.value.plan"
+				:value="data.plan"
 					@change="(e) => updateField('plan', (e.target as HTMLSelectElement).value as RegistrationData['plan'])"
 					class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
 				>
@@ -242,7 +246,7 @@ type StringOrUndefined = string | undefined;
 				<textarea
 					v-if="field === 'message'"
 					:id="field"
-					:value="data.value?.[field] as ModelValue"
+				:value="getFieldValue(field) as ModelValue"
 					@input="(e: Event) => updateField(field, (e.target as HTMLTextAreaElement).value)"
 					class="flex min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
 					placeholder="Enter your message for our sales team"
@@ -253,7 +257,7 @@ type StringOrUndefined = string | undefined;
 					v-else
 					:id="field"
 					:type="getFieldType(field)"
-					:model-value="data.value?.[field] as StringOrUndefined"
+				:model-value="getFieldValue(field) as StringOrUndefined"
 					@update:model-value="(newValue: unknown) => updateField(field, newValue)"
 				/>
 
