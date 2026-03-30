@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expectTypeOf, test } from "vitest";
 import type {
 	SyncOrAsync,
 	ValidationResult,
@@ -8,24 +8,20 @@ import type { StepTransition } from "../src/types/transitions";
 
 describe("Base Types", () => {
 	test("SyncOrAsync should accept sync values", () => {
-		const sync: SyncOrAsync<number> = 42;
-		expect(sync).toBe(42);
+		expectTypeOf<42>().toMatchTypeOf<SyncOrAsync<number>>();
 	});
 
 	test("SyncOrAsync should accept Promise values", () => {
-		const async: SyncOrAsync<number> = Promise.resolve(42);
-		expect(async).toBeInstanceOf(Promise);
+		expectTypeOf<Promise<number>>().toMatchTypeOf<SyncOrAsync<number>>();
 	});
 
 	test("ValidationResult should have correct shape", () => {
-		const valid: ValidationResult = { valid: true };
-		const invalid: ValidationResult = {
-			valid: false,
-			errors: { field: "error" },
-		};
-
-		expect(valid.valid).toBe(true);
-		expect(invalid.errors).toBeDefined();
+		expectTypeOf<ValidationResult>().toHaveProperty("valid");
+		expectTypeOf<{ valid: true }>().toMatchTypeOf<ValidationResult>();
+		expectTypeOf<{
+			valid: false;
+			errors: { field: string };
+		}>().toMatchTypeOf<ValidationResult>();
 	});
 
 	test("WizardContext should be extensible", () => {
@@ -33,40 +29,29 @@ describe("Base Types", () => {
 			customField: string;
 		}
 
-		const ctx: ExtendedContext = { customField: "value" };
-		expect(ctx.customField).toBe("value");
+		expectTypeOf<ExtendedContext>().toMatchTypeOf<WizardContext>();
+		expectTypeOf<{ customField: "value" }>().toMatchTypeOf<ExtendedContext>();
 	});
 });
 
 describe("Transition Types", () => {
 	test("Static transition should have correct type", () => {
-		const transition: StepTransition<unknown> = {
-			type: "static",
-			to: "nextStep",
-		};
-
-		expect(transition.type).toBe("static");
-		expect(transition.to).toBe("nextStep");
+		expectTypeOf<{
+			type: "static";
+			to: "nextStep";
+		}>().toMatchTypeOf<StepTransition<unknown>>();
 	});
 
 	test("Conditional transition should support multiple branches", () => {
-		const transition: StepTransition<{ age: number }> = {
-			type: "conditional",
-			branches: [
-				{ when: (d: { age: number }) => d.age >= 18, to: "adult" },
-				{ when: (d: { age: number }) => d.age < 18, to: "minor" },
-			],
-		};
-
-		expect(transition.branches).toHaveLength(2);
+		type Conditional = Extract<
+			StepTransition<{ age: number }>,
+			{ type: "conditional" }
+		>;
+		expectTypeOf<Conditional>().toHaveProperty("branches");
 	});
 
 	test("Resolver transition should accept async functions", () => {
-		const transition: StepTransition<unknown> = {
-			type: "resolver",
-			resolve: async () => "dynamicStep",
-		};
-
-		expect(transition.type).toBe("resolver");
+		type Resolver = Extract<StepTransition<unknown>, { type: "resolver" }>;
+		expectTypeOf<Resolver>().toHaveProperty("resolve");
 	});
 });
