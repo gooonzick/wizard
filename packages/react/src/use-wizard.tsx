@@ -1,4 +1,5 @@
 import type {
+	GoToOptions,
 	StepId,
 	WizardContext,
 	WizardData,
@@ -69,6 +70,8 @@ export interface UseWizardNavigationActions {
 	goNext: () => Promise<void>;
 	goPrevious: () => Promise<void>;
 	goBack: (steps?: number) => Promise<void>;
+	goTo: (stepId: StepId, options?: GoToOptions) => Promise<void>;
+	/** @deprecated Use goTo(stepId) instead */
 	goToStep: (stepId: StepId) => Promise<void>;
 }
 
@@ -345,16 +348,24 @@ export function useWizard<T extends WizardData>(
 		[manager],
 	);
 
-	const goToStep = useCallback(
-		async (stepId: StepId) => {
+	const goTo = useCallback(
+		async (stepId: StepId, options?: GoToOptions) => {
 			manager.setLoadingState({ isNavigating: true });
 			try {
-				await manager.getMachine().goToStep(stepId);
+				await manager.getMachine().goTo(stepId, options);
 			} finally {
 				manager.setLoadingState({ isNavigating: false });
 			}
 		},
 		[manager],
+	);
+
+	/** @deprecated Use goTo instead */
+	const goToStep = useCallback(
+		async (stepId: StepId) => {
+			return goTo(stepId, { skipValidation: true });
+		},
+		[goTo],
 	);
 
 	const reset = useCallback(
@@ -403,6 +414,7 @@ export function useWizard<T extends WizardData>(
 			goNext,
 			goPrevious,
 			goBack,
+			goTo,
 			goToStep,
 		}),
 		[
@@ -417,6 +429,7 @@ export function useWizard<T extends WizardData>(
 			goNext,
 			goPrevious,
 			goBack,
+			goTo,
 			goToStep,
 		],
 	);
