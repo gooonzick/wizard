@@ -1,4 +1,9 @@
-import type { GoToOptions, StepId, WizardData, WizardState } from "@gooonzick/wizard-core";
+import type {
+	GoToOptions,
+	StepId,
+	WizardData,
+	WizardState,
+} from "@gooonzick/wizard-core";
 import { WizardMachine } from "@gooonzick/wizard-core";
 import { WizardStateManager } from "@gooonzick/wizard-state";
 import {
