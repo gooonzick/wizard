@@ -294,6 +294,210 @@ describe("Navigation History Stack", () => {
 		});
 	});
 
+	describe("goTo with options", () => {
+		it("should navigate to an existing enabled step", async () => {
+			const machine = new WizardMachine(
+				createLinearDefinition(),
+				defaultContext,
+				defaultData,
+			);
+
+			await machine.goNext(); // → plan
+			await machine.goTo("summary", { skipValidation: true });
+
+			expect(machine.snapshot.currentStepId).toBe("summary");
+		});
+
+		it("should throw on non-existing step", async () => {
+			const machine = new WizardMachine(
+				createLinearDefinition(),
+				defaultContext,
+				defaultData,
+			);
+
+			await expect(
+				machine.goTo("nonexistent", { skipValidation: true }),
+			).rejects.toThrow("not found");
+		});
+
+		it("should no-op when navigating to current step", async () => {
+			const events = {
+				onStepLeave: vi.fn(),
+				onStepEnter: vi.fn(),
+			};
+			const machine = new WizardMachine(
+				createLinearDefinition(),
+				defaultContext,
+				defaultData,
+				events,
+			);
+
+			// Clear initial onStepEnter call
+			events.onStepEnter.mockClear();
+
+			await machine.goTo("personal", { skipValidation: true });
+
+			expect(machine.snapshot.currentStepId).toBe("personal");
+			expect(events.onStepLeave).not.toHaveBeenCalled();
+			expect(events.onStepEnter).not.toHaveBeenCalled();
+		});
+
+		it("should validate current step by default and throw on invalid", async () => {
+			const definition = createLinearDefinition();
+			definition.steps.personal.validate = async (data) => ({
+				valid: !!data.name,
+				errors: data.name ? undefined : { name: "Name is required" },
+			});
+
+			const machine = new WizardMachine(
+				definition,
+				defaultContext,
+				defaultData, // name is empty string → invalid
+			);
+
+			await expect(machine.goTo("plan")).rejects.toThrow();
+			expect(machine.snapshot.currentStepId).toBe("personal");
+		});
+
+		it("should skip validation when skipValidation is true", async () => {
+			const definition = createLinearDefinition();
+			definition.steps.personal.validate = async (data) => ({
+				valid: !!data.name,
+				errors: data.name ? undefined : { name: "Name is required" },
+			});
+
+			const machine = new WizardMachine(
+				definition,
+				defaultContext,
+				defaultData,
+			);
+
+			await machine.goTo("plan", { skipValidation: true });
+			expect(machine.snapshot.currentStepId).toBe("plan");
+		});
+
+		it("should throw when target step is disabled and skipGuards is false", async () => {
+			const definition = createLinearDefinition();
+			definition.steps.invoice.enabled = false;
+
+			const machine = new WizardMachine(
+				definition,
+				defaultContext,
+				defaultData,
+			);
+
+			await expect(
+				machine.goTo("invoice", { skipValidation: true }),
+			).rejects.toThrow("not enabled");
+		});
+
+		it("should navigate to a disabled step when skipGuards is true", async () => {
+			const definition = createLinearDefinition();
+			definition.steps.invoice.enabled = false;
+
+			const machine = new WizardMachine(
+				definition,
+				defaultContext,
+				defaultData,
+			);
+
+			await machine.goTo("invoice", {
+				skipValidation: true,
+				skipGuards: true,
+			});
+			expect(machine.snapshot.currentStepId).toBe("invoice");
+		});
+
+		it("should skip lifecycle hooks when skipLifecycle is true", async () => {
+			const onLeave = vi.fn();
+			const onEnter = vi.fn();
+			const definition = createLinearDefinition();
+			definition.steps.personal.onLeave = onLeave;
+			definition.steps.plan.onEnter = onEnter;
+
+			const machine = new WizardMachine(
+				definition,
+				defaultContext,
+				defaultData,
+			);
+
+			await machine.goTo("plan", {
+				skipValidation: true,
+				skipLifecycle: true,
+			});
+
+			expect(machine.snapshot.currentStepId).toBe("plan");
+			expect(onLeave).not.toHaveBeenCalled();
+			expect(onEnter).not.toHaveBeenCalled();
+		});
+
+		it("should call lifecycle hooks by default", async () => {
+			const onLeave = vi.fn();
+			const onEnter = vi.fn();
+			const definition = createLinearDefinition();
+			definition.steps.personal.onLeave = onLeave;
+			definition.steps.plan.onEnter = onEnter;
+
+			const machine = new WizardMachine(
+				definition,
+				defaultContext,
+				defaultData,
+			);
+
+			await machine.goTo("plan", { skipValidation: true });
+
+			expect(onLeave).toHaveBeenCalledOnce();
+			expect(onEnter).toHaveBeenCalledOnce();
+		});
+
+		it("should push to navigation history", async () => {
+			const machine = new WizardMachine(
+				createLinearDefinition(),
+				defaultContext,
+				defaultData,
+			);
+
+			await machine.goTo("invoice", { skipValidation: true });
+
+			expect(machine.history).toEqual(["personal", "invoice"]);
+		});
+
+		it("goToStep (deprecated) should still work and skip validation", async () => {
+			const definition = createLinearDefinition();
+			definition.steps.personal.validate = async (data) => ({
+				valid: !!data.name,
+				errors: data.name ? undefined : { name: "Name is required" },
+			});
+
+			const machine = new WizardMachine(
+				definition,
+				defaultContext,
+				defaultData,
+			);
+
+			await machine.goToStep("plan");
+			expect(machine.snapshot.currentStepId).toBe("plan");
+		});
+
+		it("should throw when wizard is already completed", async () => {
+			const machine = new WizardMachine(
+				createLinearDefinition(),
+				defaultContext,
+				defaultData,
+			);
+
+			// Navigate to summary (last step) and complete
+			await machine.goNext(); // plan
+			await machine.goNext(); // invoice
+			await machine.goNext(); // summary
+			await machine.goNext(); // completes (no next step)
+
+			await expect(
+				machine.goTo("personal", { skipValidation: true }),
+			).rejects.toThrow("already completed");
+		});
+	});
+
 	describe("canGoBack", () => {
 		it("should be false on the initial step", () => {
 			const machine = new WizardMachine(
