@@ -1,5 +1,17 @@
 # @gooonzick/wizard-react
 
+## 1.2.0
+
+### Minor Changes
+
+- 40c1331: feat: add arbitrary navigation
+
+### Patch Changes
+
+- Updated dependencies [40c1331]
+  - @gooonzick/wizard-core@1.2.0
+  - @gooonzick/wizard-state@1.2.0
+
 ## 1.1.0
 
 ### Minor Changes
