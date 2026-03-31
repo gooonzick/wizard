@@ -133,11 +133,12 @@ class WizardMachine<TData> {
 
 ---
 
-#### WIZ-002: goTo(stepId) — Arbitrary Navigation
+#### WIZ-002: goTo(stepId) — Arbitrary Navigation ✅
 
 **Priority:** 🔴 Critical
 **Effort:** S (2–3 hours)
 **Package:** `@gooonzick/wizard-core`
+**Status:** Implemented
 
 ##### Problem
 

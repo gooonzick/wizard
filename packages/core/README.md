@@ -305,7 +305,13 @@ await machine.goNext();
 // Move backward (uses history stack — always returns to actual previous step)
 await machine.goPrevious();
 
-// Jump to specific step
+// Jump to specific step (validates current step, checks target guards)
+await machine.goTo("step-id");
+
+// Jump without validation
+await machine.goTo("step-id", { skipValidation: true });
+
+// @deprecated — use goTo() instead
 await machine.goToStep("step-id");
 
 // Navigation history

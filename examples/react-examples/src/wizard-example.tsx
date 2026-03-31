@@ -92,6 +92,7 @@ export const WizardExample: React.FC = () => {
 					currentStepId={state.currentStep.id}
 					stepIds={stepIds}
 					stepTitles={stepTitles}
+					onStepClick={(stepId) => navigation.goTo(stepId)}
 				/>
 
 				{/* Main Content */}
@@ -140,6 +141,7 @@ export const WizardExample: React.FC = () => {
 						stepIds={stepIds}
 						stepTitles={stepTitles}
 						fieldLabels={fieldLabels}
+						onStepClick={(stepId) => navigation.goTo(stepId)}
 					/>
 				</div>
 			</div>

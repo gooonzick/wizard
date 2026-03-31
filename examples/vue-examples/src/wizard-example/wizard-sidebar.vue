@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useWizardData } from "@gooonzick/wizard-vue";
+import { useWizardData, useWizardNavigation } from "@gooonzick/wizard-vue";
 import { CheckCircle2, Circle } from "lucide-vue-next";
 import { computed } from "vue";
 import Card from "@/components/ui/card.vue";
@@ -7,6 +7,7 @@ import type { RegistrationData } from "../types/wizard-data";
 import { fieldLabels, stepIds, stepTitles } from "./constants";
 
 const { data, currentStepId } = useWizardData<RegistrationData>();
+const { goTo } = useWizardNavigation();
 
 const currentIndex = computed(() =>
 	stepIds.indexOf(currentStepId.value as (typeof stepIds)[number]),
@@ -37,10 +38,15 @@ const currentIndex = computed(() =>
 			<div class="border-t pt-4">
 				<h3 class="font-semibold text-sm mb-3">Progress</h3>
 				<div class="space-y-2">
-					<div
+					<component
 						v-for="(stepId, index) in stepIds"
 						:key="stepId"
-						class="flex items-center gap-2"
+						:is="index < currentIndex ? 'button' : 'div'"
+						:class="[
+							'flex items-center gap-2 w-full text-left rounded px-1 -mx-1',
+							index < currentIndex ? 'cursor-pointer hover:bg-gray-100' : '',
+						]"
+						@click="index < currentIndex ? goTo(stepId) : undefined"
 					>
 						<CheckCircle2
 							v-if="index < currentIndex"
@@ -65,7 +71,7 @@ const currentIndex = computed(() =>
 						>
 							{{ stepTitles[stepId] || stepId }}
 						</span>
-					</div>
+					</component>
 				</div>
 			</div>
 		</Card>

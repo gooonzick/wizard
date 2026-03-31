@@ -412,6 +412,8 @@ class WizardMachine<T> {
   goPrevious(): Promise<void>;
   /** @deprecated Use goPrevious() instead */
   goBack(steps?: number): Promise<void>;
+  goTo(stepId: StepId, options?: GoToOptions): Promise<void>;
+  /** @deprecated Use goTo(stepId) instead */
   goToStep(stepId: StepId): Promise<void>;
   clearHistory(): void;
 
@@ -758,6 +760,8 @@ interface UseWizardNavigation {
   goPrevious(): Promise<void>;
   /** @deprecated Use goPrevious() instead */
   goBack(steps?: number): Promise<void>;
+  goTo(stepId: StepId, options?: GoToOptions): Promise<void>;
+  /** @deprecated Use goTo(stepId) instead */
   goToStep(stepId: StepId): Promise<void>;
 }
 
@@ -922,8 +926,14 @@ await machine.goPrevious();
 // Jump steps
 await machine.goBack(3);
 
-// Jump to specific step
-await machine.goToStep("step-id");
+// Jump to specific step (validates current step by default)
+await machine.goTo("step-id");
+
+// Skip validation when jumping
+await machine.goTo("step-id", { skipValidation: true });
+
+// Skip guards and validation
+await machine.goTo("step-id", { skipValidation: true, skipGuards: true });
 ```
 
 ### Handle Events

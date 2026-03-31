@@ -158,7 +158,7 @@ navigation.stepHistory; // Navigation history stack
 navigation.goNext(); // Go to next step
 navigation.goPrevious(); // Go to previous step (pops from history)
 navigation.goBack(steps); // Go back N steps (deprecated, use goPrevious)
-navigation.goToStep(stepId); // Jump to specific step
+navigation.goTo(stepId); // Jump to specific step (validates first)
 ```
 
 #### Loading Slice
@@ -419,7 +419,7 @@ export function TabWizard() {
           return (
             <button
               key={stepId}
-              onClick={() => isVisited && navigation.goToStep(stepId)}
+              onClick={() => isVisited && navigation.goTo(stepId)}
               className={`tab ${isActive ? "active" : ""}`}
               disabled={!isVisited}
             >
@@ -466,7 +466,7 @@ navigation.stepHistory; // Navigation history
 navigation.goNext(); // Navigate to next
 navigation.goPrevious(); // Navigate to previous
 navigation.goBack(n); // Go back n steps
-navigation.goToStep(id); // Jump to specific step
+navigation.goTo(id); // Jump to specific step (validates first)
 
 // Loading slice
 loading.isValidating; // Validation in progress?

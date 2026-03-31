@@ -68,6 +68,8 @@ interface UseWizardNavigation {
   goPrevious(): Promise<void>;
   /** @deprecated Use goPrevious() instead */
   goBack(steps?: number): Promise<void>;
+  goTo(stepId: StepId, options?: GoToOptions): Promise<void>;
+  /** @deprecated Use goTo(stepId) instead */
   goToStep(stepId: StepId): Promise<void>;
 }
 
@@ -118,7 +120,7 @@ For fine-grained subscriptions, use `WizardProvider` with these composables:
 
 ```ts
 const { data, currentStepId, currentStep, isCompleted } = useWizardData<T>();
-const { canGoNext, canGoPrevious, canGoBack, goNext, goPrevious, ... } = useWizardNavigation();
+const { canGoNext, canGoPrevious, canGoBack, goNext, goPrevious, goTo, ... } = useWizardNavigation();
 const { isValid, validationErrors } = useWizardValidation();
 const { isValidating, isSubmitting, isNavigating } = useWizardLoading();
 const { updateField, updateData, setData, validate, submit, reset, canSubmit } = useWizardActions<T>();
