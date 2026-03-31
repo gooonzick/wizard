@@ -36,6 +36,7 @@ export {
 
 // Machine
 export {
+	type GoToOptions,
 	type WizardEvents,
 	WizardMachine,
 	type WizardState,

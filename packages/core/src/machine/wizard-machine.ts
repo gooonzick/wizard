@@ -42,6 +42,18 @@ export interface WizardEvents<T> {
 }
 
 /**
+ * Options for the goTo() navigation method
+ */
+export interface GoToOptions {
+	/** Skip validation of the current step before leaving (default: false) */
+	skipValidation?: boolean;
+	/** Skip checking the enabled guard on the target step (default: false) */
+	skipGuards?: boolean;
+	/** Skip onLeave/onEnter lifecycle hooks (default: false) */
+	skipLifecycle?: boolean;
+}
+
+/**
  * Runtime state machine for wizard execution
  */
 export class WizardMachine<T extends WizardData> {
@@ -368,10 +380,24 @@ export class WizardMachine<T extends WizardData> {
 	}
 
 	/**
-	 * Jumps directly to a specific step (if enabled)
+	 * Navigates to a specific step with options to control validation, guards, and lifecycle.
+	 * @param stepId Target step ID
+	 * @param options Navigation options
+	 * @throws WizardNavigationError if step not found or disabled (when skipGuards is false)
+	 * @throws WizardValidationError if current step is invalid (when skipValidation is false)
 	 */
-	async goToStep(stepId: StepId): Promise<void> {
+	async goTo(stepId: StepId, options?: GoToOptions): Promise<void> {
+		const {
+			skipValidation = false,
+			skipGuards = false,
+			skipLifecycle = false,
+		} = options ?? {};
+
 		return this.withTransition(async () => {
+			if (this.state.isCompleted) {
+				throw new WizardNavigationError("Wizard is already completed");
+			}
+
 			const targetStep = this.definition.steps[stepId];
 			if (!targetStep) {
 				throw new WizardNavigationError(
@@ -381,24 +407,48 @@ export class WizardMachine<T extends WizardData> {
 				);
 			}
 
-			// Check if step is enabled
-			const isEnabled = await evaluateGuard(
-				targetStep.enabled,
-				this.state.data,
-				this.context,
-			);
-
-			if (!isEnabled) {
-				throw new WizardNavigationError(
-					`Step "${stepId}" is not enabled`,
-					stepId,
-					"disabled",
-				);
+			// No-op if already on the target step
+			if (this.state.currentStepId === stepId) {
+				return;
 			}
 
-			await this.navigateToStep(stepId);
-			this.debug(`Jumped to step: ${stepId}`);
+			// Validate current step before leaving (unless skipped)
+			if (!skipValidation) {
+				const validationResult = await this.validate();
+				if (!validationResult.valid) {
+					throw new WizardValidationError(validationResult.errors || {});
+				}
+			}
+
+			// Check if target step is enabled (unless skipped)
+			if (!skipGuards) {
+				const isEnabled = await evaluateGuard(
+					targetStep.enabled,
+					this.state.data,
+					this.context,
+				);
+
+				if (!isEnabled) {
+					throw new WizardNavigationError(
+						`Step "${stepId}" is not enabled`,
+						stepId,
+						"disabled",
+					);
+				}
+			}
+
+			await this.navigateToStep(stepId, { skipLifecycle });
+			this.debug(`Navigated to step: ${stepId}`);
 		});
+	}
+
+	/**
+	 * Jumps directly to a specific step (if enabled)
+	 * @deprecated Use `goTo(stepId)` instead. Will be removed in next major version.
+	 * Note: goToStep skips validation (unlike goTo which validates by default).
+	 */
+	async goToStep(stepId: StepId): Promise<void> {
+		return this.goTo(stepId, { skipValidation: true });
 	}
 
 	/**
@@ -475,17 +525,19 @@ export class WizardMachine<T extends WizardData> {
 	 */
 	private async navigateToStep(
 		stepId: StepId,
-		options?: { pushToHistory?: boolean },
+		options?: { pushToHistory?: boolean; skipLifecycle?: boolean },
 	): Promise<void> {
-		const { pushToHistory = true } = options ?? {};
+		const { pushToHistory = true, skipLifecycle = false } = options ?? {};
 		const currentStep = this.currentStep;
 		const targetStep = this.definition.steps[stepId];
 
 		// Call onLeave for current step
-		if (currentStep.onLeave) {
-			await currentStep.onLeave(this.state.data, this.context);
+		if (!skipLifecycle) {
+			if (currentStep.onLeave) {
+				await currentStep.onLeave(this.state.data, this.context);
+			}
+			this.events.onStepLeave?.(currentStep.id, this.state.data);
 		}
-		this.events.onStepLeave?.(currentStep.id, this.state.data);
 
 		// Update history stack
 		if (pushToHistory) {
@@ -504,10 +556,12 @@ export class WizardMachine<T extends WizardData> {
 		this.visitedSteps.add(stepId);
 
 		// Call onEnter for new step
-		if (targetStep.onEnter) {
-			await targetStep.onEnter(this.state.data, this.context);
+		if (!skipLifecycle) {
+			if (targetStep.onEnter) {
+				await targetStep.onEnter(this.state.data, this.context);
+			}
+			this.events.onStepEnter?.(stepId, this.state.data);
 		}
-		this.events.onStepEnter?.(stepId, this.state.data);
 
 		this.notifyStateChange();
 	}
