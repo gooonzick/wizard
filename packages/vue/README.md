@@ -150,7 +150,8 @@ const { updateField } = useWizardActions();
 <script setup lang="ts">
 import { useWizardNavigation } from "@gooonzick/wizard-vue";
 
-const { canGoNext, canGoPrevious, goNext, goPrevious } = useWizardNavigation();
+const { canGoNext, canGoPrevious, goNext, goPrevious, goTo } =
+  useWizardNavigation();
 </script>
 
 <template>

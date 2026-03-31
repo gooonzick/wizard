@@ -1,4 +1,9 @@
-import type { StepId, WizardData, WizardState } from "@gooonzick/wizard-core";
+import type {
+	GoToOptions,
+	StepId,
+	WizardData,
+	WizardState,
+} from "@gooonzick/wizard-core";
 import { WizardMachine } from "@gooonzick/wizard-core";
 import { WizardStateManager } from "@gooonzick/wizard-state";
 import {
@@ -235,13 +240,18 @@ export function useWizard<T extends WizardData>(
 		}
 	};
 
-	const goToStep = async (stepId: StepId) => {
+	const goTo = async (stepId: StepId, options?: GoToOptions) => {
 		loadingState.isNavigating = true;
 		try {
-			await machine.value.goToStep(stepId);
+			await machine.value.goTo(stepId, options);
 		} finally {
 			loadingState.isNavigating = false;
 		}
+	};
+
+	/** @deprecated Use goTo instead */
+	const goToStep = async (stepId: StepId) => {
+		return goTo(stepId, { skipValidation: true });
 	};
 
 	const reset = (data?: T) => {
@@ -282,6 +292,7 @@ export function useWizard<T extends WizardData>(
 		goNext,
 		goPrevious,
 		goBack,
+		goTo,
 		goToStep,
 	};
 

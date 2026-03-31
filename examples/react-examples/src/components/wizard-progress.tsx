@@ -7,12 +7,14 @@ interface WizardProgressProps {
 	currentStepId: string;
 	stepIds: string[];
 	stepTitles: Record<string, string>;
+	onStepClick?: (stepId: string) => void;
 }
 
 export const WizardProgress: React.FC<WizardProgressProps> = ({
 	currentStepId,
 	stepIds,
 	stepTitles,
+	onStepClick,
 }) => {
 	const currentIndex = stepIds.indexOf(currentStepId);
 	const progressPercent = ((currentIndex + 1) / stepIds.length) * 100;
@@ -25,8 +27,19 @@ export const WizardProgress: React.FC<WizardProgressProps> = ({
 					const isCompleted = index < currentIndex;
 					const isCurrent = stepId === currentStepId;
 
+					const isClickable = isCompleted && !!onStepClick;
+
 					return (
-						<div key={stepId} className="flex flex-col items-center flex-1">
+						<button
+							type="button"
+							key={stepId}
+							className={cn(
+								"flex flex-col items-center flex-1 bg-transparent border-none p-0",
+								isClickable && "cursor-pointer",
+							)}
+							disabled={!isClickable}
+							onClick={() => isClickable && onStepClick(stepId)}
+						>
 							<div
 								className={cn(
 									"flex items-center justify-center w-10 h-10 rounded-full border-2 mb-2 transition-colors",
@@ -35,6 +48,7 @@ export const WizardProgress: React.FC<WizardProgressProps> = ({
 										: isCurrent
 											? "bg-blue-500 border-blue-500"
 											: "bg-gray-200 border-gray-300",
+									isClickable && "hover:ring-2 hover:ring-green-300",
 								)}
 							>
 								{isCompleted ? (
@@ -53,7 +67,7 @@ export const WizardProgress: React.FC<WizardProgressProps> = ({
 							>
 								{stepTitles[stepId] || stepId}
 							</span>
-						</div>
+						</button>
 					);
 				})}
 			</div>

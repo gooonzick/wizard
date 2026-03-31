@@ -196,7 +196,7 @@ navigation.stepHistory.value; // Navigation history stack
 await navigation.goNext(); // Go to next step
 await navigation.goPrevious(); // Go to previous step (pops from history)
 await navigation.goBack(n); // Go back n steps (deprecated, use goPrevious)
-await navigation.goToStep(id); // Jump to specific step
+await navigation.goTo(id); // Jump to specific step (validates first)
 ```
 
 #### Loading Slice
@@ -468,7 +468,7 @@ const isStepVisited = (stepId: string) => {
       <button
         v-for="stepId in navigation.availableSteps.value"
         :key="stepId"
-        @click="isStepVisited(stepId) && navigation.goToStep(stepId)"
+        @click="isStepVisited(stepId) && navigation.goTo(stepId)"
         :class="['tab', { active: stepId === state.currentStepId.value }]"
         :disabled="!isStepVisited(stepId)"
       >
@@ -518,7 +518,7 @@ const stepHistory = navigation.stepHistory.value; // Navigation history stack
 await navigation.goNext(); // Navigate to next
 await navigation.goPrevious(); // Navigate to previous (pops history)
 await navigation.goBack(n); // Go back n steps (deprecated)
-await navigation.goToStep(id); // Jump to specific step
+await navigation.goTo(id); // Jump to specific step (validates first)
 
 // Loading slice
 const isValidating = loading.isValidating.value; // Validation in progress?

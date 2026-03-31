@@ -150,7 +150,9 @@ navigation.stepHistory;
 navigation.goNext();
 navigation.goPrevious();
 navigation.goBack(n); // deprecated
-navigation.goToStep(stepId);
+navigation.goTo(stepId); // validates current step first
+navigation.goTo(stepId, options); // with GoToOptions
+navigation.goToStep(stepId); // @deprecated — use goTo() instead
 
 // Loading slice
 loading.isValidating;
@@ -220,6 +222,8 @@ interface UseWizardNavigation {
   goPrevious(): Promise<void>;
   /** @deprecated Use goPrevious() instead */
   goBack(steps?: number): Promise<void>;
+  goTo(stepId: string, options?: GoToOptions): Promise<void>;
+  /** @deprecated Use goTo(stepId) instead */
   goToStep(stepId: string): Promise<void>;
 }
 

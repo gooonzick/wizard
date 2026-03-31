@@ -1,4 +1,4 @@
-import type { StepId, WizardData } from "@gooonzick/wizard-core";
+import type { GoToOptions, StepId, WizardData } from "@gooonzick/wizard-core";
 import { useCallback, useMemo, useSyncExternalStore } from "react";
 import type {
 	UseWizardActions,
@@ -95,16 +95,24 @@ export function useWizardNavigation(): UseWizardNavigation {
 		[manager],
 	);
 
-	const goToStep = useCallback(
-		async (stepId: StepId) => {
+	const goTo = useCallback(
+		async (stepId: StepId, options?: GoToOptions) => {
 			manager.setLoadingState({ isNavigating: true });
 			try {
-				await manager.getMachine().goToStep(stepId);
+				await manager.getMachine().goTo(stepId, options);
 			} finally {
 				manager.setLoadingState({ isNavigating: false });
 			}
 		},
 		[manager],
+	);
+
+	/** @deprecated Use goTo instead */
+	const goToStep = useCallback(
+		async (stepId: StepId) => {
+			return goTo(stepId, { skipValidation: true });
+		},
+		[goTo],
 	);
 
 	return useMemo(
@@ -120,6 +128,7 @@ export function useWizardNavigation(): UseWizardNavigation {
 			goNext,
 			goPrevious,
 			goBack,
+			goTo,
 			goToStep,
 		}),
 		[
@@ -134,6 +143,7 @@ export function useWizardNavigation(): UseWizardNavigation {
 			goNext,
 			goPrevious,
 			goBack,
+			goTo,
 			goToStep,
 		],
 	);

@@ -1,4 +1,5 @@
 import type {
+	GoToOptions,
 	StepId,
 	WizardContext,
 	WizardData,
@@ -73,6 +74,8 @@ export interface UseWizardNavigationActions {
 	goNext: () => Promise<void>;
 	goPrevious: () => Promise<void>;
 	goBack: (steps?: number) => Promise<void>;
+	goTo: (stepId: StepId, options?: GoToOptions) => Promise<void>;
+	/** @deprecated Use goTo(stepId) instead */
 	goToStep: (stepId: StepId) => Promise<void>;
 }
 
