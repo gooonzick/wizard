@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type { StepStatus } from "@gooonzick/wizard-core";
 import { CheckCircle2, AlertCircle } from "lucide-vue-next";
-import { computed } from "vue";
 
 interface Props {
 	currentStepId: string;
@@ -10,15 +9,8 @@ interface Props {
 	stepStatuses: Record<string, StepStatus>;
 }
 
-const props = defineProps<Props>();
+defineProps<Props>();
 
-const completedCount = computed(
-	() =>
-		props.stepIds.filter((id) => props.stepStatuses[id] === "completed").length,
-);
-const progressPercent = computed(
-	() => (completedCount.value / props.stepIds.length) * 100,
-);
 </script>
 
 <template>

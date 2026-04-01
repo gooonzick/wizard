@@ -5,7 +5,7 @@ import Card from "@/components/ui/card.vue";
 import type { RegistrationData } from "../types/wizard-data";
 import { fieldLabels, stepIds, stepTitles } from "./constants";
 
-const { data, currentStepId, stepStatuses } =
+const { data, stepStatuses } =
 	useWizardData<RegistrationData>();
 const { goTo } = useWizardNavigation();
 </script>
