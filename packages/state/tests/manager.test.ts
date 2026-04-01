@@ -19,6 +19,8 @@ function createMockMachine<T extends WizardData>(): WizardMachine<T> {
 			isCompleted: false,
 			isValid: true,
 			validationErrors: undefined,
+			canGoBack: false,
+			stepStatuses: { "step-1": "active", "step-2": "pristine" },
 		},
 		currentStep: {
 			id: "step-1",
@@ -231,6 +233,7 @@ describe("WizardStateManager", () => {
 				isCompleted: false,
 				isValid: true,
 				canGoBack: false,
+				stepStatuses: { "step-1": "active" },
 			};
 
 			const newState: WizardState<{ name: string }> = {
@@ -239,6 +242,7 @@ describe("WizardStateManager", () => {
 				isCompleted: false,
 				isValid: true,
 				canGoBack: false,
+				stepStatuses: { "step-1": "active" },
 			};
 
 			manager.handleStateChange(newState, oldState);
@@ -259,6 +263,7 @@ describe("WizardStateManager", () => {
 				isCompleted: false,
 				isValid: true,
 				canGoBack: false,
+				stepStatuses: { "step-1": "active", "step-2": "pristine" },
 			};
 
 			const newState: WizardState<{ name: string }> = {
@@ -267,6 +272,7 @@ describe("WizardStateManager", () => {
 				isCompleted: false,
 				isValid: true,
 				canGoBack: false,
+				stepStatuses: { "step-1": "completed", "step-2": "active" },
 			};
 
 			manager.handleStateChange(newState, oldState);
@@ -287,6 +293,7 @@ describe("WizardStateManager", () => {
 				isCompleted: false,
 				isValid: true,
 				canGoBack: false,
+				stepStatuses: { "step-1": "active" },
 			};
 
 			const newState: WizardState<{ name: string }> = {
@@ -295,6 +302,7 @@ describe("WizardStateManager", () => {
 				isCompleted: false,
 				isValid: false,
 				canGoBack: false,
+				stepStatuses: { "step-1": "active" },
 				validationErrors: { name: "Required" },
 			};
 
@@ -316,6 +324,7 @@ describe("WizardStateManager", () => {
 				isCompleted: false,
 				isValid: true,
 				canGoBack: false,
+				stepStatuses: { "step-1": "active" },
 			};
 
 			manager.handleStateChange(state, state);

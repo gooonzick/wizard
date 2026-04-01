@@ -33,12 +33,14 @@ export function useWizardData<T extends WizardData>(): UseWizardState<T> {
 			currentStep: stateSnapshot.currentStep,
 			data: stateSnapshot.data,
 			isCompleted: stateSnapshot.isCompleted,
+			stepStatuses: stateSnapshot.stepStatuses,
 		}),
 		[
 			stateSnapshot.currentStepId,
 			stateSnapshot.currentStep,
 			stateSnapshot.data,
 			stateSnapshot.isCompleted,
+			stateSnapshot.stepStatuses,
 		],
 	);
 }

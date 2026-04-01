@@ -1,23 +1,16 @@
 <script setup lang="ts">
-import { CheckCircle2 } from "lucide-vue-next";
-import { computed } from "vue";
+import type { StepStatus } from "@gooonzick/wizard-core";
+import { CheckCircle2, AlertCircle } from "lucide-vue-next";
 
 interface Props {
 	currentStepId: string;
 	stepIds: readonly string[];
 	stepTitles: Record<string, string>;
+	stepStatuses: Record<string, StepStatus>;
 }
 
-const props = defineProps<Props>();
+defineProps<Props>();
 
-const currentIndex = computed(() => props.stepIds.indexOf(props.currentStepId));
-
-const getStepStatus = (stepId: string) => {
-	const index = props.stepIds.indexOf(stepId);
-	if (index < currentIndex.value) return "completed";
-	if (index === currentIndex.value) return "current";
-	return "pending";
-};
 </script>
 
 <template>
@@ -31,18 +24,30 @@ const getStepStatus = (stepId: string) => {
 				<div
 					:class="[
 						'flex items-center justify-center w-10 h-10 rounded-full border-2 mb-2 transition-colors',
-						getStepStatus(stepId) === 'completed'
+						stepStatuses[stepId] === 'completed'
 							? 'bg-green-500 border-green-500'
-							: getStepStatus(stepId) === 'current'
+							: stepStatuses[stepId] === 'active'
 								? 'bg-blue-500 border-blue-500'
-								: 'bg-gray-200 border-gray-300',
+								: stepStatuses[stepId] === 'error'
+									? 'bg-red-500 border-red-500'
+									: stepStatuses[stepId] === 'visited'
+										? 'bg-blue-200 border-blue-300'
+										: 'bg-gray-200 border-gray-300',
 					]"
 				>
-					<template v-if="getStepStatus(stepId) === 'completed'">
+					<template v-if="stepStatuses[stepId] === 'completed'">
 						<CheckCircle2 class="w-5 h-5 text-white" />
 					</template>
+					<template v-else-if="stepStatuses[stepId] === 'error'">
+						<AlertCircle class="w-5 h-5 text-white" />
+					</template>
 					<template v-else>
-						<span class="text-sm font-semibold text-gray-700">
+						<span
+							:class="[
+								'text-sm font-semibold',
+								stepStatuses[stepId] === 'active' ? 'text-white' : 'text-gray-700',
+							]"
+						>
 							{{ index + 1 }}
 						</span>
 					</template>
@@ -50,7 +55,11 @@ const getStepStatus = (stepId: string) => {
 				<span
 					:class="[
 						'text-xs font-medium text-center line-clamp-2',
-						getStepStatus(stepId) === 'current' ? 'text-blue-600' : 'text-gray-600',
+						stepStatuses[stepId] === 'active'
+							? 'text-blue-600'
+							: stepStatuses[stepId] === 'error'
+								? 'text-red-600'
+								: 'text-gray-600',
 					]"
 				>
 					{{ stepTitles[stepId] || stepId }}

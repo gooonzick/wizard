@@ -1,6 +1,7 @@
 import type {
 	GoToOptions,
 	StepId,
+	StepStatus,
 	WizardContext,
 	WizardData,
 	WizardDefinition,
@@ -39,6 +40,7 @@ export interface UseWizardState<T extends WizardData> {
 	currentStep: WizardStepDefinition<T>;
 	data: T;
 	isCompleted: boolean;
+	stepStatuses: Record<StepId, StepStatus>;
 }
 
 /**
@@ -384,12 +386,14 @@ export function useWizard<T extends WizardData>(
 			currentStep: stateSnapshot.currentStep,
 			data: stateSnapshot.data,
 			isCompleted: stateSnapshot.isCompleted,
+			stepStatuses: stateSnapshot.stepStatuses,
 		}),
 		[
 			stateSnapshot.currentStepId,
 			stateSnapshot.currentStep,
 			stateSnapshot.data,
 			stateSnapshot.isCompleted,
+			stateSnapshot.stepStatuses,
 		],
 	);
 

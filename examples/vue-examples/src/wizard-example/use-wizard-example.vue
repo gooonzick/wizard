@@ -35,6 +35,7 @@ const { navigation, actions, state, validation } = useWizard({
 				:current-step-id="state.currentStepId.value"
 				:step-ids="stepIds"
 				:step-titles="stepTitles"
+				:step-statuses="state.stepStatuses.value"
 			/>
 
 			<!-- Main Content -->

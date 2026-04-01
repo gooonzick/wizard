@@ -7,6 +7,17 @@ import type {
 import type { StepGuard, StepTransition } from "./transitions";
 
 /**
+ * Runtime lifecycle status of a wizard step
+ */
+export type StepStatus =
+	| "pristine"
+	| "active"
+	| "visited"
+	| "completed"
+	| "error"
+	| "skipped";
+
+/**
  * Validator function for step data
  */
 export type Validator<T> = (

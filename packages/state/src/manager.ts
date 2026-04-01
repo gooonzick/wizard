@@ -66,6 +66,7 @@ export class WizardStateManager<T extends WizardData> {
 			currentStep: this.machine.currentStep,
 			data: snapshot.data,
 			isCompleted: snapshot.isCompleted,
+			stepStatuses: snapshot.stepStatuses,
 		};
 
 		// Initialize validation cache
@@ -170,6 +171,7 @@ export class WizardStateManager<T extends WizardData> {
 			currentStep: this.machine.currentStep,
 			data: snapshot.data,
 			isCompleted: snapshot.isCompleted,
+			stepStatuses: snapshot.stepStatuses,
 		};
 	}
 
@@ -373,6 +375,11 @@ export class WizardStateManager<T extends WizardData> {
 			newState.validationErrors !== oldState.validationErrors
 		) {
 			affected.push("validation");
+		}
+
+		// Step status changes affect state
+		if (newState.stepStatuses !== oldState.stepStatuses) {
+			affected.push("state");
 		}
 
 		if (affected.length > 0) {

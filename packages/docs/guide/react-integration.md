@@ -137,6 +137,7 @@ state.currentStepId; // Current step ID
 state.currentStep; // Current step definition
 state.data; // Current wizard data
 state.isCompleted; // Has wizard completed?
+state.stepStatuses; // Record<StepId, StepStatus> — status of every step
 ```
 
 #### Validation Slice

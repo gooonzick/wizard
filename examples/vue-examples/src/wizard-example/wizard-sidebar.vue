@@ -1,17 +1,13 @@
 <script setup lang="ts">
 import { useWizardData, useWizardNavigation } from "@gooonzick/wizard-vue";
-import { CheckCircle2, Circle } from "lucide-vue-next";
-import { computed } from "vue";
+import { AlertCircle, CheckCircle2, Circle } from "lucide-vue-next";
 import Card from "@/components/ui/card.vue";
 import type { RegistrationData } from "../types/wizard-data";
 import { fieldLabels, stepIds, stepTitles } from "./constants";
 
-const { data, currentStepId } = useWizardData<RegistrationData>();
+const { data, stepStatuses } =
+	useWizardData<RegistrationData>();
 const { goTo } = useWizardNavigation();
-
-const currentIndex = computed(() =>
-	stepIds.indexOf(currentStepId.value as (typeof stepIds)[number]),
-);
 </script>
 
 <template>
@@ -21,13 +17,29 @@ const currentIndex = computed(() =>
 			<div>
 				<h3 class="font-semibold text-lg mb-3">Summary</h3>
 				<div class="space-y-2">
-					<div v-for="[key, value] in Object.entries(data)" :key="key" class="text-sm">
-						<span v-if="typeof value !== 'object' && (typeof value !== 'string' || value !== '')" class="flex justify-between items-start">
+					<div
+						v-for="[key, value] in Object.entries(data)"
+						:key="key"
+						class="text-sm"
+					>
+						<span
+							v-if="
+								typeof value !== 'object' &&
+								(typeof value !== 'string' || value !== '')
+							"
+							class="flex justify-between items-start"
+						>
 							<span class="text-gray-600">
 								{{ fieldLabels[key] || key }}:
 							</span>
 							<span class="font-medium ml-2 text-right">
-								{{ typeof value === "boolean" ? (value ? "Yes" : "No") : String(value) }}
+								{{
+									typeof value === "boolean"
+										? value
+											? "Yes"
+											: "No"
+										: String(value)
+								}}
 							</span>
 						</span>
 					</div>
@@ -39,34 +51,57 @@ const currentIndex = computed(() =>
 				<h3 class="font-semibold text-sm mb-3">Progress</h3>
 				<div class="space-y-2">
 					<component
-						v-for="(stepId, index) in stepIds"
+						v-for="stepId in stepIds"
 						:key="stepId"
-						:is="index < currentIndex ? 'button' : 'div'"
+						:is="
+							stepStatuses[stepId] === 'completed' ||
+							stepStatuses[stepId] === 'visited'
+								? 'button'
+								: 'div'
+						"
 						:class="[
 							'flex items-center gap-2 w-full text-left rounded px-1 -mx-1',
-							index < currentIndex ? 'cursor-pointer hover:bg-gray-100' : '',
+							stepStatuses[stepId] === 'completed' ||
+							stepStatuses[stepId] === 'visited'
+								? 'cursor-pointer hover:bg-gray-100'
+								: '',
 						]"
-						@click="index < currentIndex ? goTo(stepId) : undefined"
+						@click="
+							stepStatuses[stepId] === 'completed' ||
+							stepStatuses[stepId] === 'visited'
+								? goTo(stepId)
+								: undefined
+						"
 					>
 						<CheckCircle2
-							v-if="index < currentIndex"
+							v-if="stepStatuses[stepId] === 'completed'"
 							class="w-4 h-4 text-green-500 shrink-0"
+						/>
+						<AlertCircle
+							v-else-if="stepStatuses[stepId] === 'error'"
+							class="w-4 h-4 text-red-500 shrink-0"
 						/>
 						<Circle
 							v-else
 							:class="[
 								'w-4 h-4 shrink-0',
-								stepId === currentStepId ? 'text-blue-500' : 'text-gray-300',
+								stepStatuses[stepId] === 'active'
+									? 'text-blue-500'
+									: stepStatuses[stepId] === 'visited'
+										? 'text-blue-300'
+										: 'text-gray-300',
 							]"
 						/>
 						<span
 							:class="[
 								'text-sm',
-								stepId === currentStepId
+								stepStatuses[stepId] === 'active'
 									? 'font-semibold text-blue-600'
-									: index < currentIndex
+									: stepStatuses[stepId] === 'completed'
 										? 'text-gray-600'
-										: 'text-gray-500',
+										: stepStatuses[stepId] === 'error'
+											? 'text-red-600 font-medium'
+											: 'text-gray-500',
 							]"
 						>
 							{{ stepTitles[stepId] || stepId }}

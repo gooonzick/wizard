@@ -132,6 +132,7 @@ state.currentStepId; // Current step ID
 state.currentStep; // Current step definition
 state.data; // Current wizard data
 state.isCompleted; // Has wizard completed?
+state.stepStatuses; // Record<StepId, StepStatus> — status of every step
 ```
 
 #### Validation Slice
@@ -349,26 +350,29 @@ export function SafeWizard() {
 export function ProgressWizard() {
   const { state, navigation } = useWizard({ definition, initialData });
 
-  const progress =
-    (navigation.visitedSteps.length / navigation.availableSteps.length) * 100;
+  const completedCount = Object.values(state.stepStatuses).filter(
+    (s) => s === "completed",
+  ).length;
+  const totalSteps = navigation.availableSteps.length;
+  const progress = (completedCount / totalSteps) * 100;
 
   return (
     <div>
       <div className="progress-bar" style={{ width: `${progress}%` }} />
       <p>
-        Step {navigation.visitedSteps.length} of{" "}
-        {navigation.availableSteps.length}
+        {completedCount} of {totalSteps} steps completed
       </p>
 
-      {state.currentStepId === "review" && (
-        <div className="review">
-          {navigation.visitedSteps.map((stepId) => (
-            <div key={stepId}>
-              <h4>{state.currentStep.meta?.title}</h4>
-            </div>
-          ))}
-        </div>
-      )}
+      <div className="steps">
+        {navigation.availableSteps.map((stepId) => (
+          <div
+            key={stepId}
+            className={`step step-${state.stepStatuses[stepId]}`}
+          >
+            {stepId} — {state.stepStatuses[stepId]}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -450,6 +454,7 @@ state.data; // Current form data
 state.currentStepId; // Current step
 state.currentStep; // Current step definition
 state.isCompleted; // Is wizard completed?
+state.stepStatuses; // Status of each step (pristine/active/visited/completed/error/skipped)
 
 // Validation slice
 validation.isValid; // Is current step valid?

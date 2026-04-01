@@ -458,6 +458,78 @@ navigation.canGoBack.value; // boolean
 navigation.stepHistory.value; // StepId[]
 ```
 
+## 12. Step Status Tracking
+
+WizardForm automatically tracks the **status** of every step throughout the wizard lifecycle. This powers navigation bars, progress indicators, and sidebar navigation without manual bookkeeping.
+
+### Step Statuses
+
+Each step has one of six possible statuses:
+
+| Status      | Meaning                               |
+| ----------- | ------------------------------------- |
+| `pristine`  | Not yet visited                       |
+| `active`    | Currently displayed                   |
+| `visited`   | Was active, then user navigated away  |
+| `completed` | Successfully submitted via `goNext()` |
+| `error`     | Validation failed on `goNext()`       |
+| `skipped`   | Disabled by guard (`enabled: false`)  |
+
+### Automatic Transitions
+
+Statuses update automatically as users navigate:
+
+```
+pristine ──(becomes currentStepId)──▶ active
+active ──(goNext succeeds)──▶ completed
+active ──(goNext validation fails)──▶ error
+active ──(goPrevious / goTo)──▶ visited
+completed / error ──(goTo back)──▶ active
+* ──(guard enabled=false)──▶ skipped
+skipped ──(guard enabled=true)──▶ pristine
+```
+
+### Using Step Statuses
+
+Access step statuses from the state:
+
+```typescript
+// Core
+const machine = new WizardMachine(definition, context, initialData, {
+  onStateChange: (state) => {
+    console.log(state.stepStatuses);
+    // { personal: "completed", plan: "active", review: "pristine" }
+  },
+});
+
+// Query a single step
+machine.getStepStatus("personal"); // "completed"
+
+// Manual override (e.g., mark a step as needing review)
+machine.setStepStatus("personal", "error");
+```
+
+### Building a Progress Bar
+
+Step statuses make it easy to build progress indicators:
+
+```typescript
+// React
+const { state } = useWizard({ definition, initialData });
+
+function StepIndicator({ stepId }: { stepId: string }) {
+  const status = state.stepStatuses[stepId];
+
+  return (
+    <div className={`step step-${status}`}>
+      {status === "completed" && <CheckIcon />}
+      {status === "error" && <AlertIcon />}
+      {status === "active" && <CurrentIcon />}
+    </div>
+  );
+}
+```
+
 ## Putting It Together
 
 Here's how these concepts work together:

@@ -78,6 +78,7 @@ interface WizardState<T> {
   isCompleted: boolean;
   canGoBack: boolean; // true when history stack has > 1 entry
   validationErrors?: Record<string, string>;
+  stepStatuses: Record<StepId, StepStatus>; // Status of every step
 }
 ```
 
@@ -121,6 +122,29 @@ Type alias for sync or async operations.
 ```typescript
 type SyncOrAsync<T> = T | Promise<T>;
 ```
+
+#### `StepStatus`
+
+Status of a wizard step.
+
+```typescript
+type StepStatus =
+  | "pristine"
+  | "active"
+  | "visited"
+  | "completed"
+  | "error"
+  | "skipped";
+```
+
+| Value       | Meaning                               |
+| ----------- | ------------------------------------- |
+| `pristine`  | Not yet visited                       |
+| `active`    | Currently displayed step              |
+| `visited`   | Previously visited, navigated away    |
+| `completed` | Successfully submitted via `goNext()` |
+| `error`     | Validation failed on `goNext()`       |
+| `skipped`   | Disabled by guard (`enabled: false`)  |
 
 ---
 
@@ -416,6 +440,10 @@ class WizardMachine<T> {
   /** @deprecated Use goTo(stepId) instead */
   goToStep(stepId: StepId): Promise<void>;
   clearHistory(): void;
+
+  // Step Status
+  getStepStatus(stepId: StepId): StepStatus;
+  setStepStatus(stepId: StepId, status: StepStatus): void;
 
   // Query
   getNextStepId(): Promise<StepId | null>;
