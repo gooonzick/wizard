@@ -79,6 +79,7 @@ interface WizardState<T> {
   isCompleted: boolean;
   canGoBack: boolean; // true when history stack has > 1 entry
   validationErrors?: Record<string, string>;
+  stepStatuses: Record<StepId, StepStatus>; // Status of every step
 }
 ```
 
@@ -381,6 +382,10 @@ class WizardMachine<T> {
   /** @deprecated Use goTo(stepId) instead */
   goToStep(stepId: StepId): Promise<void>;
   clearHistory(): void;
+
+  // Step Status
+  getStepStatus(stepId: StepId): StepStatus;
+  setStepStatus(stepId: StepId, status: StepStatus): void;
 
   // Query
   getNextStepId(): Promise<StepId | null>;

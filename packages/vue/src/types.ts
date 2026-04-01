@@ -1,6 +1,7 @@
 import type {
 	GoToOptions,
 	StepId,
+	StepStatus,
 	WizardContext,
 	WizardData,
 	WizardDefinition,
@@ -41,6 +42,7 @@ export interface UseWizardState<T extends WizardData> {
 	currentStep: ComputedRef<WizardStepDefinition<T>>;
 	data: ComputedRef<T>;
 	isCompleted: ComputedRef<boolean>;
+	stepStatuses: ComputedRef<Record<StepId, StepStatus>>;
 }
 
 /**

@@ -46,6 +46,7 @@ interface UseWizardState<T> {
   currentStep: WizardStepDefinition<T>;
   data: T;
   isCompleted: boolean;
+  stepStatuses: Record<StepId, StepStatus>;
 }
 
 interface UseWizardValidation {

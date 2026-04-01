@@ -1,4 +1,5 @@
-import { CheckCircle2 } from "lucide-react";
+import type { StepStatus } from "@gooonzick/wizard-core";
+import { AlertCircle, CheckCircle2 } from "lucide-react";
 import type React from "react";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
@@ -7,27 +8,29 @@ interface WizardProgressProps {
 	currentStepId: string;
 	stepIds: string[];
 	stepTitles: Record<string, string>;
+	stepStatuses: Record<string, StepStatus>;
 	onStepClick?: (stepId: string) => void;
 }
 
 export const WizardProgress: React.FC<WizardProgressProps> = ({
-	currentStepId,
 	stepIds,
 	stepTitles,
+	stepStatuses,
 	onStepClick,
 }) => {
-	const currentIndex = stepIds.indexOf(currentStepId);
-	const progressPercent = ((currentIndex + 1) / stepIds.length) * 100;
+	const completedCount = stepIds.filter(
+		(id) => stepStatuses[id] === "completed",
+	).length;
+	const progressPercent = (completedCount / stepIds.length) * 100;
 
 	return (
 		<div className="space-y-4 mb-6">
 			<Progress value={progressPercent} className="h-2" />
 			<div className="flex justify-between items-center">
 				{stepIds.map((stepId, index) => {
-					const isCompleted = index < currentIndex;
-					const isCurrent = stepId === currentStepId;
-
-					const isClickable = isCompleted && !!onStepClick;
+					const status = stepStatuses[stepId];
+					const isClickable =
+						(status === "completed" || status === "visited") && !!onStepClick;
 
 					return (
 						<button
@@ -43,18 +46,29 @@ export const WizardProgress: React.FC<WizardProgressProps> = ({
 							<div
 								className={cn(
 									"flex items-center justify-center w-10 h-10 rounded-full border-2 mb-2 transition-colors",
-									isCompleted
+									status === "completed"
 										? "bg-green-500 border-green-500"
-										: isCurrent
+										: status === "active"
 											? "bg-blue-500 border-blue-500"
-											: "bg-gray-200 border-gray-300",
+											: status === "error"
+												? "bg-red-500 border-red-500"
+												: status === "visited"
+													? "bg-blue-200 border-blue-300"
+													: "bg-gray-200 border-gray-300",
 									isClickable && "hover:ring-2 hover:ring-green-300",
 								)}
 							>
-								{isCompleted ? (
+								{status === "completed" ? (
 									<CheckCircle2 className="w-5 h-5 text-white" />
+								) : status === "error" ? (
+									<AlertCircle className="w-5 h-5 text-white" />
 								) : (
-									<span className="text-sm font-semibold text-gray-700">
+									<span
+										className={cn(
+											"text-sm font-semibold",
+											status === "active" ? "text-white" : "text-gray-700",
+										)}
+									>
 										{index + 1}
 									</span>
 								)}
@@ -62,7 +76,11 @@ export const WizardProgress: React.FC<WizardProgressProps> = ({
 							<span
 								className={cn(
 									"text-xs font-medium text-center line-clamp-2",
-									isCurrent ? "text-blue-600" : "text-gray-600",
+									status === "active"
+										? "text-blue-600"
+										: status === "error"
+											? "text-red-600"
+											: "text-gray-600",
 								)}
 							>
 								{stepTitles[stepId] || stepId}

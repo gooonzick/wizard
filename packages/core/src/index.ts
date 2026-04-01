@@ -62,6 +62,7 @@ export type { CompleteHandler, WizardDefinition } from "./types/definition";
 export type {
 	LifecycleHook,
 	StepMeta,
+	StepStatus,
 	SubmitHandler,
 	Validator,
 	WizardStepDefinition,

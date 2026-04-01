@@ -273,6 +273,7 @@ export function useWizard<T extends WizardData>(
 		currentStep,
 		data: computed(() => state.value.data) as ComputedRef<T>,
 		isCompleted: computed(() => state.value.isCompleted),
+		stepStatuses: computed(() => state.value.stepStatuses),
 	};
 
 	const validationSlice: UseWizardValidation = {

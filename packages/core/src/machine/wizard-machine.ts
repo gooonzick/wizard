@@ -11,7 +11,7 @@ import type {
 	WizardData,
 } from "../types/base";
 import type { WizardDefinition } from "../types/definition";
-import type { WizardStepDefinition } from "../types/step";
+import type { StepStatus, WizardStepDefinition } from "../types/step";
 import { resolveStepInDirection } from "./step-resolver";
 import { evaluateGuard } from "./transitions";
 import { alwaysValid } from "./validators";
@@ -26,6 +26,7 @@ export interface WizardState<T> {
 	isCompleted: boolean;
 	canGoBack: boolean;
 	validationErrors?: Record<string, string>;
+	stepStatuses: Record<StepId, StepStatus>;
 }
 
 /**
@@ -90,6 +91,7 @@ export class WizardMachine<T extends WizardData> {
 			isValid: true,
 			isCompleted: false,
 			canGoBack: false,
+			stepStatuses: this.initializeStepStatuses(),
 		};
 		this.visitedSteps.add(definition.initialStepId);
 		this.stepHistory.push(definition.initialStepId);
@@ -112,6 +114,29 @@ export class WizardMachine<T extends WizardData> {
 		} catch (error) {
 			this.handleError(error);
 		}
+	}
+
+	/**
+	 * Builds the initial stepStatuses map.
+	 * All steps start as "pristine", except the active step ("active")
+	 * and steps with a static `enabled: false` ("skipped").
+	 * @param activeStepId The step to mark as "active" (defaults to initialStepId)
+	 */
+	private initializeStepStatuses(
+		activeStepId?: StepId,
+	): Record<StepId, StepStatus> {
+		const active = activeStepId ?? this.definition.initialStepId;
+		const statuses: Record<StepId, StepStatus> = {};
+		for (const [stepId, step] of Object.entries(this.definition.steps)) {
+			if (step.enabled === false) {
+				statuses[stepId] = "skipped";
+			} else if (stepId === active) {
+				statuses[stepId] = "active";
+			} else {
+				statuses[stepId] = "pristine";
+			}
+		}
+		return statuses;
 	}
 
 	/**
@@ -153,9 +178,12 @@ export class WizardMachine<T extends WizardData> {
 	 * Updates wizard data
 	 */
 	updateData(updater: (data: T) => T): void {
+		const newData = updater(this.state.data);
+		const newStatuses = this.recalculateSkippedStatuses();
 		this.state = {
 			...this.state,
-			data: updater(this.state.data),
+			data: newData,
+			stepStatuses: newStatuses,
 		};
 		this.notifyStateChange();
 	}
@@ -164,9 +192,11 @@ export class WizardMachine<T extends WizardData> {
 	 * Sets wizard data directly
 	 */
 	setData(data: T): void {
+		const newStatuses = this.recalculateSkippedStatuses();
 		this.state = {
 			...this.state,
 			data,
+			stepStatuses: newStatuses,
 		};
 		this.notifyStateChange();
 	}
@@ -271,6 +301,7 @@ export class WizardMachine<T extends WizardData> {
 			// Validate current step
 			const validationResult = await this.validate();
 			if (!validationResult.valid) {
+				this.setStepStatusInternal(this.state.currentStepId, "error");
 				throw new WizardValidationError(validationResult.errors || {});
 			}
 
@@ -280,6 +311,9 @@ export class WizardMachine<T extends WizardData> {
 				await currentStep.onSubmit(this.state.data, this.context);
 				this.events.onSubmit?.(currentStep.id, this.state.data);
 			}
+
+			// Mark current step as completed before navigating
+			this.setStepStatusInternal(this.state.currentStepId, "completed");
 
 			// Resolve next step
 			const nextStepId = await this.resolveNextStep();
@@ -309,6 +343,7 @@ export class WizardMachine<T extends WizardData> {
 				// The new top is our target
 				const previousStepId = this.stepHistory[this.stepHistory.length - 1];
 
+				this.setStepStatusInternal(this.state.currentStepId, "visited");
 				await this.navigateToStep(previousStepId, { pushToHistory: false });
 				this.debug(
 					`Navigated to previous step (from history): ${previousStepId}`,
@@ -322,6 +357,7 @@ export class WizardMachine<T extends WizardData> {
 				throw new WizardNavigationError("No previous step available");
 			}
 
+			this.setStepStatusInternal(this.state.currentStepId, "visited");
 			await this.navigateToStep(previousStepId);
 			this.debug(
 				`Navigated to previous step (from resolver): ${previousStepId}`,
@@ -437,6 +473,7 @@ export class WizardMachine<T extends WizardData> {
 				}
 			}
 
+			this.setStepStatusInternal(this.state.currentStepId, "visited");
 			await this.navigateToStep(stepId, { skipLifecycle });
 			this.debug(`Navigated to step: ${stepId}`);
 		});
@@ -551,6 +588,10 @@ export class WizardMachine<T extends WizardData> {
 			isValid: true,
 			validationErrors: undefined,
 			canGoBack: this.stepHistory.length > 1,
+			stepStatuses: {
+				...this.state.stepStatuses,
+				[stepId]: "active",
+			},
 		};
 
 		this.visitedSteps.add(stepId);
@@ -568,6 +609,7 @@ export class WizardMachine<T extends WizardData> {
 
 	/**
 	 * Clears the navigation history stack, keeping only the current step.
+	 * Resets all step statuses to their initial values.
 	 * Useful for reset/cancel scenarios.
 	 */
 	clearHistory(): void {
@@ -575,6 +617,7 @@ export class WizardMachine<T extends WizardData> {
 		this.state = {
 			...this.state,
 			canGoBack: false,
+			stepStatuses: this.initializeStepStatuses(this.state.currentStepId),
 		};
 		this.notifyStateChange();
 	}
@@ -627,6 +670,69 @@ export class WizardMachine<T extends WizardData> {
 	 */
 	private notifyStateChange(): void {
 		this.events.onStateChange?.(this.snapshot);
+	}
+
+	/**
+	 * Updates a step's status in the internal state without emitting a change.
+	 * Used by navigation methods that will emit their own state change afterward.
+	 */
+	private setStepStatusInternal(stepId: StepId, status: StepStatus): void {
+		this.state = {
+			...this.state,
+			stepStatuses: {
+				...this.state.stepStatuses,
+				[stepId]: status,
+			},
+		};
+	}
+
+	/**
+	 * Recalculates skipped statuses based on static boolean `enabled` guards.
+	 * Function guards are deferred to navigation time to keep data updates synchronous.
+	 */
+	private recalculateSkippedStatuses(): Record<StepId, StepStatus> {
+		const current = this.state.stepStatuses;
+		let changed = false;
+		const updated: Record<StepId, StepStatus> = { ...current };
+
+		for (const [stepId, step] of Object.entries(this.definition.steps)) {
+			if (typeof step.enabled !== "boolean") {
+				continue;
+			}
+			const shouldBeSkipped = !step.enabled;
+			if (shouldBeSkipped && current[stepId] !== "skipped") {
+				updated[stepId] = "skipped";
+				changed = true;
+			} else if (!shouldBeSkipped && current[stepId] === "skipped") {
+				updated[stepId] = "pristine";
+				changed = true;
+			}
+		}
+
+		return changed ? updated : current;
+	}
+
+	/**
+	 * Gets the status of a specific step
+	 */
+	getStepStatus(stepId: StepId): StepStatus {
+		return this.state.stepStatuses[stepId];
+	}
+
+	/**
+	 * Manually overrides the status of a specific step.
+	 * Emits an onStateChange event.
+	 */
+	setStepStatus(stepId: StepId, status: StepStatus): void {
+		if (!this.definition.steps[stepId]) {
+			throw new WizardNavigationError(
+				`Step "${stepId}" not found`,
+				stepId,
+				"not-found",
+			);
+		}
+		this.setStepStatusInternal(stepId, status);
+		this.notifyStateChange();
 	}
 
 	/**

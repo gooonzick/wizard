@@ -29,6 +29,7 @@
 | Vue 3 composable (useWizard) + granular + provider    | ✅     | `vue`   |
 | Framework-agnostic architecture                       | ✅     | `core`  |
 | Navigation History Stack (WIZ-001)                    | ✅     | `core`  |
+| Step Status Tracking (WIZ-003)                        | ✅     | `core`  |
 
 ### Architectural Decisions
 
@@ -54,7 +55,7 @@
 | Schema validation         | ✅ Standard Schema | ❌               | ❌                | ❌          | ❌          | ❌ (DIY)     | ❌             | ✅ built-in | ✅       | ❌                 | ❌           |
 | **Navigation history**    | ✅                 | ❌               | ❌                | ✅ 2 stacks | ✅ history  | ✅           | ✅             | ✅          | ❌       | ❌                 | ❌           |
 | **goTo(stepId)**          | ❌                 | ❌               | ✅                | ❌          | ✅ push(id) | ✅           | ✅             | ✅          | ❌       | ❌                 | ❌           |
-| **Step status tracking**  | ❌                 | ❌               | ❌                | ❌          | ❌          | ✅ (DIY)     | ✅             | ✅          | ❌       | ❌                 | ❌           |
+| **Step status tracking**  | ✅                 | ❌               | ❌                | ❌          | ❌          | ✅ (DIY)     | ✅             | ✅          | ❌       | ❌                 | ❌           |
 | **Progress API**          | ❌                 | ❌               | ❌                | ❌          | ❌          | ❌           | ❌             | ✅          | ❌       | ✅                 | ❌           |
 | **Reset / Cancel**        | ❌                 | ❌               | ❌                | ❌          | ❌          | ✅           | ✅             | ✅          | ✅       | ❌                 | ❌           |
 | **State persistence**     | ❌                 | ❌               | ❌                | ❌          | ❌          | ✅ persist   | ✅ sessions    | ✅          | ❌       | ✅ server          | ❌           |
@@ -193,7 +194,7 @@ navigation.goTo('personal', { skipValidation: true });
 
 ---
 
-#### WIZ-003: Step Status Tracking
+#### WIZ-003: Step Status Tracking ✅
 
 **Priority:** 🔴 Critical
 **Effort:** S (3–4 hours)
