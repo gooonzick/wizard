@@ -1,5 +1,11 @@
 # @gooonzick/wizard-core
 
+## 1.3.0
+
+### Minor Changes
+
+- bca0f5b: feat: add steps status tracking
+
 ## 1.2.0
 
 ### Minor Changes
