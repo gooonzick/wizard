@@ -1,5 +1,17 @@
 # @gooonzick/wizard-vue
 
+## 1.3.0
+
+### Minor Changes
+
+- bca0f5b: feat: add steps status tracking
+
+### Patch Changes
+
+- Updated dependencies [bca0f5b]
+  - @gooonzick/wizard-state@1.3.0
+  - @gooonzick/wizard-core@1.3.0
+
 ## 1.2.0
 
 ### Minor Changes
