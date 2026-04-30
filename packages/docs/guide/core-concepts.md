@@ -516,11 +516,14 @@ machine.setStepStatus("personal", "error");
 
 ### Building a Progress Bar
 
-Step statuses make it easy to build progress indicators:
+For a precomputed snapshot, read [`state.progress`](./api/core.md#wizardprogress)
+(also exposed as `progress: WizardProgress` on `WizardState`). Step statuses
+still make per-step indicators easy:
 
 ```typescript
 // React
 const { state } = useWizard({ definition, initialData });
+const { percentage, currentStepIndex, enabledSteps } = state.progress;
 
 function StepIndicator({ stepId }: { stepId: string }) {
   const status = state.stepStatuses[stepId];

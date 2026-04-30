@@ -2,6 +2,7 @@ import type {
 	StepId,
 	StepStatus,
 	WizardData,
+	WizardProgress,
 	WizardStepDefinition,
 } from "@gooonzick/wizard-core";
 
@@ -55,6 +56,7 @@ export interface StateSnapshot<T extends WizardData> {
 	data: T;
 	isCompleted: boolean;
 	stepStatuses: Record<StepId, StepStatus>;
+	progress: WizardProgress;
 }
 
 /**

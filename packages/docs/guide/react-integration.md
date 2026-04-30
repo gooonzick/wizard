@@ -138,6 +138,7 @@ state.currentStep; // Current step definition
 state.data; // Current wizard data
 state.isCompleted; // Has wizard completed?
 state.stepStatuses; // Record<StepId, StepStatus> — status of every step
+state.progress; // WizardProgress — computed totals, index, percentage
 ```
 
 #### Validation Slice
@@ -351,26 +352,32 @@ export function SafeWizard() {
 
 ### Tracking Progress
 
+The `state.progress` slice exposes a precomputed [`WizardProgress`](./api/core.md#wizardprogress)
+snapshot, so you don't need to derive totals or percentages by hand.
+
 ```tsx
 export function ProgressWizard() {
-  const { state, navigation } = useWizard({ definition, initialData });
-
-  const progress =
-    (navigation.visitedSteps.length / navigation.availableSteps.length) * 100;
+  const { state } = useWizard({ definition, initialData });
+  const { progress } = state;
 
   return (
     <div>
-      <div className="progress-bar" style={{ width: `${progress}%` }} />
+      <div
+        className="progress-bar"
+        style={{ width: `${progress.percentage}%` }}
+      />
       <p>
-        Step {navigation.visitedSteps.length} of{" "}
-        {navigation.availableSteps.length}
+        Step {progress.currentStepIndex + 1} of {progress.enabledSteps} ·{" "}
+        {progress.completedSteps} completed ({progress.percentage}%)
       </p>
 
       {state.currentStepId === "review" && (
         <div className="review">
-          {navigation.visitedSteps.map((stepId) => (
+          {progress.enabledStepIds.map((stepId) => (
             <div key={stepId}>
-              <h4>{state.currentStep.meta?.title}</h4>
+              <h4>
+                {stepId} — {state.stepStatuses[stepId]}
+              </h4>
             </div>
           ))}
         </div>

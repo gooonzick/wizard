@@ -89,8 +89,7 @@ export const WizardExample: React.FC = () => {
 
 				{/* Progress */}
 				<WizardProgress
-					currentStepId={state.currentStep.id}
-					stepIds={stepIds}
+					progress={state.progress}
 					stepTitles={stepTitles}
 					stepStatuses={state.stepStatuses}
 					onStepClick={(stepId) => navigation.goTo(stepId)}

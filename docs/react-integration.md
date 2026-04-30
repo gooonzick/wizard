@@ -133,6 +133,7 @@ state.currentStep; // Current step definition
 state.data; // Current wizard data
 state.isCompleted; // Has wizard completed?
 state.stepStatuses; // Record<StepId, StepStatus> — status of every step
+state.progress; // WizardProgress — computed totals, index, percentage
 ```
 
 #### Validation Slice
@@ -346,25 +347,27 @@ export function SafeWizard() {
 
 ### Tracking Progress
 
+The `state.progress` slice exposes a precomputed [`WizardProgress`](./api-reference.md#wizardprogress)
+snapshot, so you don't need to derive totals or percentages by hand.
+
 ```tsx
 export function ProgressWizard() {
-  const { state, navigation } = useWizard({ definition, initialData });
-
-  const completedCount = Object.values(state.stepStatuses).filter(
-    (s) => s === "completed",
-  ).length;
-  const totalSteps = navigation.availableSteps.length;
-  const progress = (completedCount / totalSteps) * 100;
+  const { state } = useWizard({ definition, initialData });
+  const { progress } = state;
 
   return (
     <div>
-      <div className="progress-bar" style={{ width: `${progress}%` }} />
+      <div
+        className="progress-bar"
+        style={{ width: `${progress.percentage}%` }}
+      />
       <p>
-        {completedCount} of {totalSteps} steps completed
+        Step {progress.currentStepIndex + 1} of {progress.enabledSteps} ·{" "}
+        {progress.completedSteps} completed ({progress.percentage}%)
       </p>
 
       <div className="steps">
-        {navigation.availableSteps.map((stepId) => (
+        {progress.enabledStepIds.map((stepId) => (
           <div
             key={stepId}
             className={`step step-${state.stepStatuses[stepId]}`}
@@ -455,6 +458,7 @@ state.currentStepId; // Current step
 state.currentStep; // Current step definition
 state.isCompleted; // Is wizard completed?
 state.stepStatuses; // Status of each step (pristine/active/visited/completed/error/skipped)
+state.progress; // { totalSteps, enabledSteps, completedSteps, currentStepIndex, percentage, isFirstStep, isLastStep, enabledStepIds }
 
 // Validation slice
 validation.isValid; // Is current step valid?

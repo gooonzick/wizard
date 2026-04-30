@@ -202,6 +202,8 @@ interface UseWizardState<T> {
   currentStep: WizardStepDefinition<T>;
   data: T;
   isCompleted: boolean;
+  stepStatuses: Record<string, StepStatus>;
+  progress: WizardProgress;
 }
 
 interface UseWizardValidation {

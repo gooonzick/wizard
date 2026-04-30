@@ -67,6 +67,7 @@ export class WizardStateManager<T extends WizardData> {
 			data: snapshot.data,
 			isCompleted: snapshot.isCompleted,
 			stepStatuses: snapshot.stepStatuses,
+			progress: snapshot.progress,
 		};
 
 		// Initialize validation cache
@@ -172,6 +173,7 @@ export class WizardStateManager<T extends WizardData> {
 			data: snapshot.data,
 			isCompleted: snapshot.isCompleted,
 			stepStatuses: snapshot.stepStatuses,
+			progress: snapshot.progress,
 		};
 	}
 

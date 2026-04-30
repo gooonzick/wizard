@@ -393,30 +393,31 @@ const wizard = useWizard({
 
 ### Tracking Progress
 
-```typescript
+The `state.progress` slice exposes a precomputed [`WizardProgress`](./api/core.md#wizardprogress)
+snapshot as a `ComputedRef`, so you don't need to derive totals by hand.
+
+```vue
 <script setup lang="ts">
-import { computed } from "vue";
-
-const { state, navigation } = useWizard({ definition, initialData });
-
-const progress = computed(
-  () =>
-    (navigation.visitedSteps.value.length / navigation.availableSteps.value.length) *
-    100,
-);
+const { state } = useWizard({ definition, initialData });
 </script>
 
 <template>
   <div>
-    <div class="progress-bar" :style="{ width: `${progress}%` }" />
+    <div
+      class="progress-bar"
+      :style="{ width: `${state.progress.value.percentage}%` }"
+    />
     <p>
-      Step {{ navigation.visitedSteps.value.length }} of
-      {{ navigation.availableSteps.value.length }}
+      Step {{ state.progress.value.currentStepIndex + 1 }} of
+      {{ state.progress.value.enabledSteps }} ·
+      {{ state.progress.value.completedSteps }} completed ({{
+        state.progress.value.percentage
+      }}%)
     </p>
 
     <div v-if="state.currentStepId.value === 'review'" class="review">
-      <div v-for="stepId in navigation.visitedSteps.value" :key="stepId">
-        <h4>{{ state.currentStep.value.meta?.title }}</h4>
+      <div v-for="stepId in state.progress.value.enabledStepIds" :key="stepId">
+        <h4>{{ stepId }} — {{ state.stepStatuses.value[stepId] }}</h4>
       </div>
     </div>
   </div>

@@ -34,6 +34,7 @@ export function useWizardData<T extends WizardData>(): UseWizardState<T> {
 			data: stateSnapshot.data,
 			isCompleted: stateSnapshot.isCompleted,
 			stepStatuses: stateSnapshot.stepStatuses,
+			progress: stateSnapshot.progress,
 		}),
 		[
 			stateSnapshot.currentStepId,
@@ -41,6 +42,7 @@ export function useWizardData<T extends WizardData>(): UseWizardState<T> {
 			stateSnapshot.data,
 			stateSnapshot.isCompleted,
 			stateSnapshot.stepStatuses,
+			stateSnapshot.progress,
 		],
 	);
 }

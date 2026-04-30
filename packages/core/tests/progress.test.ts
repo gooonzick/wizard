@@ -1,0 +1,194 @@
+import { describe, expect, it, vi } from "vitest";
+import {
+	type WizardEvents,
+	WizardMachine,
+} from "../src/machine/wizard-machine";
+import type { WizardDefinition } from "../src/types/definition";
+
+interface TestData extends Record<string, unknown> {
+	name: string;
+	needsInvoice: boolean;
+}
+
+const defaultContext = {};
+
+function createMachine(
+	definition: WizardDefinition<TestData>,
+	data: Partial<TestData> = {},
+	events?: WizardEvents<TestData>,
+): WizardMachine<TestData> {
+	const initialData: TestData = {
+		name: "Ada",
+		needsInvoice: true,
+		...data,
+	};
+	return new WizardMachine(definition, defaultContext, initialData, events);
+}
+
+function linearDefinition(): WizardDefinition<TestData> {
+	return {
+		id: "linear",
+		initialStepId: "step1",
+		steps: {
+			step1: {
+				id: "step1",
+				next: { type: "static", to: "step2" },
+			},
+			step2: {
+				id: "step2",
+				next: { type: "static", to: "step3" },
+				previous: { type: "static", to: "step1" },
+			},
+			step3: {
+				id: "step3",
+				next: { type: "static", to: "step4" },
+				previous: { type: "static", to: "step2" },
+			},
+			step4: {
+				id: "step4",
+				next: { type: "static", to: "step5" },
+				previous: { type: "static", to: "step3" },
+			},
+			step5: {
+				id: "step5",
+				previous: { type: "static", to: "step4" },
+			},
+		},
+	};
+}
+
+function withDisabledStep(): WizardDefinition<TestData> {
+	return {
+		id: "with-disabled",
+		initialStepId: "step1",
+		steps: {
+			step1: {
+				id: "step1",
+				next: { type: "static", to: "step2" },
+			},
+			step2: {
+				id: "step2",
+				enabled: false,
+				next: { type: "static", to: "step3" },
+				previous: { type: "static", to: "step1" },
+			},
+			step3: {
+				id: "step3",
+				previous: { type: "static", to: "step2" },
+			},
+		},
+	};
+}
+
+describe("Progress API", () => {
+	describe("initial snapshot", () => {
+		it("reports zero progress on a fresh linear wizard", () => {
+			const machine = createMachine(linearDefinition());
+			const { progress } = machine.snapshot;
+
+			expect(progress.totalSteps).toBe(5);
+			expect(progress.enabledSteps).toBe(5);
+			expect(progress.completedSteps).toBe(0);
+			expect(progress.currentStepIndex).toBe(0);
+			expect(progress.percentage).toBe(0);
+			expect(progress.isFirstStep).toBe(true);
+			expect(progress.isLastStep).toBe(false);
+			expect(progress.enabledStepIds).toEqual([
+				"step1",
+				"step2",
+				"step3",
+				"step4",
+				"step5",
+			]);
+		});
+	});
+
+	describe("after navigation", () => {
+		it("advances currentStepIndex and percentage on goNext", async () => {
+			const machine = createMachine(linearDefinition());
+
+			await machine.goNext();
+			const { progress } = machine.snapshot;
+
+			expect(progress.currentStepIndex).toBe(1);
+			expect(progress.completedSteps).toBe(1);
+			expect(progress.percentage).toBe(20);
+			expect(progress.isFirstStep).toBe(false);
+			expect(progress.isLastStep).toBe(false);
+		});
+
+		it("flags isLastStep on the final step", async () => {
+			const machine = createMachine(linearDefinition());
+
+			await machine.goNext();
+			await machine.goNext();
+			await machine.goNext();
+			await machine.goNext();
+			const { progress } = machine.snapshot;
+
+			expect(progress.currentStepIndex).toBe(4);
+			expect(progress.completedSteps).toBe(4);
+			expect(progress.percentage).toBe(80);
+			expect(progress.isLastStep).toBe(true);
+		});
+
+		it("decrements completedSteps when going back", async () => {
+			const machine = createMachine(linearDefinition());
+
+			await machine.goNext();
+			await machine.goNext();
+			expect(machine.snapshot.progress.completedSteps).toBe(2);
+
+			await machine.goPrevious();
+			const { progress } = machine.snapshot;
+			expect(progress.currentStepIndex).toBe(1);
+			// On goPrevious: step3 (departing) becomes "visited", step2 becomes "active".
+			// step1 remains "completed" from the first goNext.
+			expect(progress.completedSteps).toBe(1);
+		});
+	});
+
+	describe("disabled steps", () => {
+		it("excludes statically disabled steps from enabledStepIds", () => {
+			const machine = createMachine(withDisabledStep());
+			const { progress } = machine.snapshot;
+
+			expect(progress.totalSteps).toBe(3);
+			expect(progress.enabledSteps).toBe(2);
+			expect(progress.enabledStepIds).toEqual(["step1", "step3"]);
+			expect(progress.currentStepIndex).toBe(0);
+		});
+
+		it("reflects dynamically skipped status via setStepStatus", () => {
+			const machine = createMachine(linearDefinition());
+
+			machine.setStepStatus("step3", "skipped");
+			const { progress } = machine.snapshot;
+
+			expect(progress.enabledSteps).toBe(4);
+			expect(progress.enabledStepIds).toEqual([
+				"step1",
+				"step2",
+				"step4",
+				"step5",
+			]);
+		});
+	});
+
+	describe("event emissions", () => {
+		it("includes progress in onStateChange snapshot", async () => {
+			const onStateChange = vi.fn();
+			const machine = createMachine(linearDefinition(), {}, { onStateChange });
+
+			await machine.goNext();
+
+			expect(onStateChange).toHaveBeenCalled();
+			const lastCall =
+				onStateChange.mock.calls[onStateChange.mock.calls.length - 1];
+			const snapshot = lastCall[0];
+			expect(snapshot.progress).toBeDefined();
+			expect(snapshot.progress.currentStepIndex).toBe(1);
+			expect(snapshot.progress.percentage).toBe(20);
+		});
+	});
+});

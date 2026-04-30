@@ -11,7 +11,11 @@ import type {
 	WizardData,
 } from "../types/base";
 import type { WizardDefinition } from "../types/definition";
-import type { StepStatus, WizardStepDefinition } from "../types/step";
+import type {
+	StepStatus,
+	WizardProgress,
+	WizardStepDefinition,
+} from "../types/step";
 import { resolveStepInDirection } from "./step-resolver";
 import { evaluateGuard } from "./transitions";
 import { alwaysValid } from "./validators";
@@ -27,6 +31,7 @@ export interface WizardState<T> {
 	canGoBack: boolean;
 	validationErrors?: Record<string, string>;
 	stepStatuses: Record<StepId, StepStatus>;
+	progress: WizardProgress;
 }
 
 /**
@@ -60,7 +65,7 @@ export interface GoToOptions {
 export class WizardMachine<T extends WizardData> {
 	private definition: WizardDefinition<T>;
 	private context: WizardContext;
-	private state: WizardState<T>;
+	private state: Omit<WizardState<T>, "progress">;
 	private events: WizardEvents<T>;
 	private visitedSteps: Set<StepId> = new Set();
 	private stepHistory: StepId[] = [];
@@ -150,7 +155,7 @@ export class WizardMachine<T extends WizardData> {
 	 * Gets the current state snapshot
 	 */
 	get snapshot(): WizardState<T> {
-		return { ...this.state };
+		return { ...this.state, progress: this.computeProgress() };
 	}
 
 	/**
@@ -710,6 +715,44 @@ export class WizardMachine<T extends WizardData> {
 		}
 
 		return changed ? updated : current;
+	}
+
+	/**
+	 * Computes the derived progress snapshot from the current state.
+	 * Insertion order of `definition.steps` is used as the canonical step order.
+	 * Steps whose status is "skipped" are excluded from `enabledStepIds`.
+	 */
+	private computeProgress(): WizardProgress {
+		const allStepIds = Object.keys(this.definition.steps);
+		const statuses = this.state.stepStatuses;
+		const enabledStepIds = allStepIds.filter(
+			(id) => statuses[id] !== "skipped",
+		);
+
+		let completedSteps = 0;
+		for (const id of enabledStepIds) {
+			if (statuses[id] === "completed") {
+				completedSteps++;
+			}
+		}
+
+		const enabledSteps = enabledStepIds.length;
+		const currentStepIndex = enabledStepIds.indexOf(this.state.currentStepId);
+		const percentage =
+			enabledSteps === 0
+				? 0
+				: Math.round((completedSteps / enabledSteps) * 100);
+
+		return {
+			totalSteps: allStepIds.length,
+			enabledSteps,
+			completedSteps,
+			currentStepIndex,
+			enabledStepIds,
+			percentage,
+			isFirstStep: enabledSteps > 0 && currentStepIndex === 0,
+			isLastStep: enabledSteps > 0 && currentStepIndex === enabledSteps - 1,
+		};
 	}
 
 	/**

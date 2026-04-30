@@ -30,6 +30,7 @@
 | Framework-agnostic architecture                       | ✅     | `core`  |
 | Navigation History Stack (WIZ-001)                    | ✅     | `core`  |
 | Step Status Tracking (WIZ-003)                        | ✅     | `core`  |
+| Progress API (WIZ-004)                                | ✅     | `core`  |
 
 ### Architectural Decisions
 
@@ -56,7 +57,7 @@
 | **Navigation history**    | ✅                 | ❌               | ❌                | ✅ 2 stacks | ✅ history  | ✅           | ✅             | ✅          | ❌       | ❌                 | ❌           |
 | **goTo(stepId)**          | ❌                 | ❌               | ✅                | ❌          | ✅ push(id) | ✅           | ✅             | ✅          | ❌       | ❌                 | ❌           |
 | **Step status tracking**  | ✅                 | ❌               | ❌                | ❌          | ❌          | ✅ (DIY)     | ✅             | ✅          | ❌       | ❌                 | ❌           |
-| **Progress API**          | ❌                 | ❌               | ❌                | ❌          | ❌          | ❌           | ❌             | ✅          | ❌       | ✅                 | ❌           |
+| **Progress API**          | ✅                 | ❌               | ❌                | ❌          | ❌          | ❌           | ❌             | ✅          | ❌       | ✅                 | ❌           |
 | **Reset / Cancel**        | ❌                 | ❌               | ❌                | ❌          | ❌          | ✅           | ✅             | ✅          | ✅       | ❌                 | ❌           |
 | **State persistence**     | ❌                 | ❌               | ❌                | ❌          | ❌          | ✅ persist   | ✅ sessions    | ✅          | ❌       | ✅ server          | ❌           |
 | **Middleware / plugins**  | ❌                 | ❌               | ❌                | ❌          | ❌          | ✅ actions   | ✅             | ❌          | ❌       | ❌                 | ❌           |
@@ -266,11 +267,12 @@ When the machine is created, all steps receive the `pristine` status, except `in
 
 ---
 
-#### WIZ-004: Progress API
+#### WIZ-004: Progress API ✅
 
 **Priority:** 🟡 High
 **Effort:** XS (1–2 hours)
 **Package:** `@gooonzick/wizard-core`
+**Status:** ✅ Implemented
 
 ##### Problem
 

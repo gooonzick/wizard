@@ -5,6 +5,7 @@ import type {
 	WizardContext,
 	WizardData,
 	WizardDefinition,
+	WizardProgress,
 	WizardState,
 	WizardStepDefinition,
 } from "@gooonzick/wizard-core";
@@ -41,6 +42,7 @@ export interface UseWizardState<T extends WizardData> {
 	data: T;
 	isCompleted: boolean;
 	stepStatuses: Record<StepId, StepStatus>;
+	progress: WizardProgress;
 }
 
 /**
@@ -387,6 +389,7 @@ export function useWizard<T extends WizardData>(
 			data: stateSnapshot.data,
 			isCompleted: stateSnapshot.isCompleted,
 			stepStatuses: stateSnapshot.stepStatuses,
+			progress: stateSnapshot.progress,
 		}),
 		[
 			stateSnapshot.currentStepId,
@@ -394,6 +397,7 @@ export function useWizard<T extends WizardData>(
 			stateSnapshot.data,
 			stateSnapshot.isCompleted,
 			stateSnapshot.stepStatuses,
+			stateSnapshot.progress,
 		],
 	);
 

@@ -47,6 +47,7 @@ interface UseWizardState<T> {
   data: ComputedRef<T>;
   isCompleted: ComputedRef<boolean>;
   stepStatuses: ComputedRef<Record<StepId, StepStatus>>;
+  progress: ComputedRef<WizardProgress>;
 }
 
 interface UseWizardValidation {

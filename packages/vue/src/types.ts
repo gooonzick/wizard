@@ -5,6 +5,7 @@ import type {
 	WizardContext,
 	WizardData,
 	WizardDefinition,
+	WizardProgress,
 	WizardState,
 	WizardStepDefinition,
 } from "@gooonzick/wizard-core";
@@ -43,6 +44,7 @@ export interface UseWizardState<T extends WizardData> {
 	data: ComputedRef<T>;
 	isCompleted: ComputedRef<boolean>;
 	stepStatuses: ComputedRef<Record<StepId, StepStatus>>;
+	progress: ComputedRef<WizardProgress>;
 }
 
 /**

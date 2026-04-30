@@ -1,11 +1,23 @@
 import type {
 	WizardData,
 	WizardMachine,
+	WizardProgress,
 	WizardState,
 	WizardStepDefinition,
 } from "@gooonzick/wizard-core";
 import { describe, expect, test, vi } from "vitest";
 import { WizardStateManager } from "../src/manager";
+
+const EMPTY_PROGRESS: WizardProgress = {
+	totalSteps: 0,
+	enabledSteps: 0,
+	completedSteps: 0,
+	currentStepIndex: -1,
+	enabledStepIds: [],
+	percentage: 0,
+	isFirstStep: false,
+	isLastStep: false,
+};
 
 /**
  * Mock WizardMachine for testing
@@ -21,6 +33,7 @@ function createMockMachine<T extends WizardData>(): WizardMachine<T> {
 			validationErrors: undefined,
 			canGoBack: false,
 			stepStatuses: { "step-1": "active", "step-2": "pristine" },
+			progress: EMPTY_PROGRESS,
 		},
 		currentStep: {
 			id: "step-1",
@@ -234,6 +247,7 @@ describe("WizardStateManager", () => {
 				isValid: true,
 				canGoBack: false,
 				stepStatuses: { "step-1": "active" },
+				progress: EMPTY_PROGRESS,
 			};
 
 			const newState: WizardState<{ name: string }> = {
@@ -243,6 +257,7 @@ describe("WizardStateManager", () => {
 				isValid: true,
 				canGoBack: false,
 				stepStatuses: { "step-1": "active" },
+				progress: EMPTY_PROGRESS,
 			};
 
 			manager.handleStateChange(newState, oldState);
@@ -264,6 +279,7 @@ describe("WizardStateManager", () => {
 				isValid: true,
 				canGoBack: false,
 				stepStatuses: { "step-1": "active", "step-2": "pristine" },
+				progress: EMPTY_PROGRESS,
 			};
 
 			const newState: WizardState<{ name: string }> = {
@@ -273,6 +289,7 @@ describe("WizardStateManager", () => {
 				isValid: true,
 				canGoBack: false,
 				stepStatuses: { "step-1": "completed", "step-2": "active" },
+				progress: EMPTY_PROGRESS,
 			};
 
 			manager.handleStateChange(newState, oldState);
@@ -294,6 +311,7 @@ describe("WizardStateManager", () => {
 				isValid: true,
 				canGoBack: false,
 				stepStatuses: { "step-1": "active" },
+				progress: EMPTY_PROGRESS,
 			};
 
 			const newState: WizardState<{ name: string }> = {
@@ -304,6 +322,7 @@ describe("WizardStateManager", () => {
 				canGoBack: false,
 				stepStatuses: { "step-1": "active" },
 				validationErrors: { name: "Required" },
+				progress: EMPTY_PROGRESS,
 			};
 
 			manager.handleStateChange(newState, oldState);
@@ -325,6 +344,7 @@ describe("WizardStateManager", () => {
 				isValid: true,
 				canGoBack: false,
 				stepStatuses: { "step-1": "active" },
+				progress: EMPTY_PROGRESS,
 			};
 
 			manager.handleStateChange(state, state);

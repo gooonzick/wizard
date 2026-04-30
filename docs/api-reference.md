@@ -79,6 +79,24 @@ interface WizardState<T> {
   canGoBack: boolean; // true when history stack has > 1 entry
   validationErrors?: Record<string, string>;
   stepStatuses: Record<StepId, StepStatus>; // Status of every step
+  progress: WizardProgress; // Computed progress snapshot
+}
+```
+
+#### `WizardProgress`
+
+Derived progress information, recomputed on every `onStateChange`.
+
+```typescript
+interface WizardProgress {
+  totalSteps: number; // all steps in the definition
+  enabledSteps: number; // steps not currently skipped
+  completedSteps: number; // steps with status "completed"
+  currentStepIndex: number; // 0-based index among enabled steps (-1 if current step is skipped)
+  enabledStepIds: StepId[]; // ordered list of enabled step ids
+  percentage: number; // 0–100, completedSteps / enabledSteps * 100, rounded
+  isFirstStep: boolean; // currentStepIndex === 0
+  isLastStep: boolean; // currentStepIndex === enabledSteps - 1
 }
 ```
 
@@ -766,6 +784,8 @@ interface UseWizardState<T> {
   currentStep: WizardStepDefinition<T>;
   data: T;
   isCompleted: boolean;
+  stepStatuses: Record<StepId, StepStatus>;
+  progress: WizardProgress;
 }
 
 interface UseWizardValidation {

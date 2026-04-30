@@ -18,6 +18,26 @@ export type StepStatus =
 	| "skipped";
 
 /**
+ * Aggregated progress information derived from the wizard's runtime state.
+ *
+ * - `enabledStepIds` follows the insertion order of `definition.steps`,
+ *   filtered by `stepStatuses[id] !== "skipped"`. Steps with a function-based
+ *   `enabled` guard are reflected as soon as their status is recomputed.
+ * - `currentStepIndex` is `-1` when the current step is currently skipped.
+ * - `percentage` is rounded to the nearest integer in `[0, 100]`.
+ */
+export interface WizardProgress {
+	totalSteps: number;
+	enabledSteps: number;
+	completedSteps: number;
+	currentStepIndex: number;
+	enabledStepIds: StepId[];
+	percentage: number;
+	isFirstStep: boolean;
+	isLastStep: boolean;
+}
+
+/**
  * Validator function for step data
  */
 export type Validator<T> = (

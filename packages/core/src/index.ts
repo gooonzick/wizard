@@ -65,6 +65,7 @@ export type {
 	StepStatus,
 	SubmitHandler,
 	Validator,
+	WizardProgress,
 	WizardStepDefinition,
 } from "./types/step";
 // Transition types

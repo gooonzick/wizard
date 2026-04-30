@@ -1,33 +1,36 @@
-import type { StepStatus } from "@gooonzick/wizard-core";
+import type {
+	StepStatus,
+	WizardProgress as WizardProgressSnapshot,
+} from "@gooonzick/wizard-core";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
 import type React from "react";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 
 interface WizardProgressProps {
-	currentStepId: string;
-	stepIds: string[];
+	progress: WizardProgressSnapshot;
 	stepTitles: Record<string, string>;
 	stepStatuses: Record<string, StepStatus>;
 	onStepClick?: (stepId: string) => void;
 }
 
 export const WizardProgress: React.FC<WizardProgressProps> = ({
-	stepIds,
+	progress,
 	stepTitles,
 	stepStatuses,
 	onStepClick,
 }) => {
-	const completedCount = stepIds.filter(
-		(id) => stepStatuses[id] === "completed",
-	).length;
-	const progressPercent = (completedCount / stepIds.length) * 100;
-
 	return (
 		<div className="space-y-4 mb-6">
-			<Progress value={progressPercent} className="h-2" />
+			<div className="flex items-center justify-between gap-4">
+				<Progress value={progress.percentage} className="h-2" />
+				<div className="text-sm font-medium text-gray-700 whitespace-nowrap tabular-nums">
+					Step {Math.max(progress.currentStepIndex, 0) + 1} /{" "}
+					{progress.enabledSteps} · {progress.percentage}%
+				</div>
+			</div>
 			<div className="flex justify-between items-center">
-				{stepIds.map((stepId, index) => {
+				{progress.enabledStepIds.map((stepId, index) => {
 					const status = stepStatuses[stepId];
 					const isClickable =
 						(status === "completed" || status === "visited") && !!onStepClick;

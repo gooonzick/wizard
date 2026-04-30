@@ -32,8 +32,7 @@ const { navigation, actions, state, validation } = useWizard({
 
 			<!-- Progress -->
 			<WizardProgress
-				:current-step-id="state.currentStepId.value"
-				:step-ids="stepIds"
+				:progress="state.progress.value"
 				:step-titles="stepTitles"
 				:step-statuses="state.stepStatuses.value"
 			/>
