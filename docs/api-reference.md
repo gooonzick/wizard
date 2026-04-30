@@ -16,6 +16,7 @@ interface WizardDefinition<T> {
   initialStepId: StepId;
   steps: Record<StepId, WizardStepDefinition<T>>;
   onComplete?: CompleteHandler<T>;
+  onCancel?: CompleteHandler<T>;
 }
 ```
 
@@ -459,6 +460,10 @@ class WizardMachine<T> {
   goToStep(stepId: StepId): Promise<void>;
   clearHistory(): void;
 
+  // Reset / Cancel
+  reset(data?: T): void;
+  cancel(): Promise<void>;
+
   // Step Status
   getStepStatus(stepId: StepId): StepStatus;
   setStepStatus(stepId: StepId, status: StepStatus): void;
@@ -492,6 +497,10 @@ interface WizardEvents<T> {
   onValidation?: (result: ValidationResult) => void;
   onSubmit?: (stepId: StepId, data: T) => void;
   onComplete?: (data: T) => void;
+  /** Fired by `cancel()` before the machine is reset. May be async. */
+  onCancel?: (data: T) => void | Promise<void>;
+  /** Fired after `reset()` (and after `cancel()`'s implicit reset). */
+  onReset?: () => void;
   onError?: (error: Error) => void;
 }
 ```
@@ -827,6 +836,7 @@ interface UseWizardActions<T> {
   canSubmit(): Promise<boolean>;
   submit(): Promise<void>;
   reset(data?: T): void;
+  cancel(): Promise<void>;
 }
 ```
 

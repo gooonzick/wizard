@@ -39,6 +39,8 @@ export function useWizard<T extends WizardData>(
 		onStepEnter,
 		onStepLeave,
 		onComplete,
+		onCancel,
+		onReset,
 		onError,
 	} = options;
 
@@ -48,6 +50,8 @@ export function useWizard<T extends WizardData>(
 		onStepEnter,
 		onStepLeave,
 		onComplete,
+		onCancel,
+		onReset,
 		onError,
 	};
 
@@ -69,6 +73,12 @@ export function useWizard<T extends WizardData>(
 			},
 			onComplete: (d: T) => {
 				callbacks.onComplete?.(d);
+			},
+			onCancel: async (d: T) => {
+				await callbacks.onCancel?.(d);
+			},
+			onReset: () => {
+				callbacks.onReset?.();
 			},
 			onError: (error: Error) => {
 				callbacks.onError?.(error);
@@ -255,16 +265,25 @@ export function useWizard<T extends WizardData>(
 	};
 
 	const reset = (data?: T) => {
-		// Create new machine and manager instances
-		machine.value = createMachine(data);
-		manager.value = new WizardStateManager(
-			machine.value,
-			definition.initialStepId,
-		);
-
-		// Update state and navigation
+		loadingState.isValidating = false;
+		loadingState.isSubmitting = false;
+		loadingState.isNavigating = false;
+		machine.value.reset(data);
 		state.value = machine.value.snapshot;
 		updateNavigationState();
+	};
+
+	const cancel = async () => {
+		loadingState.isNavigating = true;
+		try {
+			await machine.value.cancel();
+		} finally {
+			loadingState.isValidating = false;
+			loadingState.isSubmitting = false;
+			loadingState.isNavigating = false;
+			state.value = machine.value.snapshot;
+			updateNavigationState();
+		}
 	};
 
 	// Build organized return value
@@ -312,6 +331,7 @@ export function useWizard<T extends WizardData>(
 		canSubmit,
 		submit,
 		reset,
+		cancel,
 	};
 
 	return {

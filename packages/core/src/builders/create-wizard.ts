@@ -11,6 +11,7 @@ export class WizardBuilder<T extends WizardData> {
 	private initialStepId?: StepId;
 	private steps: Map<StepId, WizardStepDefinition<T>> = new Map();
 	private completeHandler?: CompleteHandler<T>;
+	private cancelHandler?: CompleteHandler<T>;
 
 	constructor(id: string) {
 		this.id = id;
@@ -86,6 +87,14 @@ export class WizardBuilder<T extends WizardData> {
 	}
 
 	/**
+	 * Sets the cancel handler. Called by `WizardMachine.cancel()` before reset.
+	 */
+	onCancel(handler: CompleteHandler<T>): this {
+		this.cancelHandler = handler;
+		return this;
+	}
+
+	/**
 	 * Builds the final wizard definition
 	 */
 	build(): WizardDefinition<T> {
@@ -114,6 +123,7 @@ export class WizardBuilder<T extends WizardData> {
 			initialStepId: this.initialStepId,
 			steps: stepsRecord,
 			onComplete: this.completeHandler,
+			onCancel: this.cancelHandler,
 		};
 	}
 }

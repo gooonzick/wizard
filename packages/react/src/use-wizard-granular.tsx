@@ -278,16 +278,12 @@ export function useWizardActions<T extends WizardData>(): UseWizardActions<T> {
 
 	const reset = useCallback(
 		(data?: T) => {
-			const resetData = data || initialData;
-			// Reset loading state
 			manager.setLoadingState({
 				isValidating: false,
 				isSubmitting: false,
 				isNavigating: false,
 			});
-			// Reset machine with new data
-			manager.getMachine().setData(resetData);
-			// Notify all channels about the reset
+			manager.getMachine().reset(data ?? initialData);
 			manager.notifySubscribers([
 				"state",
 				"navigation",
@@ -298,6 +294,25 @@ export function useWizardActions<T extends WizardData>(): UseWizardActions<T> {
 		[manager, initialData],
 	);
 
+	const cancel = useCallback(async () => {
+		manager.setLoadingState({ isNavigating: true });
+		try {
+			await manager.getMachine().cancel();
+		} finally {
+			manager.setLoadingState({
+				isValidating: false,
+				isSubmitting: false,
+				isNavigating: false,
+			});
+			manager.notifySubscribers([
+				"state",
+				"navigation",
+				"validation",
+				"loading",
+			]);
+		}
+	}, [manager]);
+
 	return useMemo(
 		() => ({
 			updateData,
@@ -307,7 +322,17 @@ export function useWizardActions<T extends WizardData>(): UseWizardActions<T> {
 			canSubmit,
 			submit,
 			reset,
+			cancel,
 		}),
-		[updateData, setData, updateField, validate, canSubmit, submit, reset],
+		[
+			updateData,
+			setData,
+			updateField,
+			validate,
+			canSubmit,
+			submit,
+			reset,
+			cancel,
+		],
 	);
 }

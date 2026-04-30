@@ -44,6 +44,10 @@ export interface WizardEvents<T> {
 	onValidation?: (result: ValidationResult) => void;
 	onSubmit?: (stepId: StepId, data: T) => void;
 	onComplete?: (data: T) => void;
+	/** Fired by `cancel()` before the machine is reset. May be async. */
+	onCancel?: (data: T) => void | Promise<void>;
+	/** Fired after `reset()` (and after `cancel()`'s implicit reset). */
+	onReset?: () => void;
 	onError?: (error: Error) => void;
 }
 
@@ -70,6 +74,8 @@ export class WizardMachine<T extends WizardData> {
 	private visitedSteps: Set<StepId> = new Set();
 	private stepHistory: StepId[] = [];
 	private isTransitioning = false;
+	/** Deep-cloned snapshot of the data used to seed `reset()`. */
+	private initialData: T;
 
 	constructor(
 		definition: WizardDefinition<T>,
@@ -87,12 +93,10 @@ export class WizardMachine<T extends WizardData> {
 			);
 		}
 
+		this.initialData = this.cloneData(initialData);
 		this.state = {
 			currentStepId: definition.initialStepId,
-			data:
-				typeof structuredClone === "function"
-					? structuredClone(initialData)
-					: JSON.parse(JSON.stringify(initialData)),
+			data: this.cloneData(initialData),
 			isValid: true,
 			isCompleted: false,
 			canGoBack: false,
@@ -103,6 +107,16 @@ export class WizardMachine<T extends WizardData> {
 
 		// Fire onStepEnter for initial step (async, non-blocking)
 		this.initializeFirstStep();
+	}
+
+	/**
+	 * Deep-clones data for snapshotting. Uses `structuredClone` when available,
+	 * falls back to JSON round-trip otherwise.
+	 */
+	private cloneData(data: T): T {
+		return typeof structuredClone === "function"
+			? structuredClone(data)
+			: JSON.parse(JSON.stringify(data));
 	}
 
 	/**
@@ -625,6 +639,73 @@ export class WizardMachine<T extends WizardData> {
 			stepStatuses: this.initializeStepStatuses(this.state.currentStepId),
 		};
 		this.notifyStateChange();
+	}
+
+	/**
+	 * Resets the wizard to its initial state.
+	 *
+	 * - Restores `currentStepId` to `definition.initialStepId`.
+	 * - Restores `data` to a fresh deep clone of the initial snapshot.
+	 * - Clears navigation history and visited steps.
+	 * - Resets all step statuses (pristine / active / skipped).
+	 * - Clears validation errors and `isCompleted`.
+	 * - Emits `onStateChange`, then `onReset`, then re-fires `onEnter` /
+	 *   `onStepEnter` for the initial step (async, non-blocking — mirrors
+	 *   constructor behavior).
+	 *
+	 * Does NOT call `onComplete` and does NOT fire `onLeave` for the
+	 * outgoing step — `reset()` is a destructive restart, not navigation.
+	 *
+	 * @param data Optional override that replaces the stored initial-data
+	 *   snapshot. Subsequent `reset()` calls will use this new value.
+	 */
+	reset(data?: T): void {
+		if (data !== undefined) {
+			this.initialData = this.cloneData(data);
+		}
+
+		const initialStepId = this.definition.initialStepId;
+		this.stepHistory = [initialStepId];
+		this.visitedSteps = new Set([initialStepId]);
+		this.state = {
+			currentStepId: initialStepId,
+			data: this.cloneData(this.initialData),
+			isValid: true,
+			isCompleted: false,
+			canGoBack: false,
+			validationErrors: undefined,
+			stepStatuses: this.initializeStepStatuses(),
+		};
+
+		this.notifyStateChange();
+		this.events.onReset?.();
+		this.debug(`Wizard reset to initial step: ${initialStepId}`);
+
+		// Re-fire onEnter for the initial step (fire-and-forget, mirrors constructor).
+		void this.initializeFirstStep();
+	}
+
+	/**
+	 * Cancels the wizard. Awaits any registered cancel handlers
+	 * (`definition.onCancel` and `events.onCancel`) and then calls `reset()`.
+	 *
+	 * If neither handler is registered, behaves identically to `reset()`.
+	 */
+	async cancel(): Promise<void> {
+		try {
+			if (this.definition.onCancel) {
+				await this.definition.onCancel(this.state.data, this.context);
+			}
+			const eventCancel = this.events.onCancel;
+			if (eventCancel) {
+				await eventCancel(this.state.data);
+			}
+			this.reset();
+			this.debug("Wizard cancelled");
+		} catch (error) {
+			this.handleError(error);
+			throw error;
+		}
 	}
 
 	/**

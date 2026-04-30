@@ -42,6 +42,8 @@ export interface WizardProviderProps<T extends WizardData> {
 	onStepEnter?: (stepId: StepId, data: T) => void;
 	onStepLeave?: (stepId: StepId, data: T) => void;
 	onComplete?: (data: T) => void;
+	onCancel?: (data: T) => void | Promise<void>;
+	onReset?: () => void;
 	onError?: (error: Error) => void;
 }
 
@@ -75,6 +77,10 @@ export const WizardProvider = defineComponent({
 			data: WizardData,
 		) => void,
 		onComplete: Function as unknown as () => (data: WizardData) => void,
+		onCancel: Function as unknown as () => (
+			data: WizardData,
+		) => void | Promise<void>,
+		onReset: Function as unknown as () => () => void,
 		onError: Function as unknown as () => (error: Error) => void,
 	},
 	setup(props, { slots }) {
@@ -88,6 +94,8 @@ export const WizardProvider = defineComponent({
 			onStepEnter: props.onStepEnter,
 			onStepLeave: props.onStepLeave,
 			onComplete: props.onComplete,
+			onCancel: props.onCancel,
+			onReset: props.onReset,
 			onError: props.onError,
 		});
 

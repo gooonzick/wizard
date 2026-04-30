@@ -4,15 +4,22 @@ import ApproachToggle from "./components/approach-toggle.vue";
 import FieldBindingExample from "./wizard-example/field-binding-example.vue";
 import HistoryExample from "./wizard-example/history-example.vue";
 import ProviderExample from "./wizard-example/provider-example.vue";
+import ResetCancelExample from "./wizard-example/reset-cancel-example.vue";
 import UseWizardExample from "./wizard-example/use-wizard-example.vue";
 
-type Approach = "use-wizard" | "provider" | "field-binding" | "history";
+type Approach =
+	| "use-wizard"
+	| "provider"
+	| "field-binding"
+	| "history"
+	| "reset-cancel";
 
 const approaches: Approach[] = [
 	"use-wizard",
 	"provider",
 	"field-binding",
 	"history",
+	"reset-cancel",
 ];
 
 const approach = ref<Approach>("use-wizard");
@@ -44,7 +51,8 @@ watch(approach, (newVal) => {
 			<UseWizardExample v-if="approach === 'use-wizard'" />
 			<ProviderExample v-else-if="approach === 'provider'" />
 			<FieldBindingExample v-else-if="approach === 'field-binding'" />
-			<HistoryExample v-else />
+			<HistoryExample v-else-if="approach === 'history'" />
+			<ResetCancelExample v-else />
 		</div>
 	</div>
 </template>

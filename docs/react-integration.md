@@ -113,6 +113,8 @@ interface UseWizardOptions<T> {
   onStepEnter?: (stepId: string, data: T) => void;
   onStepLeave?: (stepId: string, data: T) => void;
   onComplete?: (data: T) => void;
+  onCancel?: (data: T) => void;
+  onReset?: () => void;
   onError?: (error: Error) => void;
 }
 ```
@@ -184,9 +186,53 @@ actions.validate(); // Manually validate (result goes to validation slice)
 actions.canSubmit(); // Can current step be submitted?
 actions.submit(); // Submit current step
 
-// Reset
-actions.reset(); // Reset to initial data
-actions.reset(newData); // Reset with new data
+// Reset / Cancel
+actions.reset(); // Rewind to initial step + initial data, fires onReset
+actions.reset(newData); // Rewind with replacement data
+actions.cancel(); // Awaits definition.onCancel + onCancel event, then resets
+```
+
+## Reset & Cancel
+
+Use `actions.reset()` to rewind the wizard to its initial step and original data
+— for example after an error, or to let the user start over.
+
+```tsx
+<button onClick={() => actions.reset()}>Start over</button>
+```
+
+Use `actions.cancel()` to abandon the wizard. It awaits the optional
+`definition.onCancel` handler (where you can run server-side cleanup, e.g.
+delete a draft) and then resets.
+
+```tsx
+const handleCancel = async () => {
+  if (!confirm("Discard your progress?")) return;
+  await actions.cancel();
+};
+```
+
+Observe both via the `onReset` and `onCancel` event hooks:
+
+```tsx
+useWizard({
+  definition,
+  initialData,
+  onCancel: (data) =>
+    analytics.track("wizard_cancelled", { email: data.email }),
+  onReset: () => analytics.track("wizard_reset"),
+});
+```
+
+Declarative server cleanup via the wizard definition:
+
+```ts
+createWizard<SignupData>("signup")
+  // …steps…
+  .onCancel(async (data) => {
+    await api.deleteDraft(data.draftId);
+  })
+  .build();
 ```
 
 ## Common Patterns

@@ -2,7 +2,12 @@
 import { cn } from "@/lib/utils";
 import Button from "./ui/button.vue";
 
-type Approach = "use-wizard" | "provider" | "field-binding" | "history";
+type Approach =
+	| "use-wizard"
+	| "provider"
+	| "field-binding"
+	| "history"
+	| "reset-cancel";
 
 interface Props {
 	modelValue: Approach;
@@ -43,6 +48,12 @@ defineEmits<
 			@click="$emit('update:modelValue', 'history')"
 		>
 			History Stack
+		</Button>
+		<Button
+			:variant="modelValue === 'reset-cancel' ? 'default' : 'outline'"
+			@click="$emit('update:modelValue', 'reset-cancel')"
+		>
+			Reset & Cancel
 		</Button>
 	</div>
 </template>

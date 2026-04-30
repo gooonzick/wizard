@@ -105,6 +105,8 @@ export function createEventSpies<T extends Record<string, unknown>>(): Required<
 		onValidation: vi.fn(),
 		onSubmit: vi.fn(),
 		onComplete: vi.fn(),
+		onCancel: vi.fn(),
+		onReset: vi.fn(),
 		onError: vi.fn(),
 	};
 }

@@ -30,6 +30,8 @@ export interface UseWizardOptions<T extends WizardData> {
 	onStepEnter?: (stepId: StepId, data: T) => void;
 	onStepLeave?: (stepId: StepId, data: T) => void;
 	onComplete?: (data: T) => void;
+	onCancel?: (data: T) => void | Promise<void>;
+	onReset?: () => void;
 	onError?: (error: Error) => void;
 }
 
@@ -106,6 +108,7 @@ export type ValidateFn = () => Promise<void>;
 export type CanSubmitFn = () => Promise<boolean>;
 export type SubmitFn = () => Promise<void>;
 export type ResetFn<T extends WizardData> = (data?: T) => void;
+export type CancelFn = () => Promise<void>;
 
 /**
  * Actions slice - data mutations and validation
@@ -118,6 +121,7 @@ export interface UseWizardActions<T extends WizardData> {
 	canSubmit: CanSubmitFn;
 	submit: SubmitFn;
 	reset: ResetFn<T>;
+	cancel: CancelFn;
 }
 
 /**
@@ -146,6 +150,8 @@ export function useWizard<T extends WizardData>(
 		onStepEnter,
 		onStepLeave,
 		onComplete,
+		onCancel,
+		onReset,
 		onError,
 	} = options;
 
@@ -155,6 +161,8 @@ export function useWizard<T extends WizardData>(
 		onStepEnter,
 		onStepLeave,
 		onComplete,
+		onCancel,
+		onReset,
 		onError,
 	});
 
@@ -164,6 +172,8 @@ export function useWizard<T extends WizardData>(
 		onStepEnter,
 		onStepLeave,
 		onComplete,
+		onCancel,
+		onReset,
 		onError,
 	};
 
@@ -199,6 +209,12 @@ export function useWizard<T extends WizardData>(
 			onComplete: (data: T) => {
 				callbacksRef.current.onComplete?.(data);
 			},
+			onCancel: async (data: T) => {
+				await callbacksRef.current.onCancel?.(data);
+			},
+			onReset: () => {
+				callbacksRef.current.onReset?.();
+			},
 			onError: (error: Error) => {
 				callbacksRef.current.onError?.(error);
 			},
@@ -231,8 +247,8 @@ export function useWizard<T extends WizardData>(
 		[createEvents],
 	);
 
-	// Use state for manager to ensure re-render when reset creates a new manager
-	const [manager, setManager] = useState<WizardStateManager<T>>(() =>
+	// Use state for manager (created once; native machine.reset() handles resets)
+	const [manager] = useState<WizardStateManager<T>>(() =>
 		createManager(initialDataRef.current),
 	);
 
@@ -374,12 +390,40 @@ export function useWizard<T extends WizardData>(
 
 	const reset = useCallback(
 		(data?: T) => {
-			const resetData = data || initialDataRef.current;
-			const newManager = createManager(resetData);
-			setManager(newManager);
+			manager.setLoadingState({
+				isValidating: false,
+				isSubmitting: false,
+				isNavigating: false,
+			});
+			manager.getMachine().reset(data ?? initialDataRef.current);
+			manager.notifySubscribers([
+				"state",
+				"navigation",
+				"validation",
+				"loading",
+			]);
 		},
-		[createManager],
+		[manager],
 	);
+
+	const cancel = useCallback(async () => {
+		manager.setLoadingState({ isNavigating: true });
+		try {
+			await manager.getMachine().cancel();
+		} finally {
+			manager.setLoadingState({
+				isValidating: false,
+				isSubmitting: false,
+				isNavigating: false,
+			});
+			manager.notifySubscribers([
+				"state",
+				"navigation",
+				"validation",
+				"loading",
+			]);
+		}
+	}, [manager]);
 
 	// Build organized return value
 	const stateSlice: UseWizardState<T> = useMemo(
@@ -464,8 +508,18 @@ export function useWizard<T extends WizardData>(
 			canSubmit: canSubmitFn,
 			submit,
 			reset,
+			cancel,
 		}),
-		[updateData, setData, updateField, validate, canSubmitFn, submit, reset],
+		[
+			updateData,
+			setData,
+			updateField,
+			validate,
+			canSubmitFn,
+			submit,
+			reset,
+			cancel,
+		],
 	);
 
 	// Return organized slices

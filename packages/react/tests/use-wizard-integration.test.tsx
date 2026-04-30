@@ -522,5 +522,74 @@ describe("useWizard hook integration", () => {
 				});
 			});
 		});
+
+		it("should fire onReset event after reset()", async () => {
+			const definition = createTestDefinition();
+			const onReset = vi.fn();
+			const { result } = renderHook(() =>
+				useWizard({
+					definition,
+					initialData: { name: "", email: "" },
+					onReset,
+				}),
+			);
+
+			await act(async () => {
+				result.current.actions.reset();
+			});
+
+			await waitFor(() => {
+				expect(onReset).toHaveBeenCalled();
+			});
+		});
+	});
+
+	describe("cancel functionality", () => {
+		it("should expose actions.cancel as a function", async () => {
+			const definition = createTestDefinition();
+			const { result } = renderHook(() =>
+				useWizard({
+					definition,
+					initialData: { name: "", email: "" },
+				}),
+			);
+
+			await waitFor(() => {
+				expect(typeof result.current.actions.cancel).toBe("function");
+			});
+		});
+
+		it("should call onCancel and reset to initial step", async () => {
+			const definition = createTestDefinition();
+			const onCancel = vi.fn();
+			const { result } = renderHook(() =>
+				useWizard({
+					definition,
+					initialData: { name: "", email: "" },
+					onCancel,
+				}),
+			);
+
+			await act(async () => {
+				result.current.actions.updateField("name", "John");
+				await result.current.navigation.goNext();
+			});
+
+			await waitFor(() => {
+				expect(result.current.state.currentStepId).toBe("step2");
+			});
+
+			await act(async () => {
+				await result.current.actions.cancel();
+			});
+
+			await waitFor(() => {
+				expect(onCancel).toHaveBeenCalledWith(
+					expect.objectContaining({ name: "John" }),
+				);
+				expect(result.current.state.currentStepId).toBe("step1");
+				expect(result.current.state.data.name).toBe("");
+			});
+		});
 	});
 });

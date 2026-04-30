@@ -36,6 +36,8 @@ export interface WizardProviderProps<T extends WizardData> {
 	onStepEnter?: (stepId: StepId, data: T) => void;
 	onStepLeave?: (stepId: StepId, data: T) => void;
 	onComplete?: (data: T) => void;
+	onCancel?: (data: T) => void | Promise<void>;
+	onReset?: () => void;
 	onError?: (error: Error) => void;
 	children: ReactNode;
 }
@@ -52,6 +54,8 @@ export function WizardProvider<T extends WizardData>({
 	onStepEnter,
 	onStepLeave,
 	onComplete,
+	onCancel,
+	onReset,
 	onError,
 	children,
 }: WizardProviderProps<T>) {
@@ -61,6 +65,8 @@ export function WizardProvider<T extends WizardData>({
 		onStepEnter,
 		onStepLeave,
 		onComplete,
+		onCancel,
+		onReset,
 		onError,
 	});
 
@@ -70,6 +76,8 @@ export function WizardProvider<T extends WizardData>({
 		onStepEnter,
 		onStepLeave,
 		onComplete,
+		onCancel,
+		onReset,
 		onError,
 	};
 
@@ -105,6 +113,12 @@ export function WizardProvider<T extends WizardData>({
 			},
 			onComplete: (data: T) => {
 				callbacksRef.current.onComplete?.(data);
+			},
+			onCancel: async (data: T) => {
+				await callbacksRef.current.onCancel?.(data);
+			},
+			onReset: () => {
+				callbacksRef.current.onReset?.();
 			},
 			onError: (error: Error) => {
 				callbacksRef.current.onError?.(error);

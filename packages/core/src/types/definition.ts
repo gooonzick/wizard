@@ -19,4 +19,8 @@ export interface WizardDefinition<T> {
 
 	// Final handler (optional)
 	onComplete?: CompleteHandler<T>;
+
+	// Cancellation handler (optional). Invoked by `WizardMachine.cancel()`
+	// before the machine is reset.
+	onCancel?: CompleteHandler<T>;
 }

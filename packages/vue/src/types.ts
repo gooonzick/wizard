@@ -31,6 +31,8 @@ export interface UseWizardOptions<T extends WizardData> {
 	onStepEnter?: (stepId: StepId, data: T) => void;
 	onStepLeave?: (stepId: StepId, data: T) => void;
 	onComplete?: (data: T) => void;
+	onCancel?: (data: T) => void | Promise<void>;
+	onReset?: () => void;
 	onError?: (error: Error) => void;
 }
 
@@ -111,6 +113,7 @@ export type ValidateFn = () => Promise<void>;
 export type CanSubmitFn = () => Promise<boolean>;
 export type SubmitFn = () => Promise<void>;
 export type ResetFn<T extends WizardData> = (data?: T) => void;
+export type CancelFn = () => Promise<void>;
 
 /**
  * Actions slice - data mutations and validation
@@ -123,6 +126,7 @@ export interface UseWizardActions<T extends WizardData> {
 	canSubmit: CanSubmitFn;
 	submit: SubmitFn;
 	reset: ResetFn<T>;
+	cancel: CancelFn;
 }
 
 /**

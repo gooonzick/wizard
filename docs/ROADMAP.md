@@ -31,6 +31,7 @@
 | Navigation History Stack (WIZ-001)                    | ✅     | `core`  |
 | Step Status Tracking (WIZ-003)                        | ✅     | `core`  |
 | Progress API (WIZ-004)                                | ✅     | `core`  |
+| Reset / Cancel (WIZ-005)                              | ✅     | `core`  |
 
 ### Architectural Decisions
 
@@ -319,7 +320,7 @@ The order is determined by traversing the transition graph from `initialStepId` 
 
 ---
 
-#### WIZ-005: Reset / Cancel
+#### WIZ-005: Reset / Cancel ✅ Implemented
 
 **Priority:** 🟡 High
 **Effort:** XS (1–2 hours)

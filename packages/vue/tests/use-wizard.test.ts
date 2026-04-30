@@ -19,6 +19,8 @@ function mountWizard<T extends Record<string, unknown>>(options: {
 	onStepEnter?: (stepId: string, data: T) => void;
 	onStepLeave?: (stepId: string, data: T) => void;
 	onComplete?: (data: T) => void;
+	onCancel?: (data: T) => void | Promise<void>;
+	onReset?: () => void;
 	onError?: (error: Error) => void;
 }) {
 	let wizardRef!: UseWizardReturn<T>;
@@ -446,5 +448,65 @@ describe("useWizard", () => {
 
 		expect(onError).toHaveBeenCalledTimes(1);
 		expect(onError).toHaveBeenCalledWith(expect.any(Error));
+	});
+
+	it("should expose actions.cancel as a function", () => {
+		const definition = createLinearWizard<{ name: string }>({
+			id: "cancel-shape",
+			steps: [{ id: "step1", title: "Step 1" }],
+		});
+
+		const { wizard } = mountWizard({
+			definition,
+			initialData: { name: "" },
+		});
+
+		expect(typeof wizard.actions.cancel).toBe("function");
+	});
+
+	it("should call onCancel and reset to initial step", async () => {
+		const definition = createLinearWizard<{ name: string }>({
+			id: "cancel-test",
+			steps: [
+				{ id: "step1", title: "Step 1" },
+				{ id: "step2", title: "Step 2" },
+			],
+		});
+
+		const onCancel = vi.fn();
+		const { wizard } = mountWizard({
+			definition,
+			initialData: { name: "initial" },
+			onCancel,
+		});
+
+		wizard.actions.updateField("name", "changed");
+		await wizard.navigation.goNext();
+		expect(wizard.state.currentStepId.value).toBe("step2");
+
+		await wizard.actions.cancel();
+
+		expect(onCancel).toHaveBeenCalledWith(
+			expect.objectContaining({ name: "changed" }),
+		);
+		expect(wizard.state.currentStepId.value).toBe("step1");
+		expect(wizard.state.data.value.name).toBe("initial");
+	});
+
+	it("should fire onReset event after reset()", async () => {
+		const definition = createLinearWizard<{ name: string }>({
+			id: "reset-event-test",
+			steps: [{ id: "step1", title: "Step 1" }],
+		});
+
+		const onReset = vi.fn();
+		const { wizard } = mountWizard({
+			definition,
+			initialData: { name: "" },
+			onReset,
+		});
+
+		wizard.actions.reset();
+		expect(onReset).toHaveBeenCalled();
 	});
 });
