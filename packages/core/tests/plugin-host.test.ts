@@ -155,6 +155,15 @@ describe("PluginHost", () => {
 		expect(destroy).toHaveBeenCalledTimes(1);
 	});
 
+	it("add() throws WizardConfigurationError after destroyAll()", async () => {
+		const { host } = makeHost();
+		await host.destroyAll();
+		expect(() => host.add({ name: "late" })).toThrow(WizardConfigurationError);
+		expect(() => host.add({ name: "late" })).toThrow(
+			'Cannot add plugin "late" after the wizard has been destroyed',
+		);
+	});
+
 	it("dispatchAfterTransition — first plugin throw reports once and second plugin still runs", async () => {
 		const { host, reported } = makeHost();
 		const second = vi.fn();

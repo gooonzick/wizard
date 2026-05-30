@@ -23,8 +23,13 @@ export class PluginHost<TData> {
 
 	constructor(private readonly reportError: PluginErrorReporter) {}
 
-	/** Registers a plugin. Throws on duplicate name. */
+	/** Registers a plugin. Throws on duplicate name or after destroyAll(). */
 	add(plugin: WizardPlugin<TData>): void {
+		if (this.destroyed) {
+			throw new WizardConfigurationError(
+				`Cannot add plugin "${plugin.name}" after the wizard has been destroyed`,
+			);
+		}
 		if (this.plugins.some((p) => p.name === plugin.name)) {
 			throw new WizardConfigurationError(
 				`Plugin "${plugin.name}" is already registered`,

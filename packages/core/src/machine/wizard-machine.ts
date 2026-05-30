@@ -6,7 +6,11 @@ import {
 	WizardValidationError,
 } from "../errors";
 import { PluginHost } from "../plugins/plugin-host";
-import type { WizardMachineReadonly, WizardPlugin } from "../plugins/types";
+import type {
+	DeepReadonly,
+	WizardMachineReadonly,
+	WizardPlugin,
+} from "../plugins/types";
 import type {
 	StepId,
 	ValidationResult,
@@ -117,6 +121,12 @@ export class WizardMachine<T extends WizardData> {
 	private pluginHost!: PluginHost<T>;
 	private readonlyFacade!: WizardMachineReadonly<T>;
 
+	/**
+	 * @param plugins Optional plugins to register at construction time.
+	 *   Each plugin's `onInit` is dispatched fire-and-forget and may run
+	 *   concurrently with the initial step's `onEnter` — plugins must not
+	 *   assume `onInit` has completed before their first hook fires.
+	 */
 	constructor(
 		definition: WizardDefinition<T>,
 		context: WizardContext,
@@ -154,10 +164,17 @@ export class WizardMachine<T extends WizardData> {
 		const machineRef = this;
 		this.readonlyFacade = {
 			get snapshot() {
-				return machineRef.snapshot as never;
+				// `snapshot` returns a frozen `WizardState<T>` which is structurally
+				// compatible with `DeepReadonly<WizardState<T>>` at runtime, but the
+				// compiler cannot verify that the freeze satisfies every nested readonly
+				// constraint, so we use a double cast rather than `as never`.
+				return machineRef.snapshot as unknown as DeepReadonly<WizardState<T>>;
 			},
 			get currentStep() {
-				return machineRef.currentStep as never;
+				// Same structural-readonly mismatch as `snapshot` above.
+				return machineRef.currentStep as unknown as DeepReadonly<
+					WizardStepDefinition<T>
+				>;
 			},
 			getStepStatus: (stepId) => this.getStepStatus(stepId),
 		};
@@ -268,7 +285,9 @@ export class WizardMachine<T extends WizardData> {
 
 	/**
 	 * Registers a plugin (chainable). Throws WizardConfigurationError on a
-	 * duplicate name. The plugin's onInit fires immediately (fire-and-forget).
+	 * duplicate name. The plugin's `onInit` fires immediately (fire-and-forget)
+	 * and may run concurrently with any in-progress step lifecycle — plugins must
+	 * not assume `onInit` has completed before their first hook fires.
 	 */
 	use(plugin: WizardPlugin<T>): this {
 		this.pluginHost.add(plugin);
