@@ -19,6 +19,7 @@ export type PluginErrorReporter = (error: unknown) => void;
  */
 export class PluginHost<TData> {
 	private plugins: WizardPlugin<TData>[] = [];
+	private destroyed = false;
 
 	constructor(private readonly reportError: PluginErrorReporter) {}
 
@@ -145,8 +146,12 @@ export class PluginHost<TData> {
 		}
 	}
 
-	/** Runs all plugins' destroy() in REVERSE registration order, isolated. */
+	/** Runs all plugins' destroy() in REVERSE registration order, isolated. No-op after the first call. */
 	async destroyAll(): Promise<void> {
+		if (this.destroyed) {
+			return;
+		}
+		this.destroyed = true;
 		const reversed = [...this.plugins].reverse();
 		this.plugins = [];
 		for (const plugin of reversed) {
