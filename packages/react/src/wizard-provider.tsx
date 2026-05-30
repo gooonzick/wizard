@@ -11,10 +11,13 @@ import { WizardStateManager } from "@gooonzick/wizard-state";
 import {
 	createContext,
 	type ReactNode,
+	useCallback,
 	useContext,
 	useEffect,
 	useMemo,
 	useRef,
+	useState,
+	useSyncExternalStore,
 } from "react";
 
 /**
@@ -98,18 +101,21 @@ export function WizardProvider<T extends WizardData>({
 	// Track previous state for change detection
 	const previousStateRef = useRef<WizardState<T> | null>(null);
 
-	// Create manager instance once
-	const managerRef = useRef<WizardStateManager<T> | null>(null);
+	// Holds the live manager. `managerStateRef` mirrors the state value so the
+	// events closure (created once per manager) can always reach the current
+	// manager without re-creating the closure.
+	const managerStateRef = useRef<WizardStateManager<T> | null>(null);
 
-	if (!managerRef.current) {
+	// Factory: build a fresh manager re-applying the same plugins/definition.
+	const createManager = useCallback((): WizardStateManager<T> => {
 		const events = {
 			onStateChange: (newState: WizardState<T>) => {
 				const oldState = previousStateRef.current;
 				previousStateRef.current = newState;
 
 				// Notify subscribers via channel-based system
-				if (oldState && managerRef.current) {
-					managerRef.current.handleStateChange(newState, oldState);
+				if (oldState && managerStateRef.current) {
+					managerStateRef.current.handleStateChange(newState, oldState);
 				}
 
 				callbacksRef.current.onStateChange?.(newState);
@@ -142,30 +148,59 @@ export function WizardProvider<T extends WizardData>({
 			pluginsRef.current,
 		);
 
-		managerRef.current = new WizardStateManager(
+		const newManager = new WizardStateManager(
 			machine,
 			definitionRef.current.initialStepId,
 		);
 		previousStateRef.current = machine.snapshot;
+		return newManager;
+	}, []);
+
+	// Manager state (created once; native machine.reset() handles resets).
+	const [managerState, setManagerState] = useState<WizardStateManager<T>>(
+		() => {
+			const m = createManager();
+			managerStateRef.current = m;
+			return m;
+		},
+	);
+
+	// WIZ-007: if the StrictMode mount->unmount->remount probe destroyed the
+	// manager, recreate it (re-applying the same plugins). Production never trips
+	// this: with no probe, isDestroyed stays false on a live manager.
+	const manager = managerState.isDestroyed ? createManager() : managerState;
+	if (manager !== managerState) {
+		managerStateRef.current = manager;
+		setManagerState(manager); // re-render with the live manager; subscriptions rebind
 	}
+
+	// Re-render the provider when the manager emits, so a navigation issued by a
+	// consumer (which destroys/leaves M1 a zombie under StrictMode) drives the
+	// render-phase recreate above. In production this is a normal subscription.
+	useSyncExternalStore(
+		useCallback((cb) => manager.subscribe(cb, "all"), [manager]),
+		useCallback(() => manager.isDestroyed, [manager]),
+		useCallback(() => manager.isDestroyed, [manager]),
+	);
 
 	// WIZ-007: tear down plugins on unmount. Cleanup must be synchronous; we
 	// deliberately do NOT await the Promise<void> (destroy isolates its own
-	// rejections internally).
+	// rejections internally). Keyed on `manager` so it re-registers after a
+	// StrictMode-driven recreate.
 	useEffect(() => {
-		const manager = managerRef.current;
 		return () => {
-			void manager?.destroy();
+			void manager.destroy();
 		};
-	}, []);
+	}, [manager]);
 
-	// Create a stable context value
+	// Create a stable context value, keyed on `manager` so consumers rebind
+	// after a StrictMode-driven recreate.
 	const contextValue = useMemo(
 		() => ({
-			manager: managerRef.current as WizardStateManager<T>,
+			manager,
 			initialData: initialDataRef.current,
 		}),
-		[],
+		[manager],
 	);
 
 	return (

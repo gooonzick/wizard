@@ -343,6 +343,13 @@ export class WizardMachine<T extends WizardData> {
 	}
 
 	/**
+	 * Whether the machine has been destroyed (plugins torn down). Terminal.
+	 */
+	get isDestroyed(): boolean {
+		return this.pluginHost.isDestroyed;
+	}
+
+	/**
 	 * Serializes the current wizard runtime state into a plain object.
 	 */
 	serialize(): WizardSerializedState<T> {
