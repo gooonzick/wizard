@@ -60,7 +60,7 @@ interface WizardPlugin<TData = unknown> {
   beforeTransition?(e: TransitionEvent<TData>): boolean | void | Promise<boolean | void>; // return false to veto
   afterTransition?(e: TransitionEvent<TData>): void | Promise<void>;
   onError?(error: WizardError | Error, ctx: ErrorContext<TData>): void | Promise<void>;
-  onComplete?(data: TData): void | Promise<void>;
+  onComplete?(data: DeepReadonly<TData>): void | Promise<void>;
   onReset?(): void | Promise<void>;
   destroy?(): void | Promise<void>;
 }
@@ -76,7 +76,7 @@ New methods on `WizardMachine<TData>`:
 
 ```typescript
 use(plugin: WizardPlugin<TData>): this;   // chainable; throws WizardConfigurationError on duplicate name
-removePlugin(name: string): void;          // calls that plugin's destroy(), then drops it
+removePlugin(name: string): Promise<void>; // awaits that plugin's destroy(), then drops it
 destroy(): Promise<void>;                  // calls destroy() on all plugins in REVERSE registration order
 ```
 
