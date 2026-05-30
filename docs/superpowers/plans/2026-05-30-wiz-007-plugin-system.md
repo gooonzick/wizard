@@ -50,6 +50,7 @@
 | `packages/react/tests/plugins.test.tsx` | Create | React threading + destroy-on-unmount. |
 | `packages/vue/src/use-wizard.ts` | Modify | `plugins` option → 5th ctor arg; `manager.destroy()` in existing `onScopeDispose`. |
 | `packages/vue/src/types.ts` | Modify | Add `plugins?` to `UseWizardOptions`. |
+| `packages/vue/src/wizard-provider.ts` | Modify | Add `plugins` prop; forward into internal `useWizard(...)`. |
 | `packages/vue/tests/plugins.test.ts` | Create | Vue threading + destroy-on-dispose. |
 | `packages/docs/guide/plugins.md` | Create | Plugin guide. |
 | `packages/docs/.vitepress/config.ts` | Modify | Sidebar entry for Plugins. |
@@ -206,7 +207,7 @@ export interface WizardPlugin<TData = unknown> {
 		error: WizardError | Error,
 		ctx: ErrorContext<TData>,
 	): void | Promise<void>;
-	onComplete?(data: TData): void | Promise<void>;
+	onComplete?(data: DeepReadonly<TData>): void | Promise<void>;
 	onReset?(): void | Promise<void>;
 	destroy?(): void | Promise<void>;
 }
@@ -1097,7 +1098,7 @@ git commit -m "feat(core): dispatch before/afterTransition with veto + type (WIZ
 ### Task 5: Machine — extend `handleError(error, phase?, stepId?)` + dispatch plugin `onError`
 
 **Files:**
-- Modify: `packages/core/src/machine/wizard-machine.ts` (`handleError` L1244-1247; call sites: `validate` L362, `submit` L423, `goNext` validation path, `cancel` L860, `withTransition` L1268, `initializeFirstStep` L191)
+- Modify: `packages/core/src/machine/wizard-machine.ts` (`handleError` L1244-1247; call sites: `validate` L362, `submit` L423, `goNext` validation path, `goTo` validation path L598-600, `cancel` L860, `withTransition` L1268, `initializeFirstStep` L191)
 - Test: `packages/core/tests/plugins.test.ts`
 
 - [ ] **Step 1: Write the failing test** (append to `packages/core/tests/plugins.test.ts`)
@@ -1119,6 +1120,22 @@ describe("WizardMachine plugin onError", () => {
 		const ctx = onError.mock.calls.at(-1)?.[1];
 		expect(ctx).toMatchObject({ phase: "validation", stepId: "step1" });
 		expect(ctx.data).toBeDefined();
+	});
+
+	it("dispatches onError with phase 'validation' when goTo fails current-step validation", async () => {
+		const onError = vi.fn();
+		const m = new WizardMachine<SimpleData>(
+			createValidatedDefinition(),
+			{},
+			{ name: "", email: "" }, // invalid: current step1 fails validation
+			{},
+			[{ name: "p", onError }],
+		);
+		// goTo validates the CURRENT step before leaving; skipValidation defaults to false.
+		await expect(m.goTo("step2")).rejects.toBeTruthy();
+		expect(onError).toHaveBeenCalledTimes(1);
+		const ctx = onError.mock.calls.at(-1)?.[1];
+		expect(ctx).toMatchObject({ phase: "validation", stepId: "step1" });
 	});
 
 	it("a throw inside a plugin's onError is swallowed (no recursion)", async () => {
@@ -1194,6 +1211,15 @@ import type {
 				throw err;
 			}
 ```
+- `goTo` — like `goNext`, `goTo` validates the CURRENT step before leaving (real code L595-601: `if (!skipValidation) { const validationResult = await this.validate(); if (!validationResult.valid) { throw new WizardValidationError(...); } }`). Because `withTransition`'s catch now SKIPS every `WizardValidationError` (5d), this throw would reach NO reporting site and plugin `onError` would never fire for a `goTo` validation failure. Mirror `goNext`: report explicitly with `phase: "validation"` before throwing, keeping `goTo`'s `Promise<void>` contract and rethrow semantics unchanged. Change the `goTo` validation branch (currently L598-600) to:
+```ts
+				if (!validationResult.valid) {
+					const err = new WizardValidationError(validationResult.errors || {});
+					this.handleError(err, "validation");
+					throw err;
+				}
+```
+(`goTo` does not set step status to `"error"` here — preserve its current behavior; only add the report before the throw.)
 - `cancel` (L860): `this.handleError(handlerError, "lifecycle");`
 - `initializeFirstStep` catch (L191): `this.handleError(error, "lifecycle");`
 - The `beforeTransition` throw path in `navigateToStep` (Task 4) deliberately does NOT call `handleError` — it just rethrows, so `withTransition`'s catch is the single reporter (default `phase: "transition"`). This keeps plugin `onError` firing exactly once for that path.
@@ -1787,9 +1813,10 @@ git commit -m "feat(react): thread plugins option + destroy on unmount (WIZ-007)
 **Files:**
 - Modify: `packages/vue/src/types.ts` (`UseWizardOptions`)
 - Modify: `packages/vue/src/use-wizard.ts` (destructure L35-46; `createMachine` `new WizardMachine` L65-66; existing `onScopeDispose` L178-181)
+- Modify: `packages/vue/src/wizard-provider.ts` (`WizardProviderProps` L37-48; `props` block L55-85; `useWizard({...})` call L89-100)
 - Test: `packages/vue/tests/plugins.test.ts`
 
-> NOTE: `packages/vue/src/wizard-provider.ts` calls `useWizard` internally (it does NOT call `new WizardMachine` directly), so wiring `plugins` through `useWizard` covers the provider once a `plugins` prop is added. Per spec scope (the three call sites are `wizard-provider.tsx`, `use-wizard.tsx`, `vue/use-wizard.ts`), the Vue machine construction lives only in `use-wizard.ts` — implement there. Adding a `plugins` prop to the Vue `WizardProvider` component is optional polish and NOT required by the spec; leave it out to stay surgical.
+> NOTE: `packages/vue/src/wizard-provider.ts` calls `useWizard` internally (it does NOT call `new WizardMachine` directly). The Vue `WizardProvider` IS public API and forwards its props into `useWizard`, so — mirroring the React task which adds `plugins` to BOTH `use-wizard` and `wizard-provider` — the Vue provider gains a `plugins` prop that is threaded into its internal `useWizard(...)` call (matching how it forwards `onComplete`/`onError`/etc.). The Vue machine construction itself lives only in `use-wizard.ts`; the provider just forwards the option.
 
 - [ ] **Step 1: Write the failing test** (create `packages/vue/tests/plugins.test.ts`)
 ```ts
@@ -1891,12 +1918,24 @@ to add `, plugins` after the events object:
 		void manager.value.destroy();
 	});
 ```
+
+11c. `packages/vue/src/wizard-provider.ts` — add a `plugins` prop and forward it (mirrors the React provider):
+- Add `WizardPlugin` to the type import (L1-7, from `@gooonzick/wizard-core`).
+- Add to `WizardProviderProps<T>` (after `onError?` L47): `plugins?: WizardPlugin<T>[];`.
+- Add to the `props` block (after the `onError:` entry L84):
+```ts
+		plugins: Array as unknown as () => WizardPlugin<WizardData>[],
+```
+- Forward it into the internal `useWizard({...})` call (after `onError: props.onError,` L99):
+```ts
+			plugins: props.plugins,
+```
 - [ ] **Step 4: Run test to verify it passes**
 Run: `pnpm --filter @gooonzick/wizard-vue test -- plugins` → PASS. Full vue suite + typecheck.
 - [ ] **Step 5: Commit**
 ```bash
 git add packages/vue/src/types.ts packages/vue/src/use-wizard.ts \
-        packages/vue/tests/plugins.test.ts && \
+        packages/vue/src/wizard-provider.ts packages/vue/tests/plugins.test.ts && \
 git commit -m "feat(vue): thread plugins option + destroy on scope dispose (WIZ-007)"
 ```
 
@@ -1935,7 +1974,7 @@ interface WizardPlugin<TData = unknown> {
   beforeTransition?(e: TransitionEvent<TData>): boolean | void | Promise<boolean | void>;
   afterTransition?(e: TransitionEvent<TData>): void | Promise<void>;
   onError?(error: WizardError | Error, ctx: ErrorContext<TData>): void | Promise<void>;
-  onComplete?(data: TData): void | Promise<void>;
+  onComplete?(data: DeepReadonly<TData>): void | Promise<void>;
   onReset?(): void | Promise<void>;
   destroy?(): void | Promise<void>;
 }
