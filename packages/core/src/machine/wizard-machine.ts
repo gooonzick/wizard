@@ -570,9 +570,6 @@ export class WizardMachine<T extends WizardData> {
 				this.events.onSubmit?.(currentStep.id, this.state.data);
 			}
 
-			// Mark current step as completed before navigating
-			this.setStepStatusInternal(this.state.currentStepId, "completed");
-
 			// Resolve next step
 			const nextStepId = await this.resolveNextStep();
 			// FIX 2: a reset()/cancel() during resolveNextStep supersedes this transition.
@@ -742,7 +739,6 @@ export class WizardMachine<T extends WizardData> {
 				}
 			}
 
-			this.setStepStatusInternal(this.state.currentStepId, "visited");
 			await this.navigateToStep(stepId, "goTo", { skipLifecycle });
 			this.debug(`Navigated to step: ${stepId}`);
 		});
@@ -891,9 +887,16 @@ export class WizardMachine<T extends WizardData> {
 			this.stepHistory.push(stepId);
 		}
 
-		// Backward navigation marks the departing step as visited. Deferred to
-		// here so a beforeTransition veto does not leave the status mutated.
-		if (type === "previous") {
+		// Mark the departing step's status. Deferred to here (after the
+		// beforeTransition veto / stale checks above) so a vetoed transition
+		// never leaves stepStatuses mutated. Per direction:
+		//   next     -> the step we are leaving is "completed"
+		//   goTo     -> the step we are leaving is "visited"
+		//   previous -> the step we are leaving is "visited"
+		if (type === "next") {
+			this.setStepStatusInternal(fromStepId, "completed");
+		} else {
+			// "goTo" and "previous"
 			this.setStepStatusInternal(fromStepId, "visited");
 		}
 
