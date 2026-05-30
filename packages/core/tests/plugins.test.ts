@@ -217,10 +217,50 @@ describe("WizardMachine before/afterTransition", () => {
 			{},
 			[{ name: "p", beforeTransition: () => false, afterTransition: after }],
 		);
+		const statusesBefore = { ...m.snapshot.stepStatuses };
 		const result = await m.goTo("step2", { skipValidation: true });
 		expect(result).toBeUndefined(); // goTo stays Promise<void>
 		expect(m.snapshot.currentStepId).toBe("step1"); // unchanged
+		expect(m.snapshot.stepStatuses).toEqual(statusesBefore); // statuses unchanged
 		expect(after).not.toHaveBeenCalled();
+	});
+
+	it("beforeTransition veto on goNext leaves stepStatuses unchanged (current not 'completed')", async () => {
+		// Veto only forward ("next") transitions.
+		const m = new WizardMachine<SimpleData>(
+			createSimpleLinearDefinition(),
+			{},
+			initial,
+			{},
+			[{ name: "p", beforeTransition: (e) => e.type !== "next" }],
+		);
+		await flush();
+
+		const statusesBefore = { ...m.snapshot.stepStatuses };
+		await m.goNext(); // vetoed
+
+		expect(m.snapshot.currentStepId).toBe("step1"); // unchanged
+		expect(m.snapshot.stepStatuses.step1).not.toBe("completed"); // not flipped
+		expect(m.snapshot.stepStatuses).toEqual(statusesBefore); // statuses unchanged
+	});
+
+	it("beforeTransition veto on goTo leaves stepStatuses unchanged (current not 'visited')", async () => {
+		// Veto only goTo transitions.
+		const m = new WizardMachine<SimpleData>(
+			createSimpleLinearDefinition(),
+			{},
+			initial,
+			{},
+			[{ name: "p", beforeTransition: (e) => e.type !== "goTo" }],
+		);
+		await flush();
+
+		const statusesBefore = { ...m.snapshot.stepStatuses };
+		await m.goTo("step2", { skipValidation: true }); // vetoed
+
+		expect(m.snapshot.currentStepId).toBe("step1"); // unchanged
+		expect(m.snapshot.stepStatuses.step1).not.toBe("visited"); // not flipped
+		expect(m.snapshot.stepStatuses).toEqual(statusesBefore); // statuses unchanged
 	});
 
 	it("beforeTransition veto on goPrevious leaves stepHistory and current step unchanged", async () => {
