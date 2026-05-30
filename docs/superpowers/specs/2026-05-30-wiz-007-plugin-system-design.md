@@ -37,20 +37,20 @@ interface TransitionEvent<TData> {
   type: "next" | "previous" | "goTo";
   fromStepId: StepId;
   toStepId: StepId;
-  data: TData;
+  data: DeepReadonly<TData>;
   timestamp: number;
 }
 
 interface ErrorContext<TData> {
   stepId: StepId;
   phase: "validation" | "transition" | "lifecycle" | "submit";
-  data: TData;
+  data: DeepReadonly<TData>;
 }
 
 // Read-only view passed to onInit so plugins can inspect but not mutate.
 interface WizardMachineReadonly<TData> {
-  readonly snapshot: WizardState<TData>;
-  readonly currentStep: WizardStepDefinition<TData>;
+  readonly snapshot: DeepReadonly<WizardState<TData>>;
+  readonly currentStep: DeepReadonly<WizardStepDefinition<TData>>;
   getStepStatus(stepId: StepId): StepStatus;
 }
 
@@ -68,6 +68,8 @@ interface WizardPlugin<TData = unknown> {
 
 `onDataChange` is intentionally NOT included (deferred to WIZ-010).
 
+**Immutability contract.** Hook payloads (`data`, `snapshot`, `currentStep`) are typed with a `DeepReadonly<T>` helper — a recursive `readonly` mapped type added to `packages/core/src/plugins/types.ts`. This is a **compile-time** guard with zero runtime cost: the values are the machine's live references, NOT clones (deep-cloning on every transition would be too costly on the hot path). `WizardMachine` stays the single state-mutation path; plugins are trusted code and MUST NOT mutate these payloads — TypeScript flags mutation attempts via the `readonly` typing. (Dev-mode `Object.freeze` is possible future hardening; YAGNI for now.)
+
 ## 4. Registration API
 
 New methods on `WizardMachine<TData>`:
@@ -79,8 +81,8 @@ destroy(): Promise<void>;                  // calls destroy() on all plugins in 
 ```
 
 - Plugins are stored in an **ordered list** (registration order). All hook dispatch follows registration order, EXCEPT `destroy`, which runs in reverse (symmetric teardown).
-- The machine constructor gains an optional **5th positional argument** `plugins?: WizardPlugin<TData>[]` (registered in array order during construction). The three current call sites (`wizard-provider.tsx`, `use-wizard.tsx`, `vue/use-wizard.ts`) all pass exactly 4 args, so this is non-breaking. Each plugin's `onInit` fires right after the machine's initial state is seeded.
-- `use()` is allowed after construction. If the machine is already initialized, the newly added plugin's `onInit` is invoked immediately.
+- The machine constructor gains an optional **5th positional argument** `plugins?: WizardPlugin<TData>[]` (registered in array order during construction). The three current call sites (`wizard-provider.tsx`, `use-wizard.tsx`, `vue/use-wizard.ts`) all pass exactly 4 args, so this is non-breaking. Each plugin's `onInit` fires (fire-and-forget — see §5) right after the machine's initial state is seeded.
+- `use()` is allowed after construction and stays synchronous (returns `this`). If the machine is already initialized, the newly added plugin's `onInit` is invoked immediately (fire-and-forget — see §5).
 - Duplicate `name` on `use()` throws `WizardConfigurationError`.
 
 ## 5. Hook Dispatch Points & Ordering
@@ -94,7 +96,7 @@ The machine calls into the `PluginHost` at these points:
 ### `beforeTransition` (veto-capable)
 - Fires inside `navigateToStep()` at the very top, BEFORE `onLeave` and the state write, where both `fromStepId` (`currentStep.id`) and `toStepId` are known.
 - Dispatched in registration order, **awaited sequentially**.
-- If any plugin returns `false` → **silent cancel**: no leave/enter, no state write, no `onStateChange`, no `afterTransition`. `goTo` propagates this as `return false`; `goNext`/`goPrevious` resolve as no-ops.
+- If any plugin returns `false` → **silent cancel**: no leave/enter, no state write, no `onStateChange`, no `afterTransition`. All three nav methods (`goNext`/`goPrevious`/`goTo`) resolve as no-ops with no return-type change (`goTo` stays `Promise<void>`).
 - If a plugin **throws** → abort the transition and route through `handleError` with `phase: "transition"`, then rethrow (consistent with existing nav-method behavior).
 - After the awaited dispatch, an `isTransitionStale()` check runs before proceeding (a plugin may have awaited while `reset`/`cancel` interrupted).
 - Fires regardless of `skipLifecycle`.
@@ -115,6 +117,7 @@ The machine calls into the `PluginHost` at these points:
 
 ### `onInit`
 - After initial state seeding (constructor plugins) or immediately on late `use()`.
+- **`onInit` is dispatched fire-and-forget — NOT awaited.** `use()` and the constructor stay synchronous and chainable (consistent with the machine's existing non-blocking `initializeFirstStep()`). A rejected `onInit` promise is caught and routed to `onError`. Consequence: a plugin's other hooks (e.g. `beforeTransition`) may fire before a slow async `onInit` resolves — plugins MUST NOT assume `onInit` has finished before their first transition hook, and should gate their own readiness internally if they need async setup.
 
 ### `destroy`
 - Reverse registration order, isolated, on `machine.destroy()` and (for one plugin) `removePlugin()`.
@@ -158,7 +161,7 @@ A `beforeTransition` returning `false` is a **silent cancel** (normal control-fl
 `plugins?: WizardPlugin<TData>[]` is added at each layer, and an explicit teardown path is **added** (it does not exist today):
 
 - **`@gooonzick/wizard-state` manager:** the manager does NOT construct the machine — its constructor is `(machine, initialStepId)`. It only gains a new **`destroy()`** method that calls `machine.destroy()`. (The manager currently has NO dispose/teardown method — this is new.) `plugins` is therefore threaded at the React/Vue call sites that build the machine, not through the manager.
-- **React (`useWizard`, `WizardProvider`):** options type gains `plugins`, passed as the new 5th arg where these files call `new WizardMachine(...)` (`use-wizard.tsx`, `wizard-provider.tsx`). Plugins are **reference-stable** (read once at machine creation, like `definition`/`initialData`), NOT reactive — document that plugins must be defined outside render or memoized. **A new `useEffect(() => () => manager.destroy(), [manager])` cleanup is added** in both files. (Today neither file has any `useEffect`/cleanup, so the manager is never torn down — this cleanup must be created.)
+- **React (`useWizard`, `WizardProvider`):** options type gains `plugins`, passed as the new 5th arg where these files call `new WizardMachine(...)` (`use-wizard.tsx`, `wizard-provider.tsx`). Plugins are **reference-stable** (read once at machine creation, like `definition`/`initialData`), NOT reactive — document that plugins must be defined outside render or memoized. **A new `useEffect(() => () => { void manager.destroy(); }, [manager])` cleanup is added** in both files — the cleanup returns `void` and deliberately does NOT await `destroy()`'s `Promise<void>` (React cleanup functions must be synchronous). `manager.destroy()` handles its own plugin-`destroy` rejections internally (isolated, routed to `onError`/`console.error`), so the fire-and-forget call is safe. (Today neither file has any `useEffect`/cleanup, so the manager is never torn down — this cleanup must be created.)
 - **Vue (`useWizard`, `wizard-provider`):** options type gains `plugins`, passed as the new 5th arg where `new WizardMachine(...)` is called. Vue already has an `onScopeDispose` block (it stops watchers / unsubscribes); **add `manager.destroy()` into that existing block** (do not add a second `onScopeDispose`).
 
 No new public components — additive option plus the new (internal) teardown wiring.
