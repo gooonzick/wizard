@@ -503,3 +503,122 @@ describe("WizardMachine plugin onError", () => {
 		spy.mockRestore();
 	});
 });
+
+describe("WizardMachine onComplete / onReset boundaries", () => {
+	it("fires onComplete (not before/afterTransition) on completion", async () => {
+		const before = vi.fn();
+		const after = vi.fn();
+		const onComplete = vi.fn();
+		const m = new WizardMachine<SimpleData>(
+			createSimpleLinearDefinition(),
+			{},
+			initial,
+			{},
+			[
+				{
+					name: "p",
+					beforeTransition: before,
+					afterTransition: after,
+					onComplete,
+				},
+			],
+		);
+		await m.goNext(); // step1 -> step2
+		await m.goNext(); // step2 -> step3
+		await m.goNext(); // step3 -> complete
+		expect(m.snapshot.isCompleted).toBe(true);
+		expect(onComplete).toHaveBeenCalledTimes(1);
+		expect(onComplete).toHaveBeenCalledWith(
+			expect.objectContaining({ name: "a" }),
+		);
+		// 2 real transitions fired before/after; the final goNext completes (no transition).
+		expect(before).toHaveBeenCalledTimes(2);
+		expect(after).toHaveBeenCalledTimes(2);
+	});
+
+	it("fires onReset (not before/afterTransition) on reset() and cancel()", async () => {
+		const before = vi.fn();
+		const after = vi.fn();
+		const onReset = vi.fn();
+		const m = new WizardMachine<SimpleData>(
+			createSimpleLinearDefinition(),
+			{},
+			initial,
+			{},
+			[
+				{
+					name: "p",
+					beforeTransition: before,
+					afterTransition: after,
+					onReset,
+				},
+			],
+		);
+		await m.goNext();
+		before.mockClear();
+		after.mockClear();
+		m.reset();
+		await m.cancel();
+		await flush();
+		expect(onReset).toHaveBeenCalledTimes(2); // reset() + cancel(->reset())
+		expect(before).not.toHaveBeenCalled();
+		expect(after).not.toHaveBeenCalled();
+	});
+
+	it("a throwing onComplete is isolated — completion still occurs and onError fires with phase 'lifecycle'", async () => {
+		const onError = vi.fn();
+		const boom = new Error("onComplete-threw");
+		const m = new WizardMachine<SimpleData>(
+			createSimpleLinearDefinition(),
+			{},
+			initial,
+			{},
+			[
+				{
+					name: "p",
+					onComplete: () => {
+						throw boom;
+					},
+					onError,
+				},
+			],
+		);
+		await m.goNext();
+		await m.goNext();
+		await m.goNext(); // triggers complete()
+		await flush();
+		expect(m.snapshot.isCompleted).toBe(true);
+		expect(onError).toHaveBeenCalledTimes(1);
+		const [err, ctx] = onError.mock.calls[0];
+		expect(err).toBe(boom);
+		expect(ctx).toMatchObject({ phase: "lifecycle" });
+	});
+
+	it("a throwing onReset is isolated — reset still occurs and onError fires with phase 'lifecycle'", async () => {
+		const onError = vi.fn();
+		const boom = new Error("onReset-threw");
+		const m = new WizardMachine<SimpleData>(
+			createSimpleLinearDefinition(),
+			{},
+			initial,
+			{},
+			[
+				{
+					name: "p",
+					onReset: () => {
+						throw boom;
+					},
+					onError,
+				},
+			],
+		);
+		await m.goNext();
+		m.reset();
+		await flush();
+		expect(m.snapshot.isCompleted).toBe(false);
+		expect(onError).toHaveBeenCalledTimes(1);
+		const [err, ctx] = onError.mock.calls[0];
+		expect(err).toBe(boom);
+		expect(ctx).toMatchObject({ phase: "lifecycle" });
+	});
+});

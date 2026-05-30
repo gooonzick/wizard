@@ -165,8 +165,11 @@ export class WizardMachine<T extends WizardData> {
 		this.stepHistory.push(definition.initialStepId);
 
 		// WIZ-007: plugin host + readonly facade. The host's error reporter routes
-		// isolated hook throws through handleError (phase defaults to "transition").
-		this.pluginHost = new PluginHost<T>((err) => this.handleError(err));
+		// isolated hook throws through handleError; phase is passed through so
+		// lifecycle hooks (onComplete, onReset, destroy) report as "lifecycle".
+		this.pluginHost = new PluginHost<T>((err, phase) =>
+			this.handleError(err, phase),
+		);
 		// Object literal getters cannot use the outer `this`, so capture it in
 		// `machineRef`.
 		const machineRef = this;
@@ -967,6 +970,9 @@ export class WizardMachine<T extends WizardData> {
 
 		this.notifyStateChange();
 		this.events.onReset?.();
+		// WIZ-007: dispatch plugin onReset (isolated). Fires for reset() and, via
+		// cancel()'s implicit reset(), for cancel() too. Do NOT dispatch in cancel().
+		void this.pluginHost.dispatchReset();
 		this.debug(`Wizard reset to initial step: ${initialStepId}`);
 
 		// Re-fire onEnter for the initial step (fire-and-forget, mirrors constructor).
@@ -1028,6 +1034,9 @@ export class WizardMachine<T extends WizardData> {
 		this.events.onComplete?.(this.state.data);
 		this.debug("Wizard completed");
 		this.notifyStateChange();
+
+		// WIZ-007: dispatch plugin onComplete (isolated), after definition/events.
+		void this.pluginHost.dispatchComplete(this.state.data);
 	}
 
 	/**
