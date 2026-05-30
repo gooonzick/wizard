@@ -158,7 +158,7 @@ Plugins are automatically destroyed via `onScopeDispose` when the component scop
 | Hook | When it fires | Can veto? | Error handling |
 |---|---|---|---|
 | `onInit` | After machine state is seeded (fire-and-forget) | No | Isolated — logged, does not throw to callers |
-| `beforeTransition` | Before every `goNext` / `goPrevious` / `goTo` (incl. `skipLifecycle`) | **Yes** — return `false` | Isolated |
+| `beforeTransition` | Before every `goNext` / `goPrevious` / `goTo` (incl. `skipLifecycle`) | **Yes** — return `false` | Sequential — a throw aborts the transition and rethrows to the caller (`goNext`/`goPrevious`/`goTo` reject); reported once via `onError` with phase `"transition"` |
 | `afterTransition` | After the transition succeeds | No | Isolated |
 | `onError` | When any hook or validation throws | No | Single reporter — fires **exactly once** per failure |
 | `onComplete` | When the wizard completes | No | Isolated |
@@ -185,7 +185,7 @@ A.afterTransition → B.afterTransition
 
 ### Veto Semantics
 
-If `beforeTransition` returns `false`, the transition is **silently cancelled** — no error is thrown, no `afterTransition` fires. The wizard remains on the current step. This is a no-op from the user's perspective.
+If `beforeTransition` returns `false`, the transition is **silently cancelled** — no error is thrown, no `afterTransition` fires. The wizard remains on the current step. This is a no-op from the user's perspective. Note that the navigation method still resolves normally: `await goTo(...)` (and `goNext`/`goPrevious`) returns `Promise<void>` and resolves rather than rejects on a veto, so callers awaiting the call will not see a rejection.
 
 ### Error Semantics — Exactly Once
 
