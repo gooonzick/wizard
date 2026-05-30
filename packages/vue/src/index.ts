@@ -4,6 +4,7 @@ export type {
 	WizardProgress,
 	WizardSerializedState,
 } from "@gooonzick/wizard-core";
+export { WizardRestoreError } from "@gooonzick/wizard-core";
 export {
 	type LoadingState,
 	type NavigationState,
