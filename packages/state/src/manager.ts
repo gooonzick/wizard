@@ -347,6 +347,16 @@ export class WizardStateManager<T extends WizardData> {
 	}
 
 	/**
+	 * Tears down the wizard: delegates to the machine's destroy(), which runs
+	 * every plugin's destroy() hook in reverse registration order. The machine
+	 * isolates plugin-destroy rejections internally (routed to onError /
+	 * console.error), so callers may fire-and-forget the returned promise.
+	 */
+	async destroy(): Promise<void> {
+		await this.machine.destroy();
+	}
+
+	/**
 	 * Reset the wizard to its initial state.
 	 *
 	 * Sets the loading flags + notifies "loading", calls the machine's
