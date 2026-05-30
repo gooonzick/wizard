@@ -33,6 +33,7 @@
 | Progress API (WIZ-004)                                | ✅     | `core`  |
 | Reset / Cancel (WIZ-005)                              | ✅     | `core`  |
 | State Persistence (WIZ-006)                           | ✅     | `core`  |
+| Plugin System (WIZ-007)                               | ✅     | `core`  |
 
 ### Architectural Decisions
 
@@ -62,7 +63,7 @@
 | **Progress API**          | ✅                 | ❌               | ❌                | ❌          | ❌          | ❌           | ❌             | ✅          | ❌       | ✅                 | ❌           |
 | **Reset / Cancel**        | ❌                 | ❌               | ❌                | ❌          | ❌          | ✅           | ✅             | ✅          | ✅       | ❌                 | ❌           |
 | **State persistence**     | ✅                 | ❌               | ❌                | ❌          | ❌          | ✅ persist   | ✅ sessions    | ✅          | ❌       | ✅ server          | ❌           |
-| **Middleware / plugins**  | ❌                 | ❌               | ❌                | ❌          | ❌          | ✅ actions   | ✅             | ❌          | ❌       | ❌                 | ❌           |
+| **Middleware / plugins**  | ✅ WIZ-007         | ❌               | ❌                | ❌          | ❌          | ✅ actions   | ✅             | ❌          | ❌       | ❌                 | ❌           |
 | **Router integration**    | ❌                 | ❌               | ❌                | ❌          | ✅          | ❌           | ❌             | ❌          | ❌       | ❌                 | ✅           |
 | **Sub-wizards**           | ❌                 | ❌               | ❌                | ✅ nested   | ❌          | ✅ spawn     | ✅             | ✅ pages    | ❌       | ❌                 | ❌           |
 | **Validate all steps**    | ❌                 | ❌               | ❌                | ❌          | ❌          | ❌           | ❌             | ✅          | ❌       | ❌                 | ❌           |
@@ -483,8 +484,8 @@ The following from the original proposal were NOT implemented:
 
 #### WIZ-007: Middleware / Plugin System
 
+**Status:** ✅ DONE
 **Priority:** 🟡 High
-**Effort:** M (4–6 hours)
 **Package:** `@gooonzick/wizard-core`
 
 ##### Problem
@@ -495,37 +496,38 @@ Common cross-cutting concerns — analytics, auto-save, logging, error reporting
 
 A plugin system with hooks at the `WizardMachine` level, allowing global interception of all transitions.
 
-##### API
+##### Shipped API
 
 ```typescript
 interface WizardPlugin<TData = unknown> {
-  name: string;
+  name: string; // unique; used by removePlugin
 
-  // Called when the machine is initialized
+  // Called when the machine is initialized (fire-and-forget).
   onInit?: (machine: WizardMachineReadonly<TData>) => void | Promise<void>;
 
-  // Before a transition. Can return false to cancel it.
+  // Before a transition. Return `false` to veto (silent cancel).
+  // Note: data and event payloads are DeepReadonly<TData>.
   beforeTransition?: (
     event: TransitionEvent<TData>,
-  ) => boolean | Promise<boolean>;
+  ) => boolean | undefined | Promise<boolean | undefined>;
 
   // After a successful transition.
   afterTransition?: (event: TransitionEvent<TData>) => void | Promise<void>;
 
   // On error in any lifecycle hook or validation.
+  // Receives WizardError | Error (not WizardError-only as originally specced).
   onError?: (
-    error: WizardError,
-    context: ErrorContext<TData>,
+    error: WizardError | Error,
+    ctx: ErrorContext<TData>,
   ) => void | Promise<void>;
 
-  // When the wizard completes.
-  onComplete?: (data: TData) => void | Promise<void>;
+  // When the wizard completes. Data is DeepReadonly<TData>.
+  onComplete?: (data: DeepReadonly<TData>) => void | Promise<void>;
 
   // On reset/cancel.
   onReset?: () => void | Promise<void>;
 
-  // On data update.
-  onDataChange?: (prevData: TData, nextData: TData) => void | Promise<void>;
+  // NOTE: onDataChange is NOT included — deferred to WIZ-010.
 
   // Cleanup when the machine is destroyed.
   destroy?: () => void | Promise<void>;
@@ -535,72 +537,70 @@ interface TransitionEvent<TData> {
   type: "next" | "previous" | "goTo";
   fromStepId: StepId;
   toStepId: StepId;
-  data: TData;
+  data: DeepReadonly<TData>; // live reference, not cloned
   timestamp: number;
 }
 
 interface ErrorContext<TData> {
   stepId: StepId;
   phase: "validation" | "transition" | "lifecycle" | "submit";
-  data: TData;
+  data: DeepReadonly<TData>;
 }
 
-// Registration
+// Registration — machine-level use() (chainable), NOT builder-level
 class WizardMachine<TData> {
-  use(plugin: WizardPlugin<TData>): void; // add plugin
-  removePlugin(name: string): void; // remove by name
-}
+  constructor(
+    definition: WizardDefinition<TData>,
+    context: WizardContext,
+    initialData: TData,
+    events?: WizardEvents<TData>,
+    plugins?: WizardPlugin<TData>[], // 5th arg (optional)
+  );
 
-// Builder
-createWizard<TData>("signup")
-  .use(analyticsPlugin({ trackingId: "UA-XXX" }))
-  .use(autoSavePlugin({ storage: localStorage, key: "signup" }))
-  .use(loggingPlugin({ level: "debug" }))
-  .build();
+  use(plugin: WizardPlugin<TData>): this; // chainable, throws on duplicate name
+  removePlugin(name: string): Promise<void>; // awaits destroy(), then removes
+  destroy(): Promise<void>; // all plugins in REVERSE order
+}
 ```
+
+> **Note:** The builder-level `.use()` from the original spec was NOT implemented. Registration goes through the constructor's 5th argument or `machine.use()` after construction. `onDataChange` was also not implemented — it is deferred to WIZ-010.
 
 ##### Execution Order
 
-Plugins are executed in registration order:
+Plugins fire in registration order:
 
 1. Plugin A `beforeTransition` → Plugin B `beforeTransition` → ...
-2. If any returned `false` → transition is cancelled, `afterTransition` is not called
+2. If any returned `false` → transition is silently cancelled (no error, no `afterTransition`)
 3. Transition executes
 4. Plugin A `afterTransition` → Plugin B `afterTransition` → ...
 
-##### Built-in Plugins (future separate packages)
+`destroy` fires in **reverse** registration order.
+
+##### Firing Conditions
+
+- `before/afterTransition` fire on `goNext`, `goPrevious`, and `goTo` — including `goTo` with `skipLifecycle: true`.
+- `before/afterTransition` do **not** fire on `complete`, `reset`, or `cancel`.
+- `onError` fires **exactly once** per error regardless of source.
+
+##### Shipped Built-in Plugin
 
 ```typescript
-// Example: analytics plugin
-function createAnalyticsPlugin<TData>(config: {
-  onStepView: (stepId: string, data: TData) => void;
-  onStepComplete: (stepId: string, duration: number) => void;
-  onWizardComplete: (data: TData, totalDuration: number) => void;
-}): WizardPlugin<TData>;
-
-// Example: auto-save plugin
-function createAutoSavePlugin<TData>(config: {
-  adapter: WizardPersistenceAdapter;
-  key: string;
-  debounceMs?: number;
-}): WizardPlugin<TData>;
-
-// Example: logging plugin
+// createLoggingPlugin — ships in @gooonzick/wizard-core (main barrel + /plugins subpath)
 function createLoggingPlugin<TData>(config?: {
-  level?: "debug" | "info" | "warn";
-  logger?: Pick<Console, "log" | "warn" | "debug">;
+  level?: "debug" | "info" | "warn"; // default: "debug"
+  logger?: Pick<Console, "log" | "warn" | "debug">; // default: console
 }): WizardPlugin<TData>;
 ```
 
+Built-in analytics and auto-save plugins remain future work (WIZ-016).
+
+##### React / Vue
+
+Both `useWizard` and `<WizardProvider>` accept a `plugins?: WizardPlugin<T>[]` option. The array is read once at creation (not reactive). Plugins are automatically destroyed on component unmount.
+
 ##### Tests
 
-- Plugin beforeTransition is called before a transition
-- Plugin beforeTransition returns false — transition cancelled
-- Plugin afterTransition is called after a transition
-- Multiple plugins execute in registration order
-- onError is called on validation error
-- removePlugin removes by name
-- destroy is called when machine is destroyed
+All hook dispatch, veto, ordering, error isolation, busy-guard re-entrancy, and destroy ordering are covered in `packages/core/tests/plugins.test.ts`.
 
 ---
 
@@ -818,6 +818,10 @@ When `updateData(updater)` is called → shallow diff of keys between `prevData`
 - updateData calls onDataChange with the diff
 - watchField calls callback only when the specific field changes
 - watchField returns unsubscribe, which works
+
+##### Note: Plugin Integration (non-breaking)
+
+WIZ-010 should also add `onDataChange` to the `WizardPlugin` interface so plugins can react to data mutations without subscribing to the full `onStateChange`. This is an additive, non-breaking extension of the plugin API shipped in WIZ-007. The existing plugin hook set intentionally omitted `onDataChange` pending this work.
 
 ---
 

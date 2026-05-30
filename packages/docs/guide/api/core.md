@@ -440,6 +440,14 @@ class WizardMachine<T> {
   getPreviousStepId(): Promise<StepId | null>;
   canNavigateToStep(stepId: StepId): Promise<boolean>;
   getAvailableSteps(): Promise<StepId[]>; // Note: async
+
+  // Plugin registration (WIZ-007)
+  /** Chainable. Throws WizardConfigurationError on duplicate name. */
+  use(plugin: WizardPlugin<T>): this;
+  /** Runs the plugin's destroy(), then removes it. No-op if absent. */
+  removePlugin(name: string): Promise<void>;
+  /** Runs every plugin's destroy() in reverse registration order. */
+  destroy(): Promise<void>;
 }
 ```
 
@@ -450,7 +458,8 @@ constructor(
   definition: WizardDefinition<T>,
   context: WizardContext = {},
   initialData: T,
-  events?: WizardEvents<T>
+  events?: WizardEvents<T>,
+  plugins?: WizardPlugin<T>[]
 )
 ```
 
@@ -845,4 +854,98 @@ const machine = new WizardMachine(definition, context, initialData, {
     // Cleanup, redirect, etc.
   },
 });
+```
+
+---
+
+## Plugin Types (WIZ-007)
+
+See the [Plugins guide](/guide/plugins) for full usage documentation.
+
+### `WizardPlugin<TData>`
+
+```ts
+interface WizardPlugin<TData = unknown> {
+  name: string;
+  onInit?(machine: WizardMachineReadonly<TData>): void | Promise<void>;
+  /** Return `false` to veto the transition (silent cancel). */
+  beforeTransition?(
+    e: TransitionEvent<TData>,
+  ): boolean | undefined | Promise<boolean | undefined>;
+  afterTransition?(e: TransitionEvent<TData>): void | Promise<void>;
+  onError?(
+    error: WizardError | Error,
+    ctx: ErrorContext<TData>,
+  ): void | Promise<void>;
+  onComplete?(data: DeepReadonly<TData>): void | Promise<void>;
+  onReset?(): void | Promise<void>;
+  destroy?(): void | Promise<void>;
+}
+```
+
+### `TransitionEvent<TData>`
+
+Payload passed to `beforeTransition` and `afterTransition`.
+
+```ts
+interface TransitionEvent<TData> {
+  type: "next" | "previous" | "goTo";
+  fromStepId: StepId;
+  toStepId: StepId;
+  data: DeepReadonly<TData>;
+  timestamp: number;
+}
+```
+
+### `ErrorContext<TData>`
+
+Context passed to `onError`.
+
+```ts
+interface ErrorContext<TData> {
+  stepId: StepId;
+  phase: "validation" | "transition" | "lifecycle" | "submit";
+  data: DeepReadonly<TData>;
+}
+```
+
+### `WizardMachineReadonly<TData>`
+
+Read-only view passed to `onInit`.
+
+```ts
+interface WizardMachineReadonly<TData> {
+  readonly snapshot: DeepReadonly<WizardState<TData>>;
+  readonly currentStep: DeepReadonly<WizardStepDefinition<TData>>;
+  getStepStatus(stepId: StepId): StepStatus;
+}
+```
+
+### `DeepReadonly<T>`
+
+Compile-time recursive readonly mapped type applied to all plugin hook payloads. Zero runtime cost — payloads are not cloned. Functions are left untouched.
+
+```ts
+type DeepReadonly<T> =
+  T extends (...args: never[]) => unknown
+    ? T
+    : T extends ReadonlyArray<infer U>
+      ? ReadonlyArray<DeepReadonly<U>>
+      : T extends object
+        ? { readonly [K in keyof T]: DeepReadonly<T[K]> }
+        : T;
+```
+
+### `createLoggingPlugin`
+
+Reference plugin that logs every hook. Never vetoes, never throws.
+
+```ts
+import { createLoggingPlugin } from "@gooonzick/wizard-core";
+// or: import { createLoggingPlugin } from "@gooonzick/wizard-core/plugins";
+
+function createLoggingPlugin<TData>(config?: {
+  level?: "debug" | "info" | "warn"; // default: "debug"
+  logger?: Pick<Console, "log" | "warn" | "debug">; // default: console
+}): WizardPlugin<TData>;
 ```

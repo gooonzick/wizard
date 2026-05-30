@@ -500,6 +500,14 @@ class WizardMachine<T> {
   getPreviousStepId(): Promise<StepId | null>;
   canNavigateToStep(stepId: StepId): Promise<boolean>;
   getAvailableSteps(): Promise<StepId[]>; // Note: async
+
+  // Plugin registration
+  /** Chainable. Throws WizardConfigurationError on duplicate name. */
+  use(plugin: WizardPlugin<T>): this;
+  /** Runs the plugin's destroy(), then removes it. No-op if absent. */
+  removePlugin(name: string): Promise<void>;
+  /** Runs every plugin's destroy() in reverse registration order. */
+  destroy(): Promise<void>;
 }
 ```
 
@@ -510,7 +518,8 @@ constructor(
   definition: WizardDefinition<T>,
   context: WizardContext = {},
   initialData: T,
-  events?: WizardEvents<T>
+  events?: WizardEvents<T>,
+  plugins?: WizardPlugin<T>[]
 )
 ```
 
@@ -1045,4 +1054,89 @@ const machine = new WizardMachine(definition, context, initialData, {
     // Cleanup, redirect, etc.
   },
 });
+```
+
+---
+
+## Plugins / Middleware
+
+Plugins intercept wizard transitions and lifecycle events globally, across every step. See the full guide at `packages/docs/guide/plugins.md` in the VitePress docs site.
+
+### `WizardPlugin<TData>`
+
+```typescript
+interface WizardPlugin<TData = unknown> {
+  name: string; // unique; used by removePlugin
+  onInit?(machine: WizardMachineReadonly<TData>): void | Promise<void>;
+  /** Return `false` to veto the transition (silent cancel). */
+  beforeTransition?(
+    e: TransitionEvent<TData>,
+  ): boolean | undefined | Promise<boolean | undefined>;
+  afterTransition?(e: TransitionEvent<TData>): void | Promise<void>;
+  onError?(
+    error: WizardError | Error,
+    ctx: ErrorContext<TData>,
+  ): void | Promise<void>;
+  onComplete?(data: DeepReadonly<TData>): void | Promise<void>;
+  onReset?(): void | Promise<void>;
+  destroy?(): void | Promise<void>;
+}
+```
+
+### `TransitionEvent<TData>`
+
+```typescript
+interface TransitionEvent<TData> {
+  type: "next" | "previous" | "goTo";
+  fromStepId: StepId;
+  toStepId: StepId;
+  data: DeepReadonly<TData>;
+  timestamp: number;
+}
+```
+
+### `ErrorContext<TData>`
+
+```typescript
+interface ErrorContext<TData> {
+  stepId: StepId;
+  phase: "validation" | "transition" | "lifecycle" | "submit";
+  data: DeepReadonly<TData>;
+}
+```
+
+### `WizardMachineReadonly<TData>`
+
+```typescript
+interface WizardMachineReadonly<TData> {
+  readonly snapshot: DeepReadonly<WizardState<TData>>;
+  readonly currentStep: DeepReadonly<WizardStepDefinition<TData>>;
+  getStepStatus(stepId: StepId): StepStatus;
+}
+```
+
+### `createLoggingPlugin`
+
+Reference plugin — logs every hook, never vetoes.
+
+```typescript
+import { createLoggingPlugin } from "@gooonzick/wizard-core";
+// or: import { createLoggingPlugin } from "@gooonzick/wizard-core/plugins";
+
+createLoggingPlugin<TData>(config?: {
+  level?: "debug" | "info" | "warn"; // default: "debug"
+  logger?: Pick<Console, "log" | "warn" | "debug">; // default: console
+}): WizardPlugin<TData>
+```
+
+### Import Paths
+
+```typescript
+// Main barrel:
+import { createLoggingPlugin } from "@gooonzick/wizard-core";
+import type { WizardPlugin, TransitionEvent, ErrorContext } from "@gooonzick/wizard-core";
+
+// Dedicated subpath:
+import { createLoggingPlugin } from "@gooonzick/wizard-core/plugins";
+import type { WizardPlugin, TransitionEvent, ErrorContext, WizardMachineReadonly, DeepReadonly } from "@gooonzick/wizard-core/plugins";
 ```
