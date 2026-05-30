@@ -5,6 +5,8 @@ import {
 	WizardRestoreError,
 	WizardValidationError,
 } from "../errors";
+import { PluginHost } from "../plugins/plugin-host";
+import type { WizardMachineReadonly, WizardPlugin } from "../plugins/types";
 import type {
 	StepId,
 	ValidationResult,
@@ -111,12 +113,16 @@ export class WizardMachine<T extends WizardData> {
 	private cachedProgressVersion = -1;
 	/** Deep-cloned snapshot of the data used to seed `reset()`. */
 	private initialData: T;
+	// WIZ-007: plugin host and the read-only facade passed to plugin hooks.
+	private pluginHost!: PluginHost<T>;
+	private readonlyFacade!: WizardMachineReadonly<T>;
 
 	constructor(
 		definition: WizardDefinition<T>,
 		context: WizardContext,
 		initialData: T,
 		events?: WizardEvents<T>,
+		plugins?: WizardPlugin<T>[],
 	) {
 		this.definition = definition;
 		this.context = context;
@@ -140,8 +146,34 @@ export class WizardMachine<T extends WizardData> {
 		this.visitedSteps.add(definition.initialStepId);
 		this.stepHistory.push(definition.initialStepId);
 
+		// WIZ-007: plugin host + readonly facade. The host's error reporter routes
+		// isolated hook throws through handleError (phase defaults to "transition").
+		this.pluginHost = new PluginHost<T>((err) => this.handleError(err));
+		// Object literal getters cannot use the outer `this`, so capture it in
+		// `machineRef`.
+		const machineRef = this;
+		this.readonlyFacade = {
+			get snapshot() {
+				return machineRef.snapshot as never;
+			},
+			get currentStep() {
+				return machineRef.currentStep as never;
+			},
+			getStepStatus: (stepId) => this.getStepStatus(stepId),
+		};
+		// Register constructor plugins in array order.
+		if (plugins) {
+			for (const plugin of plugins) {
+				this.pluginHost.add(plugin);
+			}
+		}
+
 		// Fire onStepEnter for initial step (async, non-blocking)
 		this.initializeFirstStep();
+
+		// WIZ-007: fire onInit for constructor plugins (fire-and-forget) right
+		// after initial state seeding.
+		this.pluginHost.dispatchInit(this.readonlyFacade);
 	}
 
 	/**
@@ -232,6 +264,31 @@ export class WizardMachine<T extends WizardData> {
 		// frozen (user data may legitimately be mutated / re-set via updateData).
 		Object.freeze(snapshot.stepStatuses);
 		return Object.freeze(snapshot);
+	}
+
+	/**
+	 * Registers a plugin (chainable). Throws WizardConfigurationError on a
+	 * duplicate name. The plugin's onInit fires immediately (fire-and-forget).
+	 */
+	use(plugin: WizardPlugin<T>): this {
+		this.pluginHost.add(plugin);
+		this.pluginHost.dispatchInitOne(plugin, this.readonlyFacade);
+		return this;
+	}
+
+	/**
+	 * Removes a plugin by name, invoking its destroy() first. No-op if absent.
+	 */
+	async removePlugin(name: string): Promise<void> {
+		await this.pluginHost.remove(name);
+	}
+
+	/**
+	 * Tears down the machine: runs every plugin's destroy() in REVERSE
+	 * registration order. Safe to call multiple times.
+	 */
+	async destroy(): Promise<void> {
+		await this.pluginHost.destroyAll();
 	}
 
 	/**
