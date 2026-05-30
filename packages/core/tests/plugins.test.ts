@@ -223,6 +223,51 @@ describe("WizardMachine before/afterTransition", () => {
 		expect(after).not.toHaveBeenCalled();
 	});
 
+	it("beforeTransition veto on goPrevious leaves stepHistory and current step unchanged", async () => {
+		// Allow forward moves, veto only backward ("previous") transitions.
+		const m = new WizardMachine<SimpleData>(
+			createSimpleLinearDefinition(),
+			{},
+			initial,
+			{},
+			[{ name: "p", beforeTransition: (e) => e.type !== "previous" }],
+		);
+		await flush();
+
+		await m.goNext(); // step1 -> step2
+		await m.goNext(); // step2 -> step3
+		expect(m.snapshot.currentStepId).toBe("step3");
+		const historyBefore = m.history; // ["step1","step2","step3"]
+		expect(historyBefore).toEqual(["step1", "step2", "step3"]);
+
+		await m.goPrevious(); // vetoed
+
+		expect(m.snapshot.currentStepId).toBe("step3"); // unchanged
+		expect(m.history).toEqual(historyBefore); // history NOT popped
+		expect(m.snapshot.stepStatuses.step3).toBe("active"); // not flipped to "visited"
+	});
+
+	it("beforeTransition veto on goBack leaves stepHistory unchanged", async () => {
+		const m = new WizardMachine<SimpleData>(
+			createSimpleLinearDefinition(),
+			{},
+			initial,
+			{},
+			[{ name: "p", beforeTransition: (e) => e.type !== "previous" }],
+		);
+		await flush();
+
+		await m.goNext();
+		await m.goNext();
+		const historyBefore = m.history;
+		expect(historyBefore).toEqual(["step1", "step2", "step3"]);
+
+		await m.goBack(2); // vetoed
+
+		expect(m.snapshot.currentStepId).toBe("step3");
+		expect(m.history).toEqual(historyBefore); // both pops NOT applied
+	});
+
 	it("beforeTransition throwing aborts the transition, routes to onError + plugin onError (phase 'transition'), and rethrows", async () => {
 		const onError = vi.fn();
 		const pluginOnError = vi.fn();
