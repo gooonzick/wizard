@@ -8,6 +8,7 @@ import {
 import { PluginHost } from "../plugins/plugin-host";
 import type {
 	DeepReadonly,
+	ErrorContext,
 	WizardMachineReadonly,
 	WizardPlugin,
 } from "../plugins/types";
@@ -237,7 +238,7 @@ export class WizardMachine<T extends WizardData> {
 			// side effects reach subscribers (harmless when there are none yet).
 			this.notifyStateChange();
 		} catch (error) {
-			this.handleError(error);
+			this.handleError(error, "lifecycle");
 		}
 	}
 
@@ -435,7 +436,7 @@ export class WizardMachine<T extends WizardData> {
 
 			return result;
 		} catch (error) {
-			this.handleError(error);
+			this.handleError(error, "validation");
 			return { valid: false, errors: { general: "Validation error occurred" } };
 		}
 	}
@@ -496,7 +497,7 @@ export class WizardMachine<T extends WizardData> {
 				await this.complete();
 			}
 		} catch (error) {
-			this.handleError(error);
+			this.handleError(error, "submit");
 			throw error;
 		}
 	}
@@ -514,7 +515,9 @@ export class WizardMachine<T extends WizardData> {
 			const validationResult = await this.validate();
 			if (!validationResult.valid) {
 				this.setStepStatusInternal(this.state.currentStepId, "error");
-				throw new WizardValidationError(validationResult.errors || {});
+				const err = new WizardValidationError(validationResult.errors || {});
+				this.handleError(err, "validation");
+				throw err;
 			}
 
 			// Submit current step
@@ -676,7 +679,9 @@ export class WizardMachine<T extends WizardData> {
 			if (!skipValidation) {
 				const validationResult = await this.validate();
 				if (!validationResult.valid) {
-					throw new WizardValidationError(validationResult.errors || {});
+					const err = new WizardValidationError(validationResult.errors || {});
+					this.handleError(err, "validation");
+					throw err;
 				}
 			}
 
@@ -966,7 +971,7 @@ export class WizardMachine<T extends WizardData> {
 
 		// FIX 1: surface any handler error after the reset has run.
 		if (handlerError !== undefined) {
-			this.handleError(handlerError);
+			this.handleError(handlerError, "lifecycle");
 			throw handlerError;
 		}
 	}
@@ -1348,11 +1353,24 @@ export class WizardMachine<T extends WizardData> {
 	}
 
 	/**
-	 * Handles errors
+	 * Handles errors: wraps non-Errors, fires events.onError (unchanged signature),
+	 * then dispatches to plugin onError hooks with an ErrorContext (WIZ-007).
 	 */
-	private handleError(error: unknown): void {
+	private handleError(
+		error: unknown,
+		phase: ErrorContext<T>["phase"] = "transition",
+		stepId?: StepId,
+	): void {
 		const err = error instanceof Error ? error : new Error(String(error));
 		this.events.onError?.(err);
+		// WIZ-007: build the ErrorContext and dispatch to plugins (isolated; a
+		// throw inside a plugin's onError is swallowed by the host — no recursion).
+		const ctx: ErrorContext<T> = {
+			stepId: stepId ?? this.state.currentStepId,
+			phase,
+			data: this.state.data as never,
+		};
+		void this.pluginHost.dispatchError(err, ctx);
 	}
 
 	/**
@@ -1374,7 +1392,12 @@ export class WizardMachine<T extends WizardData> {
 		try {
 			return await operation();
 		} catch (error) {
-			this.handleError(error);
+			// A WizardValidationError was already reported (with phase "validation")
+			// and its step status set by the navigation method that threw it; do not
+			// re-report it here. All other errors are reported with the default phase.
+			if (!(error instanceof WizardValidationError)) {
+				this.handleError(error);
+			}
 			throw error;
 		} finally {
 			this.isTransitioning = false;

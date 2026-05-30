@@ -1,6 +1,6 @@
 import { describe, expect, expectTypeOf, it, test, vi } from "vitest";
 import type { WizardError } from "../src/errors";
-import { WizardConfigurationError } from "../src/errors";
+import { WizardConfigurationError, WizardValidationError } from "../src/errors";
 import { WizardMachine } from "../src/machine/wizard-machine";
 import type {
 	DeepReadonly,
@@ -10,7 +10,11 @@ import type {
 	WizardPlugin,
 } from "../src/plugins/types";
 import type { StepStatus } from "../src/types/step";
-import { createSimpleLinearDefinition, type SimpleData } from "./fixtures";
+import {
+	createSimpleLinearDefinition,
+	createValidatedDefinition,
+	type SimpleData,
+} from "./fixtures";
 
 const flush = () => new Promise((r) => setTimeout(r, 0));
 const initial: SimpleData = { name: "a", email: "a@x.io" };
@@ -219,15 +223,14 @@ describe("WizardMachine before/afterTransition", () => {
 		expect(after).not.toHaveBeenCalled();
 	});
 
-	it("beforeTransition throwing aborts the transition, routes to onError, and rethrows", async () => {
+	it("beforeTransition throwing aborts the transition, routes to onError + plugin onError (phase 'transition'), and rethrows", async () => {
 		const onError = vi.fn();
+		const pluginOnError = vi.fn();
 		const boom = new Error("veto-throw");
 		const m = new WizardMachine<SimpleData>(
 			createSimpleLinearDefinition(),
 			{},
 			initial,
-			// NOTE: plugin onError dispatch + the `phase` arg arrive in Task 5.
-			// For now the wired reporter is `events.onError`; assert against it.
 			{ onError },
 			[
 				{
@@ -235,13 +238,24 @@ describe("WizardMachine before/afterTransition", () => {
 					beforeTransition: () => {
 						throw boom;
 					},
+					onError: pluginOnError,
 				},
 			],
 		);
 		await expect(m.goNext()).rejects.toBe(boom);
 		expect(m.snapshot.currentStepId).toBe("step1");
+		// events.onError reporter fires once (unchanged Task 4 behavior).
 		expect(onError).toHaveBeenCalledTimes(1);
 		expect(onError.mock.calls[0][0]).toBe(boom);
+		// Task 5: plugin onError fires EXACTLY once, via withTransition's catch,
+		// with the default phase "transition" (the beforeTransition-throw path
+		// does not self-report; withTransition is its single reporter).
+		expect(pluginOnError).toHaveBeenCalledTimes(1);
+		expect(pluginOnError.mock.calls[0][0]).toBe(boom);
+		expect(pluginOnError.mock.calls[0][1]).toMatchObject({
+			phase: "transition",
+			stepId: "step1",
+		});
 	});
 
 	it("afterTransition fires after the committed state change", async () => {
@@ -349,5 +363,64 @@ describe("WizardMachine before/afterTransition", () => {
 		);
 		await m.goNext();
 		expect((captured as { reason?: string })?.reason).toBe("busy");
+	});
+});
+
+describe("WizardMachine plugin onError", () => {
+	it("dispatches onError on a validation error with phase 'validation'", async () => {
+		const onError = vi.fn();
+		const m = new WizardMachine<SimpleData>(
+			createValidatedDefinition(),
+			{},
+			{ name: "", email: "" }, // invalid: name required on step1
+			{},
+			[{ name: "p", onError }],
+		);
+		await expect(m.goNext()).rejects.toBeTruthy();
+		// Exactly once — the goNext throw site reports with phase "validation";
+		// withTransition's catch skips the WizardValidationError.
+		expect(onError).toHaveBeenCalledTimes(1);
+		const [err, ctx] = onError.mock.calls.at(-1) ?? [];
+		expect(ctx).toMatchObject({ phase: "validation", stepId: "step1" });
+		expect(ctx.data).toBeDefined();
+		expect(err).toBeInstanceOf(WizardValidationError);
+	});
+
+	it("dispatches onError with phase 'validation' when goTo fails current-step validation", async () => {
+		const onError = vi.fn();
+		const m = new WizardMachine<SimpleData>(
+			createValidatedDefinition(),
+			{},
+			{ name: "", email: "" }, // invalid: current step1 fails validation
+			{},
+			[{ name: "p", onError }],
+		);
+		// goTo validates the CURRENT step before leaving; skipValidation defaults to false.
+		await expect(m.goTo("step2")).rejects.toBeTruthy();
+		expect(onError).toHaveBeenCalledTimes(1);
+		const ctx = onError.mock.calls.at(-1)?.[1];
+		expect(ctx).toMatchObject({ phase: "validation", stepId: "step1" });
+	});
+
+	it("a throw inside a plugin's onError is swallowed (no recursion)", async () => {
+		const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+		const m = new WizardMachine<SimpleData>(
+			createValidatedDefinition(),
+			{},
+			{ name: "", email: "" },
+			{},
+			[
+				{
+					name: "p",
+					onError: () => {
+						throw new Error("inside-onError");
+					},
+				},
+			],
+		);
+		await expect(m.goNext()).rejects.toBeTruthy();
+		// No infinite loop: console.error called a bounded number of times.
+		expect(spy).toHaveBeenCalled();
+		spy.mockRestore();
 	});
 });
