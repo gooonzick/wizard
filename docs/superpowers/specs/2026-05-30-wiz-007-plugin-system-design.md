@@ -59,7 +59,7 @@ interface WizardPlugin<TData = unknown> {
   onInit?(machine: WizardMachineReadonly<TData>): void | Promise<void>;
   beforeTransition?(e: TransitionEvent<TData>): boolean | void | Promise<boolean | void>; // return false to veto
   afterTransition?(e: TransitionEvent<TData>): void | Promise<void>;
-  onError?(error: WizardError, ctx: ErrorContext<TData>): void | Promise<void>;
+  onError?(error: WizardError | Error, ctx: ErrorContext<TData>): void | Promise<void>;
   onComplete?(data: TData): void | Promise<void>;
   onReset?(): void | Promise<void>;
   destroy?(): void | Promise<void>;
@@ -79,13 +79,17 @@ destroy(): Promise<void>;                  // calls destroy() on all plugins in 
 ```
 
 - Plugins are stored in an **ordered list** (registration order). All hook dispatch follows registration order, EXCEPT `destroy`, which runs in reverse (symmetric teardown).
-- The machine constructor gains an optional `plugins?: WizardPlugin<TData>[]` argument/option (registered in array order during construction). Each plugin's `onInit` fires right after the machine's initial state is seeded.
+- The machine constructor gains an optional **5th positional argument** `plugins?: WizardPlugin<TData>[]` (registered in array order during construction). The three current call sites (`wizard-provider.tsx`, `use-wizard.tsx`, `vue/use-wizard.ts`) all pass exactly 4 args, so this is non-breaking. Each plugin's `onInit` fires right after the machine's initial state is seeded.
 - `use()` is allowed after construction. If the machine is already initialized, the newly added plugin's `onInit` is invoked immediately.
 - Duplicate `name` on `use()` throws `WizardConfigurationError`.
 
 ## 5. Hook Dispatch Points & Ordering
 
-A new private helper class `PluginHost` (`packages/core/src/plugins/plugin-host.ts`) owns the plugin list and all dispatch logic, keeping `wizard-machine.ts` lean. The machine holds one `PluginHost` and calls into it at these points:
+A new private helper class `PluginHost` (`packages/core/src/plugins/plugin-host.ts`) owns the plugin list and all dispatch logic, keeping `wizard-machine.ts` lean. The machine holds one `PluginHost` and calls into it at these points. The `PluginHost` awaits async hooks itself (the existing `events.*` callbacks remain fire-and-forget as they are today).
+
+**`navigateToStep` signature change:** the private `navigateToStep` gains a `type: "next" | "previous" | "goTo"` parameter so `TransitionEvent.type` can be built; `goNext`/`goPrevious`/`goTo` each pass their corresponding type. `navigateToStep` is private/internal, so this is non-breaking.
+
+The machine calls into the `PluginHost` at these points:
 
 ### `beforeTransition` (veto-capable)
 - Fires inside `navigateToStep()` at the very top, BEFORE `onLeave` and the state write, where both `fromStepId` (`currentStep.id`) and `toStepId` are known.
@@ -97,6 +101,7 @@ A new private helper class `PluginHost` (`packages/core/src/plugins/plugin-host.
 
 ### `afterTransition`
 - Fires inside `navigateToStep()` AFTER the state write, `onEnter`, AND `notifyStateChange()` (so subscribers already observe the committed new state).
+- Fires ONLY when the transition actually committed — it is NOT dispatched after any `isTransitionStale()` early-return inside `navigateToStep` (a stale-aborted transition fires neither `notifyStateChange` nor `afterTransition`).
 - Registration order. Each plugin wrapped in try/catch → a throw routes to `onError` (`phase: "transition"`) and is isolated; remaining plugins still run; navigation already succeeded.
 
 ### `onComplete`
@@ -133,6 +138,8 @@ validate -> onSubmit -> status=completed -> resolveNext
 
 ## 6. Error Handling Policy
 
+**`handleError` is extended** from `handleError(error: unknown)` to `handleError(error: unknown, phase?: ErrorContext["phase"], stepId?: StepId)`. It builds an `ErrorContext` (`{ stepId: stepId ?? currentStepId, phase: phase ?? "transition", data }`) for plugin dispatch, and threads `phase` from each call site (validation / submit / lifecycle / transition); where the phase is unknown it defaults to `"transition"`. Because `handleError` may wrap a thrown non-Error as a plain `Error` (not a `WizardError`), the plugin `onError` param is typed `WizardError | Error`. The existing `events.onError` callback signature is unchanged.
+
 - `beforeTransition` throw → aborts the transition (same end state as a veto) AND routes through `handleError`/`onError` (`phase: "transition"`).
 - A throw in any non-blocking hook (`afterTransition`, `onComplete`, `onReset`, `onInit`, `destroy`) is caught, routed to `onError`, and does NOT crash the wizard or stop the remaining plugins.
 - A throw inside a plugin's `onError` is always caught and swallowed (at most `console.error`) — never re-routed (prevents infinite loops).
@@ -141,22 +148,30 @@ validate -> onSubmit -> status=completed -> resolveNext
 
 A `beforeTransition` returning `false` is a **silent cancel** (normal control-flow outcome, not an error):
 - No `onStateChange`, no `afterTransition`.
-- `goTo` returns `false`; `goNext`/`goPrevious` resolve without transitioning (current step unchanged).
+- All three nav methods resolve **without transitioning** and **without any return-type change** (current step unchanged) — this keeps the feature non-breaking. `goTo` currently returns `Promise<void>`; we do NOT change it to return a boolean. A veto simply no-ops the transition and the method resolves.
 - A plugin that wants to surface a reason can do so itself (set state / log), or escalate to an error by throwing.
+
+**Re-entrancy:** hooks run inside the `withTransition` critical section (`isTransitioning = true`), so a plugin that calls `goNext`/`goPrevious`/`goTo` synchronously from within a hook will hit the busy guard and throw `WizardNavigationError(reason: "busy")`. Plugins MUST NOT invoke navigation synchronously inside a hook; they should defer (e.g. via a microtask) if they need to navigate. This is documented and covered by a test.
 
 ## 8. React / Vue / State Wiring
 
-`plugins?: WizardPlugin<TData>[]` is added at each layer:
+`plugins?: WizardPlugin<TData>[]` is added at each layer, and an explicit teardown path is **added** (it does not exist today):
 
-- **`@gooonzick/wizard-state` manager:** options type gains `plugins`, passed straight into the `WizardMachine` constructor. The manager calls `machine.destroy()` in its existing teardown/dispose path so plugin `destroy()` runs when the manager is torn down.
-- **React (`useWizard`, `WizardProvider`):** options type gains `plugins`. Plugins are treated as **reference-stable** (read once at machine creation, like `definition`/`initialData`), NOT reactive. Document that plugins must be defined outside render or memoized. `destroy()` runs via the existing React effect cleanup.
-- **Vue (`useWizard`, `wizard-provider`):** same `plugins` option, passed at setup time. `destroy()` runs via the existing `onScopeDispose` cleanup.
+- **`@gooonzick/wizard-state` manager:** the manager does NOT construct the machine — its constructor is `(machine, initialStepId)`. It only gains a new **`destroy()`** method that calls `machine.destroy()`. (The manager currently has NO dispose/teardown method — this is new.) `plugins` is therefore threaded at the React/Vue call sites that build the machine, not through the manager.
+- **React (`useWizard`, `WizardProvider`):** options type gains `plugins`, passed as the new 5th arg where these files call `new WizardMachine(...)` (`use-wizard.tsx`, `wizard-provider.tsx`). Plugins are **reference-stable** (read once at machine creation, like `definition`/`initialData`), NOT reactive — document that plugins must be defined outside render or memoized. **A new `useEffect(() => () => manager.destroy(), [manager])` cleanup is added** in both files. (Today neither file has any `useEffect`/cleanup, so the manager is never torn down — this cleanup must be created.)
+- **Vue (`useWizard`, `wizard-provider`):** options type gains `plugins`, passed as the new 5th arg where `new WizardMachine(...)` is called. Vue already has an `onScopeDispose` block (it stops watchers / unsubscribes); **add `manager.destroy()` into that existing block** (do not add a second `onScopeDispose`).
 
-No new public components — additive option only.
+No new public components — additive option plus the new (internal) teardown wiring.
 
 ## 9. Reference Plugin: `createLoggingPlugin`
 
 Location `packages/core/src/plugins/logging.ts`. Exported from the main barrel AND via a new `./plugins` subpath export in core's `package.json` (so `import { createLoggingPlugin } from "@gooonzick/wizard-core/plugins"` works, aligning with WIZ-016's planned import style).
+
+**Build config for the `./plugins` subpath** (core currently builds a single `./src/index.ts` entry, es-only, with one `exports["."]`):
+- Add an `exports["./plugins"]` map (import + types) to `packages/core/package.json`.
+- Convert `vite.config.ts` to a multi-entry lib build (`entry: { index: "src/index.ts", plugins: "src/plugins/index.ts" }`) and adjust `fileName` accordingly.
+- Ensure `vite-plugin-dts` emits declarations for the new `plugins` entry.
+- Add a `packages/core/src/plugins/index.ts` barrel for the subpath (re-exporting the plugin `types` + `createLoggingPlugin`).
 
 ```typescript
 function createLoggingPlugin<TData>(config?: {
@@ -176,7 +191,7 @@ New file `packages/core/tests/plugins.test.ts` (Vitest, existing conventions):
 - `onInit` fires on construction and on late `use()`; receives a read-only view.
 - `use()` is chainable; duplicate name throws `WizardConfigurationError`; `removePlugin` calls `destroy` and drops it.
 - `beforeTransition` fires before the step change with correct `from`/`to`/`type` for `goNext`/`goPrevious`/`goTo`.
-- `beforeTransition` returning `false` → silent cancel (no state change, no `afterTransition`, `goTo` returns `false`, step unchanged).
+- `beforeTransition` returning `false` → silent cancel (no state change, no `afterTransition`, `goTo` resolves `void` as a no-op, step unchanged).
 - `beforeTransition` throwing → transition aborted + routed to `onError` (`phase: "transition"`).
 - `afterTransition` fires after the committed state change (observes the new `currentStepId`).
 - Multiple plugins run in registration order; a throw in a post-hoc hook is isolated (others still run, navigation succeeds).
@@ -185,6 +200,8 @@ New file `packages/core/tests/plugins.test.ts` (Vitest, existing conventions):
 - `beforeTransition`/`afterTransition` still fire under `goTo({ skipLifecycle: true })`.
 - Staleness: a `beforeTransition` that awaits while `reset()` runs does not corrupt state.
 - `destroy()` runs all plugins in reverse order.
+- Re-entrancy: a plugin calling `goNext` synchronously inside a hook throws `WizardNavigationError(reason: "busy")`.
+- Manager `destroy()` calls `machine.destroy()` (all plugin `destroy()` hooks run, in reverse order).
 - React test + Vue test: the `plugins` option threads through and `destroy` runs on unmount/dispose.
 - `createLoggingPlugin`: logs each hook via an injected fake logger; respects `level`; never vetoes/throws.
 
