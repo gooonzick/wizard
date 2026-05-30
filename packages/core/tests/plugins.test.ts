@@ -142,4 +142,14 @@ describe("WizardMachine plugin registration", () => {
 		await m.destroy();
 		expect(order).toEqual(["c", "b", "a"]);
 	});
+
+	it("use() throws WizardConfigurationError after destroy()", async () => {
+		const m = new WizardMachine<SimpleData>(
+			createSimpleLinearDefinition(),
+			{},
+			initial,
+		);
+		await m.destroy();
+		expect(() => m.use({ name: "late" })).toThrow(WizardConfigurationError);
+	});
 });
