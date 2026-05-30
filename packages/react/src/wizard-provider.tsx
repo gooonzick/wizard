@@ -3,6 +3,7 @@ import type {
 	WizardContext as WizardCoreContext,
 	WizardData,
 	WizardDefinition,
+	WizardPlugin,
 	WizardState,
 } from "@gooonzick/wizard-core";
 import { WizardMachine } from "@gooonzick/wizard-core";
@@ -11,6 +12,7 @@ import {
 	createContext,
 	type ReactNode,
 	useContext,
+	useEffect,
 	useMemo,
 	useRef,
 } from "react";
@@ -39,6 +41,11 @@ export interface WizardProviderProps<T extends WizardData> {
 	onCancel?: (data: T) => void | Promise<void>;
 	onReset?: () => void;
 	onError?: (error: Error) => void;
+	/**
+	 * Plugins registered once at machine creation (reference-stable — read once,
+	 * NOT reactive). Define them outside render or memoize them.
+	 */
+	plugins?: WizardPlugin<T>[];
 	children: ReactNode;
 }
 
@@ -57,6 +64,7 @@ export function WizardProvider<T extends WizardData>({
 	onCancel,
 	onReset,
 	onError,
+	plugins,
 	children,
 }: WizardProviderProps<T>) {
 	// Store callbacks in refs to avoid stale closures
@@ -85,6 +93,7 @@ export function WizardProvider<T extends WizardData>({
 	const initialDataRef = useRef(initialData);
 	const contextRef = useRef(context);
 	const definitionRef = useRef(definition);
+	const pluginsRef = useRef(plugins);
 
 	// Track previous state for change detection
 	const previousStateRef = useRef<WizardState<T> | null>(null);
@@ -130,6 +139,7 @@ export function WizardProvider<T extends WizardData>({
 			contextRef.current,
 			initialDataRef.current,
 			events,
+			pluginsRef.current,
 		);
 
 		managerRef.current = new WizardStateManager(
@@ -138,6 +148,16 @@ export function WizardProvider<T extends WizardData>({
 		);
 		previousStateRef.current = machine.snapshot;
 	}
+
+	// WIZ-007: tear down plugins on unmount. Cleanup must be synchronous; we
+	// deliberately do NOT await the Promise<void> (destroy isolates its own
+	// rejections internally).
+	useEffect(() => {
+		const manager = managerRef.current;
+		return () => {
+			void manager?.destroy();
+		};
+	}, []);
 
 	// Create a stable context value
 	const contextValue = useMemo(
