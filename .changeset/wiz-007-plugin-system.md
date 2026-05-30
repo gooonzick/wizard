@@ -27,3 +27,5 @@ argument or `machine.use(plugin)` (chainable; `removePlugin(name)` and
 
 `onDataChange` is intentionally deferred to WIZ-010 (will be added without a
 breaking change). Built-in analytics/auto-save plugins remain future work.
+
+Backward navigation (`goPrevious`/`goBack`) now defers its history mutation until after `beforeTransition`, so a veto leaves step history, the current step, and step statuses unchanged. As part of unifying this path, `goBack(n)` now marks the departing step `"visited"`, matching `goPrevious` (previously `goBack` did not). React teardown is also hardened against React StrictMode's mount→unmount→remount probe: a manager destroyed by the probe is transparently recreated (with the same plugins) on remount.
