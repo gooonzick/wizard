@@ -11,9 +11,11 @@ export default defineConfig({
 	],
 	build: {
 		lib: {
-			entry: "./src/index.ts",
+			entry: {
+				index: "./src/index.ts",
+				plugins: "./src/plugins/index.ts",
+			},
 			name: "WizardCore",
-			fileName: "index",
 			formats: ["es"],
 		},
 		outDir: "./dist",

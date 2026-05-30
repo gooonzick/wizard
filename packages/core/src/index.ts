@@ -43,6 +43,15 @@ export {
 	type WizardSerializedState,
 	type WizardState,
 } from "./machine/wizard-machine";
+// Plugins (WIZ-007)
+export { createLoggingPlugin } from "./plugins/logging";
+export type {
+	DeepReadonly,
+	ErrorContext,
+	TransitionEvent,
+	WizardMachineReadonly,
+	WizardPlugin,
+} from "./plugins/types";
 export type {
 	StepId,
 	SyncOrAsync,
