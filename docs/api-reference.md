@@ -96,8 +96,26 @@ interface WizardProgress {
   currentStepIndex: number; // 0-based index among enabled steps (-1 if current step is skipped)
   enabledStepIds: StepId[]; // ordered list of enabled step ids
   percentage: number; // 0–100, completedSteps / enabledSteps * 100, rounded
-  isFirstStep: boolean; // currentStepIndex === 0
-  isLastStep: boolean; // currentStepIndex === enabledSteps - 1
+  isFirstStep: boolean; // currentStepId === definition.initialStepId
+  isLastStep: boolean; // no resolvable next step (navigation-graph based)
+}
+```
+
+#### `WizardSerializedState<T>`
+
+JSON-safe snapshot returned by `serialize()` and accepted by `restore()`.
+
+```typescript
+interface WizardSerializedState<T> {
+  version: 1; // bumped on breaking serialization-format changes
+  currentStepId: StepId;
+  data: T;
+  isValid: boolean;
+  isCompleted: boolean;
+  validationErrors?: Record<string, string>;
+  stepStatuses: Record<StepId, StepStatus>;
+  visitedSteps: StepId[];
+  history: StepId[];
 }
 ```
 
@@ -464,6 +482,15 @@ class WizardMachine<T> {
   reset(data?: T): void;
   cancel(): Promise<void>;
 
+  // Persistence
+  // Returns a JSON-safe snapshot of the current runtime state (deep-clones data).
+  serialize(): WizardSerializedState<T>;
+  // Re-applies a serialized snapshot to THIS machine instance, in place.
+  // Re-validates the payload and throws WizardRestoreError if it is malformed
+  // or references steps that no longer exist in the definition.
+  // Emits one onStateChange; does NOT replay onEnter/onLeave lifecycle hooks.
+  restore(state: WizardSerializedState<T>): void;
+
   // Step Status
   getStepStatus(stepId: StepId): StepStatus;
   setStepStatus(stepId: StepId, status: StepStatus): void;
@@ -744,6 +771,16 @@ Operation aborted via signal.
 
 ```typescript
 class WizardAbortError extends WizardError {
+  constructor(message: string);
+}
+```
+
+#### `WizardRestoreError`
+
+Thrown by `restore()` when the serialized state is malformed or incompatible with the current definition.
+
+```typescript
+class WizardRestoreError extends WizardError {
   constructor(message: string);
 }
 ```

@@ -32,6 +32,7 @@
 | Step Status Tracking (WIZ-003)                        | ✅     | `core`  |
 | Progress API (WIZ-004)                                | ✅     | `core`  |
 | Reset / Cancel (WIZ-005)                              | ✅     | `core`  |
+| State Persistence (WIZ-006)                           | ✅     | `core`  |
 
 ### Architectural Decisions
 
@@ -60,7 +61,7 @@
 | **Step status tracking**  | ✅                 | ❌               | ❌                | ❌          | ❌          | ✅ (DIY)     | ✅             | ✅          | ❌       | ❌                 | ❌           |
 | **Progress API**          | ✅                 | ❌               | ❌                | ❌          | ❌          | ❌           | ❌             | ✅          | ❌       | ✅                 | ❌           |
 | **Reset / Cancel**        | ❌                 | ❌               | ❌                | ❌          | ❌          | ✅           | ✅             | ✅          | ✅       | ❌                 | ❌           |
-| **State persistence**     | ❌                 | ❌               | ❌                | ❌          | ❌          | ✅ persist   | ✅ sessions    | ✅          | ❌       | ✅ server          | ❌           |
+| **State persistence**     | ✅                 | ❌               | ❌                | ❌          | ❌          | ✅ persist   | ✅ sessions    | ✅          | ❌       | ✅ server          | ❌           |
 | **Middleware / plugins**  | ❌                 | ❌               | ❌                | ❌          | ❌          | ✅ actions   | ✅             | ❌          | ❌       | ❌                 | ❌           |
 | **Router integration**    | ❌                 | ❌               | ❌                | ❌          | ✅          | ❌           | ❌             | ❌          | ❌       | ❌                 | ✅           |
 | **Sub-wizards**           | ❌                 | ❌               | ❌                | ✅ nested   | ❌          | ✅ spawn     | ✅             | ✅ pages    | ❌       | ❌                 | ❌           |
@@ -290,11 +291,11 @@ interface WizardProgress {
   totalSteps: number; // all steps in the definition
   enabledSteps: number; // steps with enabled !== false
   completedSteps: number; // steps with status 'completed'
-  currentStepIndex: number; // 0-based index of current step among enabled steps
+  currentStepIndex: number; // 0-based index among enabled steps; -1 when the current step is skipped
   enabledStepIds: StepId[]; // ordered list of enabled steps
   percentage: number; // 0–100, completedSteps / enabledSteps * 100
-  isFirstStep: boolean; // currentStepIndex === 0
-  isLastStep: boolean; // currentStepIndex === enabledSteps - 1
+  isFirstStep: boolean; // currentStepId === definition.initialStepId
+  isLastStep: boolean; // no resolvable next step (navigation-graph based)
 }
 
 interface WizardState<TData> {
@@ -399,11 +400,12 @@ actions.cancel();
 
 ---
 
-#### WIZ-006: State Persistence (Serialize / Restore)
+#### WIZ-006: State Persistence (Serialize / Restore) ✅ Implemented
 
 **Priority:** 🟡 High
 **Effort:** M (4–6 hours)
 **Package:** `@gooonzick/wizard-core`
+**Status:** ✅ Implemented (core serialize/restore only — see "Not built" below)
 
 ##### Problem
 
@@ -416,82 +418,66 @@ Serialization/deserialization of the full `WizardMachine` state into a JSON-comp
 ##### API
 
 ```typescript
-interface WizardSnapshot<TData> {
-  version: number; // for migrations
-  definitionId: string; // wizard definition.id
+interface WizardSerializedState<T> {
+  version: 1; // bumped on breaking serialization-format changes
   currentStepId: StepId;
-  data: TData;
-  navigationHistory: StepId[];
+  data: T;
+  isValid: boolean;
+  isCompleted: boolean;
+  validationErrors?: Record<string, string>;
   stepStatuses: Record<StepId, StepStatus>;
-  timestamp: number; // Date.now() at the time of snapshot
+  visitedSteps: StepId[];
+  history: StepId[];
 }
 
-class WizardMachine<TData> {
-  serialize(): WizardSnapshot<TData>;
-  // Creates a JSON-compatible snapshot of the current state.
+class WizardMachine<T> {
+  // Returns a JSON-safe snapshot of the current runtime state (deep-clones data).
+  serialize(): WizardSerializedState<T>;
 
-  static restore<TData>(
-    snapshot: WizardSnapshot<TData>,
-    definition: WizardDefinition<TData>,
-    context?: WizardContext,
-    callbacks?: WizardCallbacks<TData>,
-  ): WizardMachine<TData>;
-  // Creates a WizardMachine from a snapshot.
-  // Validates: definitionId matches, currentStepId exists in definition.
-  // Throws WizardRestoreError if snapshot is invalid.
-}
-
-// Convenience: automatic persistence
-interface WizardPersistenceAdapter {
-  save(key: string, snapshot: WizardSnapshot<unknown>): void | Promise<void>;
-  load(
-    key: string,
-  ): WizardSnapshot<unknown> | null | Promise<WizardSnapshot<unknown> | null>;
-  clear(key: string): void | Promise<void>;
-}
-
-// Built-in adapters
-function localStorageAdapter(): WizardPersistenceAdapter;
-function sessionStorageAdapter(): WizardPersistenceAdapter;
-
-// Usage in config
-interface WizardConfig<TData> {
-  persistence?: {
-    adapter: WizardPersistenceAdapter;
-    key: string; // storage key
-    autoSave?: boolean; // save on every transition (default: true)
-    debounceMs?: number; // debounce auto-save (default: 300)
-  };
+  // Re-applies a serialized snapshot to THIS machine instance, in place.
+  // Re-validates the payload and throws WizardRestoreError if it is malformed
+  // or references steps that no longer exist in the definition.
+  // Emits one onStateChange; does NOT replay onEnter/onLeave lifecycle hooks.
+  restore(state: WizardSerializedState<T>): void;
 }
 ```
 
-##### autoSave Behavior
-
-If `persistence.autoSave === true`:
-
-- After each `onStateChange` → `adapter.save(key, machine.serialize())`
-- With debounce, so that rapid transitions don't spam the storage
-- On machine creation → attempt `adapter.load(key)`; if snapshot is valid → restore, otherwise → fresh start
-
 ##### Validation on Restore
 
-1. `snapshot.definitionId === definition.id` — otherwise error
-2. `snapshot.currentStepId` exists in `definition.steps` — otherwise fallback to `initialStepId`
-3. `snapshot.version` — reserved for future migrations
+`restore()` calls an internal `assertRestorableState()` guard and throws
+`WizardRestoreError` when:
 
-##### Security
+- the payload is not an object, or `version !== 1`
+- `currentStepId` is not a known step, or `data` is missing
+- `history` is not a non-empty array ending at `currentStepId`
+- `visitedSteps` is not an array, or `stepStatuses` is not an object
+- any step id in `history` / `visitedSteps` / `stepStatuses` is unknown
+- any status value is not a valid `StepStatus`
 
-- `serialize()` returns a plain object — the developer decides where to save it
-- Not serialized: `context` (may contain API clients), callbacks, functions
+On success it deep-clones `data`, preserves the serialized step status,
+aligns `canGoBack` with the first-step definition, and re-validates `isValid`.
 
 ##### Tests
 
-- serialize → restore → state is identical
-- restore with non-existing stepId → fallback to initialStepId
-- restore with wrong definitionId → WizardRestoreError
-- autoSave saves on every transition
-- autoSave with debounce — single save during rapid transitions
-- localStorageAdapter / sessionStorageAdapter CRUD
+- serialize → restore round-trips (state is identical after restore)
+- rejects unsupported version
+- rejects unknown step ids in `currentStepId`, `history`, `visitedSteps`, or `stepStatuses`
+- rejects empty history / history not ending at current step
+- rejects invalid status values
+- deep-clones restored data so later mutation of the payload cannot change state
+
+##### Not Built (future work)
+
+The following from the original proposal were NOT implemented:
+
+- Persistence adapters (`WizardPersistenceAdapter`, `localStorageAdapter`,
+  `sessionStorageAdapter`) — persistence is currently manual (the developer
+  serializes and stores the result themselves).
+- `autoSave` / `persistence` config on the wizard (and `debounceMs`).
+- `static restore(...)` factory — restore is an instance method that mutates an
+  existing machine, not a constructor.
+- `WizardSnapshot` shape with `definitionId` / `timestamp` — the implemented
+  shape is `WizardSerializedState` (no definitionId, no timestamp).
 
 ---
 
@@ -1289,7 +1275,7 @@ Phase 5 (Advanced):
 | WIZ-003 Step Status | New field in `WizardState`      | Additive, non-breaking                      |
 | WIZ-004 Progress    | New field in `WizardState`      | Additive, non-breaking                      |
 | WIZ-005 Reset       | New methods                     | Additive, non-breaking                      |
-| WIZ-006 Persistence | New methods + static            | Additive, non-breaking                      |
+| WIZ-006 Persistence | New instance methods (serialize/restore) | Additive, non-breaking                      |
 | WIZ-007 Plugins     | New `use()` method              | Additive, non-breaking                      |
 | WIZ-011 Sub-wizards | New step type                   | Additive, non-breaking                      |
 | WIZ-013 Lazy Steps  | Steps can be a function         | Requires `typeof step === 'function'` check |

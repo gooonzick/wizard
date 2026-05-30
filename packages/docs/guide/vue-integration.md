@@ -377,33 +377,41 @@ const { state, navigation, actions } = useWizard({
 
 ### Persisting Progress
 
-```typescript
-<script setup lang="ts">
-import { ref, watch } from "vue";
+Use `actions.serialize()` to save the full runtime snapshot (current step, history, step statuses, validity) and `actions.restore()` to re-apply it on mount.
 
-const savedData = ref(() => {
-  const saved = localStorage.getItem("wizard-data");
-  return saved ? JSON.parse(saved) : initialData;
+```vue
+<script setup lang="ts">
+import { watch, onMounted } from "vue";
+
+const { state, actions, navigation } = useWizard({ definition, initialData });
+
+// Save the full runtime snapshot on every change.
+watch(state, () => {
+  localStorage.setItem("wizard-state", JSON.stringify(actions.serialize()));
 });
 
-const wizard = useWizard({
-  definition,
-  initialData: savedData.value,
-  onStateChange: (state) => {
-    // Save after each state change
-    localStorage.setItem("wizard-data", JSON.stringify(state.data));
-  },
+// Restore once on mount; clear storage if the saved draft is incompatible.
+onMounted(() => {
+  const saved = localStorage.getItem("wizard-state");
+  if (!saved) return;
+  try {
+    actions.restore(JSON.parse(saved));
+  } catch {
+    localStorage.removeItem("wizard-state");
+  }
 });
 </script>
 
 <template>
   <WizardForm
-    :state="wizard.state"
-    :actions="wizard.actions"
-    :navigation="wizard.navigation"
+    :state="state"
+    :actions="actions"
+    :navigation="navigation"
   />
 </template>
 ```
+
+See `examples/vue-examples/src/wizard-example/state-persistence-example.vue` for a working example.
 
 ### Handling Errors
 

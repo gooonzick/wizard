@@ -118,8 +118,8 @@ interface WizardProgress {
   currentStepIndex: number; // 0-based index among enabled steps (-1 if current step is skipped)
   enabledStepIds: StepId[]; // ordered list of enabled step ids
   percentage: number; // 0–100, completedSteps / enabledSteps * 100, rounded
-  isFirstStep: boolean; // currentStepIndex === 0
-  isLastStep: boolean; // currentStepIndex === enabledSteps - 1
+  isFirstStep: boolean; // currentStepId === definition.initialStepId
+  isLastStep: boolean; // no resolvable next step (navigation-graph based)
 }
 ```
 
