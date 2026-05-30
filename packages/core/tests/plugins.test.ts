@@ -364,6 +364,30 @@ describe("WizardMachine before/afterTransition", () => {
 		await m.goNext();
 		expect((captured as { reason?: string })?.reason).toBe("busy");
 	});
+
+	it("re-entrancy: a plugin calling goNext synchronously inside afterTransition throws busy", async () => {
+		let captured: unknown;
+		const m = new WizardMachine<SimpleData>(
+			createSimpleLinearDefinition(),
+			{},
+			initial,
+			{},
+			[
+				{
+					name: "p",
+					afterTransition: async () => {
+						try {
+							await m.goNext();
+						} catch (e) {
+							captured = e;
+						}
+					},
+				},
+			],
+		);
+		await m.goNext();
+		expect((captured as { reason?: string })?.reason).toBe("busy");
+	});
 });
 
 describe("WizardMachine plugin onError", () => {
