@@ -357,6 +357,15 @@ export class WizardStateManager<T extends WizardData> {
 	}
 
 	/**
+	 * Whether the underlying machine has been destroyed (plugins torn down).
+	 * Terminal. Used by React entry points to detect a manager killed by the
+	 * StrictMode mount->unmount->remount probe so it can be recreated.
+	 */
+	get isDestroyed(): boolean {
+		return this.machine.isDestroyed;
+	}
+
+	/**
 	 * Reset the wizard to its initial state.
 	 *
 	 * Sets the loading flags + notifies "loading", calls the machine's

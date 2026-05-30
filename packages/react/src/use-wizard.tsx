@@ -265,9 +265,18 @@ export function useWizard<T extends WizardData>(
 	);
 
 	// Use state for manager (created once; native machine.reset() handles resets)
-	const [manager] = useState<WizardStateManager<T>>(() =>
+	const [managerState, setManagerState] = useState<WizardStateManager<T>>(() =>
 		createManager(initialDataRef.current),
 	);
+	// WIZ-007: if the StrictMode mount->unmount->remount probe destroyed the
+	// manager, recreate it on remount (re-applying the same plugins). Production
+	// never trips this: with no probe, isDestroyed is always false on remount.
+	const manager = managerState.isDestroyed
+		? createManager(initialDataRef.current)
+		: managerState;
+	if (manager !== managerState) {
+		setManagerState(manager); // re-render with the live manager; subscriptions rebind
+	}
 
 	// WIZ-007: tear down plugins on unmount. Cleanup must be synchronous; we
 	// deliberately do NOT await the Promise<void> (destroy isolates its own

@@ -30,6 +30,11 @@ export class PluginHost<TData> {
 
 	constructor(private readonly reportError: PluginErrorReporter) {}
 
+	/** Whether destroyAll() has been called (terminal). */
+	get isDestroyed(): boolean {
+		return this.destroyed;
+	}
+
 	/** Registers a plugin. Throws on duplicate name or after destroyAll(). */
 	add(plugin: WizardPlugin<TData>): void {
 		if (this.destroyed) {
