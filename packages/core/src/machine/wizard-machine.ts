@@ -1036,7 +1036,7 @@ export class WizardMachine<T extends WizardData> {
 		this.notifyStateChange();
 
 		// WIZ-007: dispatch plugin onComplete (isolated), after definition/events.
-		void this.pluginHost.dispatchComplete(this.state.data);
+		void this.pluginHost.dispatchComplete(this.state.data as never);
 	}
 
 	/**
