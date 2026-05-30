@@ -45,6 +45,23 @@ describe("createLoggingPlugin", () => {
 		const plugin = createLoggingPlugin<D>({ logger: fakeLogger() });
 		const result = await plugin.beforeTransition?.(ev());
 		expect(result).not.toBe(false); // does not veto
+		await expect(async () => {
+			plugin.onInit?.({
+				snapshot: { currentStepId: "a" } as never,
+				currentStep: { id: "a" } as never,
+				getStepStatus: () => "active",
+			});
+			await plugin.beforeTransition?.(ev());
+			await plugin.afterTransition?.(ev());
+			await plugin.onComplete?.({ value: 1 });
+			await plugin.onReset?.();
+			plugin.onError?.(new Error("oops"), {
+				stepId: "a",
+				phase: "transition",
+				data: { value: 1 },
+			});
+			plugin.destroy?.();
+		}).not.toThrow();
 	});
 
 	it("respects level: 'warn' uses logger.warn for errors, suppresses debug lines", async () => {
@@ -60,8 +77,15 @@ describe("createLoggingPlugin", () => {
 		expect(logger.warn).toHaveBeenCalled();
 	});
 
-	it("defaults to console when no logger is provided", () => {
-		const plugin = createLoggingPlugin<D>();
-		expect(plugin.name).toBe("logging");
+	it("defaults to console when no logger is provided", async () => {
+		const spy = vi.spyOn(console, "debug").mockImplementation(() => {});
+		try {
+			const plugin = createLoggingPlugin<D>();
+			expect(plugin.name).toBe("logging");
+			await plugin.beforeTransition?.(ev());
+			expect(spy).toHaveBeenCalled();
+		} finally {
+			spy.mockRestore();
+		}
 	});
 });
