@@ -120,8 +120,8 @@ describe("PluginHost", () => {
 		spy.mockRestore();
 	});
 
-	it("destroyAll runs in reverse registration order, isolated", async () => {
-		const { host } = makeHost();
+	it("destroyAll runs in reverse registration order, isolated, and reports errors", async () => {
+		const { host, reported } = makeHost();
 		const order: string[] = [];
 		host.add({ name: "a", destroy: () => void order.push("a") });
 		host.add({
@@ -135,6 +135,39 @@ describe("PluginHost", () => {
 		await host.destroyAll();
 		expect(order).toEqual(["c", "b", "a"]);
 		expect(host.list()).toHaveLength(0);
+		expect(reported).toHaveLength(1); // b-fail was reported; a and c still ran
+	});
+
+	it("destroyAll is idempotent — a second call is a no-op", async () => {
+		const { host } = makeHost();
+		const destroy = vi.fn();
+		host.add({ name: "a", destroy });
+		await host.destroyAll();
+		await host.destroyAll(); // second call must not re-destroy
+		expect(destroy).toHaveBeenCalledTimes(1);
+	});
+
+	it("destroyAll concurrent calls each run destroy at most once", async () => {
+		const { host } = makeHost();
+		const destroy = vi.fn();
+		host.add({ name: "a", destroy });
+		await Promise.all([host.destroyAll(), host.destroyAll()]);
+		expect(destroy).toHaveBeenCalledTimes(1);
+	});
+
+	it("dispatchAfterTransition — first plugin throw reports once and second plugin still runs", async () => {
+		const { host, reported } = makeHost();
+		const second = vi.fn();
+		host.add({
+			name: "a",
+			afterTransition: () => {
+				throw new Error("after-first-fail");
+			},
+		});
+		host.add({ name: "b", afterTransition: second });
+		await host.dispatchAfterTransition(ev());
+		expect(reported).toHaveLength(1);
+		expect(second).toHaveBeenCalledTimes(1);
 	});
 
 	it("dispatchInit is fire-and-forget and routes rejections to onError", async () => {
@@ -150,7 +183,7 @@ describe("PluginHost", () => {
 			currentStep: {} as never,
 			getStepStatus: () => "active",
 		});
-		await new Promise((r) => setTimeout(r, 0));
+		await Promise.resolve();
 		expect(reported).toHaveLength(1);
 	});
 });
