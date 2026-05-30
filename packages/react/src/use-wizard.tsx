@@ -5,6 +5,7 @@ import type {
 	WizardContext,
 	WizardData,
 	WizardDefinition,
+	WizardPlugin,
 	WizardProgress,
 	WizardSerializedState,
 	WizardState,
@@ -14,6 +15,7 @@ import { WizardMachine } from "@gooonzick/wizard-core";
 import { WizardStateManager } from "@gooonzick/wizard-state";
 import {
 	useCallback,
+	useEffect,
 	useMemo,
 	useRef,
 	useState,
@@ -34,6 +36,11 @@ export interface UseWizardOptions<T extends WizardData> {
 	onCancel?: (data: T) => void | Promise<void>;
 	onReset?: () => void;
 	onError?: (error: Error) => void;
+	/**
+	 * Plugins registered once at machine creation (reference-stable — read once,
+	 * NOT reactive). Define them outside render or memoize them.
+	 */
+	plugins?: WizardPlugin<T>[];
 }
 
 /**
@@ -160,6 +167,7 @@ export function useWizard<T extends WizardData>(
 		onCancel,
 		onReset,
 		onError,
+		plugins,
 	} = options;
 
 	// Store callbacks in refs to avoid stale closures
@@ -188,6 +196,7 @@ export function useWizard<T extends WizardData>(
 	const initialDataRef = useRef(initialData);
 	const contextRef = useRef(context);
 	const definitionRef = useRef(definition);
+	const pluginsRef = useRef(plugins);
 
 	// Track previous state for change detection
 	const previousStateRef = useRef<WizardState<T> | null>(null);
@@ -242,6 +251,7 @@ export function useWizard<T extends WizardData>(
 				contextRef.current,
 				data,
 				events,
+				pluginsRef.current,
 			);
 
 			newManager = new WizardStateManager(
@@ -258,6 +268,15 @@ export function useWizard<T extends WizardData>(
 	const [manager] = useState<WizardStateManager<T>>(() =>
 		createManager(initialDataRef.current),
 	);
+
+	// WIZ-007: tear down plugins on unmount. Cleanup must be synchronous; we
+	// deliberately do NOT await the Promise<void> (destroy isolates its own
+	// rejections internally).
+	useEffect(() => {
+		return () => {
+			void manager.destroy();
+		};
+	}, [manager]);
 
 	// Subscribe to state channel using useSyncExternalStore
 	const stateSnapshot = useSyncExternalStore(
