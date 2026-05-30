@@ -84,6 +84,28 @@ interface WizardState<T> {
 }
 ```
 
+### WizardSerializedState
+
+Plain JSON-safe runtime state returned by `machine.serialize()` and accepted by
+`machine.restore(state)`.
+
+```ts
+interface WizardSerializedState<T> {
+  version: 1;
+  currentStepId: StepId;
+  data: T;
+  isValid: boolean;
+  isCompleted: boolean;
+  validationErrors?: Record<string, string>;
+  stepStatuses: Record<StepId, StepStatus>;
+  visitedSteps: StepId[];
+  history: StepId[];
+}
+```
+
+`progress` is not stored because it is derived from `stepStatuses` and the
+current wizard definition.
+
 ### WizardProgress
 
 Derived progress information, recomputed on every `onStateChange`.
@@ -382,6 +404,10 @@ class WizardMachine<T> {
   isBusy: boolean; // getter
   currentStep: WizardStepDefinition<T>; // getter
 
+  // Persistence
+  serialize(): WizardSerializedState<T>;
+  restore(state: WizardSerializedState<T>): void;
+
   // Data operations
   updateData(updater: (data: T) => T): void;
   setData(data: T): void;
@@ -458,6 +484,23 @@ const machine = new WizardMachine(definition, context, initialData, {
   },
 });
 ```
+
+### Persist and Restore State
+
+```ts
+const machine = new WizardMachine(definition, context, initialData);
+
+localStorage.setItem("checkout-wizard", JSON.stringify(machine.serialize()));
+
+const savedState = localStorage.getItem("checkout-wizard");
+if (savedState) {
+  machine.restore(JSON.parse(savedState));
+}
+```
+
+`restore()` validates that serialized step IDs still exist in the wizard
+definition. It emits one `onStateChange` event and does not replay step
+lifecycle hooks.
 
 ---
 

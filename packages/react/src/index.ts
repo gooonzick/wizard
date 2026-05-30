@@ -1,5 +1,10 @@
 // Internal (for advanced use)
 // Re-export from state package for convenience
+
+export type {
+	WizardProgress,
+	WizardSerializedState,
+} from "@gooonzick/wizard-core";
 export {
 	type LoadingState,
 	type NavigationState,
@@ -10,6 +15,8 @@ export {
 export {
 	type CanSubmitFn,
 	type ResetFn,
+	type RestoreFn,
+	type SerializeFn,
 	type SetDataFn,
 	type SubmitFn,
 	// Helper types for individual actions

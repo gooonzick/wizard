@@ -19,10 +19,7 @@ type SignupData = {
 const signupWizard = createWizard<SignupData>("signup")
 	.initialStep("account")
 	.step("account", (s) =>
-		s
-			.title("Create Account")
-			.required("email", "password")
-			.next("plan"),
+		s.title("Create Account").required("email", "password").next("plan"),
 	)
 	.step("plan", (s) =>
 		s.title("Select Plan").previous("account").next("review"),
@@ -61,7 +58,10 @@ function StepFields({
 }: {
 	stepId: string;
 	data: SignupData;
-	onChange: <K extends keyof SignupData>(field: K, value: SignupData[K]) => void;
+	onChange: <K extends keyof SignupData>(
+		field: K,
+		value: SignupData[K],
+	) => void;
 }) {
 	switch (stepId) {
 		case "account":
@@ -148,7 +148,11 @@ function StepFields({
 
 // ── Event log ──────────────────────────────────────────────────────
 
-type LogEntry = { id: number; type: "reset" | "cancel" | "complete"; text: string };
+type LogEntry = {
+	id: number;
+	type: "reset" | "cancel" | "complete";
+	text: string;
+};
 
 function EventLog({ entries }: { entries: LogEntry[] }) {
 	const colour: Record<LogEntry["type"], string> = {
@@ -227,9 +231,9 @@ export const ResetCancelExample: React.FC = () => {
 				<div className="mb-8">
 					<h1 className="text-3xl font-bold text-gray-900">Reset & Cancel</h1>
 					<p className="text-gray-600 mt-1">
-						Demonstrates <code>actions.reset()</code>, <code>actions.cancel()</code>,
-						and the <code>onReset</code> / <code>onCancel</code> events
-						(WIZ-005).
+						Demonstrates <code>actions.reset()</code>,{" "}
+						<code>actions.cancel()</code>, and the <code>onReset</code> /{" "}
+						<code>onCancel</code> events (WIZ-005).
 					</p>
 				</div>
 

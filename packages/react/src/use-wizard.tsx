@@ -6,6 +6,7 @@ import type {
 	WizardData,
 	WizardDefinition,
 	WizardProgress,
+	WizardSerializedState,
 	WizardState,
 	WizardStepDefinition,
 } from "@gooonzick/wizard-core";
@@ -109,6 +110,10 @@ export type CanSubmitFn = () => Promise<boolean>;
 export type SubmitFn = () => Promise<void>;
 export type ResetFn<T extends WizardData> = (data?: T) => void;
 export type CancelFn = () => Promise<void>;
+export type SerializeFn<T extends WizardData> = () => WizardSerializedState<T>;
+export type RestoreFn<T extends WizardData> = (
+	state: WizardSerializedState<T>,
+) => void;
 
 /**
  * Actions slice - data mutations and validation
@@ -122,6 +127,8 @@ export interface UseWizardActions<T extends WizardData> {
 	submit: SubmitFn;
 	reset: ResetFn<T>;
 	cancel: CancelFn;
+	serialize: SerializeFn<T>;
+	restore: RestoreFn<T>;
 }
 
 /**
@@ -390,40 +397,25 @@ export function useWizard<T extends WizardData>(
 
 	const reset = useCallback(
 		(data?: T) => {
-			manager.setLoadingState({
-				isValidating: false,
-				isSubmitting: false,
-				isNavigating: false,
-			});
-			manager.getMachine().reset(data ?? initialDataRef.current);
-			manager.notifySubscribers([
-				"state",
-				"navigation",
-				"validation",
-				"loading",
-			]);
+			void manager.runReset(data ?? initialDataRef.current);
 		},
 		[manager],
 	);
 
 	const cancel = useCallback(async () => {
-		manager.setLoadingState({ isNavigating: true });
-		try {
-			await manager.getMachine().cancel();
-		} finally {
-			manager.setLoadingState({
-				isValidating: false,
-				isSubmitting: false,
-				isNavigating: false,
-			});
-			manager.notifySubscribers([
-				"state",
-				"navigation",
-				"validation",
-				"loading",
-			]);
-		}
+		await manager.runCancel();
 	}, [manager]);
+
+	const serialize = useCallback(() => {
+		return manager.getMachine().serialize();
+	}, [manager]);
+
+	const restore = useCallback(
+		(serializedState: WizardSerializedState<T>) => {
+			void manager.runRestore(serializedState);
+		},
+		[manager],
+	);
 
 	// Build organized return value
 	const stateSlice: UseWizardState<T> = useMemo(
@@ -509,6 +501,8 @@ export function useWizard<T extends WizardData>(
 			submit,
 			reset,
 			cancel,
+			serialize,
+			restore,
 		}),
 		[
 			updateData,
@@ -519,6 +513,8 @@ export function useWizard<T extends WizardData>(
 			submit,
 			reset,
 			cancel,
+			serialize,
+			restore,
 		],
 	);
 

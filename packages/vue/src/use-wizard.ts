@@ -2,6 +2,7 @@ import type {
 	GoToOptions,
 	StepId,
 	WizardData,
+	WizardSerializedState,
 	WizardState,
 } from "@gooonzick/wizard-core";
 import { WizardMachine } from "@gooonzick/wizard-core";
@@ -57,12 +58,28 @@ export function useWizard<T extends WizardData>(
 
 	// Forward reference for state - needed for createMachine callback
 	let stateRef: { value: WizardState<T> };
+	// Forward reference for manager - needed to route onStateChange to channels
+	let managerRef: WizardStateManager<T> | null = null;
 
 	// Factory function to create machine with proper events
 	const createMachine = (data?: T): WizardMachine<T> => {
 		return new WizardMachine(definition, context, data || initialData, {
 			onStateChange: (newState: WizardState<T>) => {
+				// The machine fires this synchronously from its constructor
+				// (initializeFirstStep) before `stateRef`/`managerRef` are wired up.
+				// The initial snapshot is read directly below, so skip these early
+				// notifications instead of writing through an undefined ref.
+				if (!stateRef) {
+					return;
+				}
+				const oldState = stateRef.value;
 				stateRef.value = newState;
+				// Route the change to the manager's navigation/validation channels so
+				// async follow-up notifications (e.g. after reset/cancel/restore
+				// onEnter/validate) refresh navigation state in the view.
+				if (oldState && managerRef) {
+					managerRef.handleStateChange(newState, oldState);
+				}
 				callbacks.onStateChange?.(newState);
 			},
 			onStepEnter: (stepId: StepId, d: T) => {
@@ -92,6 +109,7 @@ export function useWizard<T extends WizardData>(
 		initialMachine,
 		definition.initialStepId,
 	);
+	managerRef = initialManager;
 
 	// Create wizard machine and manager in shallow refs to avoid deep reactivity on functions
 	const machine = shallowRef<WizardMachine<T>>(initialMachine);
@@ -106,6 +124,8 @@ export function useWizard<T extends WizardData>(
 		canGoNext: false,
 		canGoPrevious: false,
 		canGoBack: false,
+		isFirstStep: false,
+		isLastStep: false,
 		availableSteps: [] as StepId[],
 	});
 
@@ -123,6 +143,8 @@ export function useWizard<T extends WizardData>(
 			navigationState.canGoNext = nav.canGoNext ?? false;
 			navigationState.canGoPrevious = nav.canGoPrevious ?? false;
 			navigationState.canGoBack = nav.canGoBack ?? false;
+			navigationState.isFirstStep = nav.isFirstStep ?? false;
+			navigationState.isLastStep = nav.isLastStep ?? false;
 			navigationState.availableSteps = nav.availableSteps ?? [];
 		} catch (error) {
 			// Log error for debugging when debug flag is enabled
@@ -175,10 +197,8 @@ export function useWizard<T extends WizardData>(
 		void state.value.currentStepId;
 		return manager.value.getStepHistory();
 	});
-	const isFirstStep = computed(
-		() => state.value.currentStepId === definition.initialStepId,
-	);
-	const isLastStep = computed(() => !navigationState.canGoNext);
+	const isFirstStep = computed(() => navigationState.isFirstStep);
+	const isLastStep = computed(() => navigationState.isLastStep);
 
 	// Data mutations
 	const updateData = (updater: (data: T) => T) => {
@@ -269,6 +289,8 @@ export function useWizard<T extends WizardData>(
 		loadingState.isSubmitting = false;
 		loadingState.isNavigating = false;
 		machine.value.reset(data);
+		// onStateChange (sync + async follow-up) drives state.value; refresh nav
+		// to mirror the synchronous reset snapshot immediately.
 		state.value = machine.value.snapshot;
 		updateNavigationState();
 	};
@@ -281,9 +303,24 @@ export function useWizard<T extends WizardData>(
 			loadingState.isValidating = false;
 			loadingState.isSubmitting = false;
 			loadingState.isNavigating = false;
+			// onStateChange drives state.value; refresh nav from the reset snapshot.
 			state.value = machine.value.snapshot;
 			updateNavigationState();
 		}
+	};
+
+	const serialize = () => {
+		return machine.value.serialize();
+	};
+
+	const restore = (serializedState: WizardSerializedState<T>) => {
+		loadingState.isValidating = false;
+		loadingState.isSubmitting = false;
+		loadingState.isNavigating = false;
+		machine.value.restore(serializedState);
+		// onStateChange drives state.value; refresh nav from the restored snapshot.
+		state.value = machine.value.snapshot;
+		updateNavigationState();
 	};
 
 	// Build organized return value
@@ -332,6 +369,8 @@ export function useWizard<T extends WizardData>(
 		submit,
 		reset,
 		cancel,
+		serialize,
+		restore,
 	};
 
 	return {

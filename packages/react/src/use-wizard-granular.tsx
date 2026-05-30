@@ -1,4 +1,9 @@
-import type { GoToOptions, StepId, WizardData } from "@gooonzick/wizard-core";
+import type {
+	GoToOptions,
+	StepId,
+	WizardData,
+	WizardSerializedState,
+} from "@gooonzick/wizard-core";
 import { useCallback, useMemo, useSyncExternalStore } from "react";
 import type {
 	UseWizardActions,
@@ -278,40 +283,25 @@ export function useWizardActions<T extends WizardData>(): UseWizardActions<T> {
 
 	const reset = useCallback(
 		(data?: T) => {
-			manager.setLoadingState({
-				isValidating: false,
-				isSubmitting: false,
-				isNavigating: false,
-			});
-			manager.getMachine().reset(data ?? initialData);
-			manager.notifySubscribers([
-				"state",
-				"navigation",
-				"validation",
-				"loading",
-			]);
+			void manager.runReset(data ?? initialData);
 		},
 		[manager, initialData],
 	);
 
 	const cancel = useCallback(async () => {
-		manager.setLoadingState({ isNavigating: true });
-		try {
-			await manager.getMachine().cancel();
-		} finally {
-			manager.setLoadingState({
-				isValidating: false,
-				isSubmitting: false,
-				isNavigating: false,
-			});
-			manager.notifySubscribers([
-				"state",
-				"navigation",
-				"validation",
-				"loading",
-			]);
-		}
+		await manager.runCancel();
 	}, [manager]);
+
+	const serialize = useCallback(() => {
+		return manager.getMachine().serialize();
+	}, [manager]);
+
+	const restore = useCallback(
+		(serializedState: WizardSerializedState<T>) => {
+			void manager.runRestore(serializedState);
+		},
+		[manager],
+	);
 
 	return useMemo(
 		() => ({
@@ -323,6 +313,8 @@ export function useWizardActions<T extends WizardData>(): UseWizardActions<T> {
 			submit,
 			reset,
 			cancel,
+			serialize,
+			restore,
 		}),
 		[
 			updateData,
@@ -333,6 +325,8 @@ export function useWizardActions<T extends WizardData>(): UseWizardActions<T> {
 			submit,
 			reset,
 			cancel,
+			serialize,
+			restore,
 		],
 	);
 }

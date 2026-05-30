@@ -189,18 +189,19 @@ describe("Step Status Tracking", () => {
 	});
 
 	describe("goPrevious", () => {
-		it("marks current step as visited and previous step as active", async () => {
+		it("marks current step as visited and preserves the completed previous step", async () => {
 			const machine = createMachine(linearDefinition());
 
-			await machine.goNext(); // step1 → step2
+			await machine.goNext(); // step1(completed) → step2
 			await machine.goPrevious(); // step2 → step1
 
 			const { stepStatuses } = machine.snapshot;
-			expect(stepStatuses.step1).toBe("active");
+			// FIX 3: a completed step keeps its "completed" status when revisited.
+			expect(stepStatuses.step1).toBe("completed");
 			expect(stepStatuses.step2).toBe("visited");
 		});
 
-		it("sets previously completed step back to active on revisit", async () => {
+		it("preserves completed status when revisiting a previously completed step", async () => {
 			const machine = createMachine(linearDefinition());
 
 			await machine.goNext(); // step1(completed) → step2
@@ -208,8 +209,9 @@ describe("Step Status Tracking", () => {
 			await machine.goPrevious(); // step3(visited) → step2
 
 			const { stepStatuses } = machine.snapshot;
+			// FIX 3: step2 stays "completed" on back-navigation, not downgraded to "active".
 			expect(stepStatuses.step1).toBe("completed");
-			expect(stepStatuses.step2).toBe("active");
+			expect(stepStatuses.step2).toBe("completed");
 			expect(stepStatuses.step3).toBe("visited");
 		});
 	});
@@ -226,14 +228,15 @@ describe("Step Status Tracking", () => {
 			expect(stepStatuses.step3).toBe("active");
 		});
 
-		it("re-activates a completed step", async () => {
+		it("preserves completed status when navigating back to a completed step", async () => {
 			const machine = createMachine(linearDefinition());
 
 			await machine.goNext(); // step1(completed) → step2
 			await machine.goTo("step1", { skipValidation: true });
 
 			const { stepStatuses } = machine.snapshot;
-			expect(stepStatuses.step1).toBe("active");
+			// FIX 3: step1 stays "completed" when navigated back to, not re-activated.
+			expect(stepStatuses.step1).toBe("completed");
 			expect(stepStatuses.step2).toBe("visited");
 		});
 

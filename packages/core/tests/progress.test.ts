@@ -132,7 +132,7 @@ describe("Progress API", () => {
 			expect(progress.isLastStep).toBe(true);
 		});
 
-		it("decrements completedSteps when going back", async () => {
+		it("preserves completedSteps when going back to a completed step", async () => {
 			const machine = createMachine(linearDefinition());
 
 			await machine.goNext();
@@ -142,9 +142,10 @@ describe("Progress API", () => {
 			await machine.goPrevious();
 			const { progress } = machine.snapshot;
 			expect(progress.currentStepIndex).toBe(1);
-			// On goPrevious: step3 (departing) becomes "visited", step2 becomes "active".
-			// step1 remains "completed" from the first goNext.
-			expect(progress.completedSteps).toBe(1);
+			// On goPrevious: step3 (departing) becomes "visited". step2 was already
+			// "completed" (from the second goNext) and is PRESERVED, not downgraded
+			// to "active". step1 also remains "completed". So the count stays at 2.
+			expect(progress.completedSteps).toBe(2);
 		});
 	});
 

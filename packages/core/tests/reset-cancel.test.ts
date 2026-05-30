@@ -26,8 +26,8 @@ describe("WizardMachine - reset()", () => {
 	});
 
 	it("returns to the initial step", async () => {
-		await machine.next();
-		await machine.next();
+		await machine.goNext();
+		await machine.goNext();
 		expect(machine.snapshot.currentStepId).toBe("step3");
 
 		machine.reset();
@@ -47,8 +47,8 @@ describe("WizardMachine - reset()", () => {
 	});
 
 	it("clears history, visited steps, canGoBack and validationErrors", async () => {
-		await machine.next();
-		await machine.next();
+		await machine.goNext();
+		await machine.goNext();
 		expect(machine.history.length).toBeGreaterThan(1);
 		expect(machine.snapshot.canGoBack).toBe(true);
 
@@ -62,7 +62,7 @@ describe("WizardMachine - reset()", () => {
 
 	it("re-fires onStepEnter for the initial step", async () => {
 		await flushAsync();
-		events.onStepEnter.mockClear();
+		vi.mocked(events.onStepEnter).mockClear();
 
 		machine.reset();
 		await flushAsync();
@@ -112,7 +112,7 @@ describe("WizardMachine - cancel()", () => {
 			initialData,
 			events,
 		);
-		await machine.next();
+		await machine.goNext();
 
 		await machine.cancel();
 
@@ -140,7 +140,7 @@ describe("WizardMachine - cancel()", () => {
 			initialData,
 			events,
 		);
-		await machine.next();
+		await machine.goNext();
 
 		await machine.cancel();
 
@@ -156,7 +156,7 @@ describe("WizardMachine - cancel()", () => {
 			initialData,
 			events,
 		);
-		await machine.next();
+		await machine.goNext();
 
 		await machine.cancel();
 
@@ -182,7 +182,8 @@ describe("WizardMachine - cancel()", () => {
 
 		await expect(machine.cancel()).rejects.toBe(failure);
 		expect(events.onError).toHaveBeenCalledWith(failure);
-		// Reset must NOT happen if cancel threw.
-		expect(events.onReset).not.toHaveBeenCalled();
+		// FIX 1: cancel ALWAYS resets to the initial state, even when a cancel
+		// handler throws; the error is surfaced after the reset has run.
+		expect(events.onReset).toHaveBeenCalled();
 	});
 });

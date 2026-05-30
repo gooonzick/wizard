@@ -2,6 +2,7 @@ import type {
 	StepId,
 	WizardData,
 	WizardMachine,
+	WizardSerializedState,
 	WizardState,
 	WizardStepDefinition,
 } from "@gooonzick/wizard-core";
@@ -32,6 +33,8 @@ export class WizardStateManager<T extends WizardData> {
 	private navigationCache: NavigationState;
 	private validationCache: ValidationState;
 	private loadingCache: LoadingState;
+	// Cached raw machine snapshot (FIX 12): same reference until state changes
+	private snapshotCache: WizardState<T>;
 
 	// Promise for async navigation computation
 	private navigationPromise: Promise<void> | null = null;
@@ -61,6 +64,7 @@ export class WizardStateManager<T extends WizardData> {
 
 		// Initialize state cache
 		const snapshot = this.machine.snapshot;
+		this.snapshotCache = snapshot;
 		this.stateCache = {
 			currentStepId: snapshot.currentStepId,
 			currentStep: this.machine.currentStep,
@@ -120,6 +124,11 @@ export class WizardStateManager<T extends WizardData> {
 	 * @param channels Array of channels that have changed
 	 */
 	notifySubscribers(channels: SubscriptionChannel[]): void {
+		// FIX 12: capture the machine snapshot ONCE per notify and refresh the
+		// cached reference so getSnapshot() and the per-channel caches all read
+		// the same object.
+		this.snapshotCache = this.machine.snapshot;
+
 		// Update caches for affected channels
 		for (const channel of channels) {
 			if (channel === "state") {
@@ -166,7 +175,7 @@ export class WizardStateManager<T extends WizardData> {
 	 * Update state cache from machine
 	 */
 	private updateStateCache(): void {
-		const snapshot = this.machine.snapshot;
+		const snapshot = this.snapshotCache;
 		this.stateCache = {
 			currentStepId: snapshot.currentStepId,
 			currentStep: this.machine.currentStep,
@@ -181,7 +190,7 @@ export class WizardStateManager<T extends WizardData> {
 	 * Update validation cache from machine
 	 */
 	private updateValidationCache(): void {
-		const snapshot = this.machine.snapshot;
+		const snapshot = this.snapshotCache;
 		this.validationCache = {
 			isValid: snapshot.isValid,
 			validationErrors: snapshot.validationErrors,
@@ -192,7 +201,7 @@ export class WizardStateManager<T extends WizardData> {
 	 * Update navigation cache with synchronous values only
 	 */
 	private updateNavigationCacheSync(): void {
-		const snapshot = this.machine.snapshot;
+		const snapshot = this.snapshotCache;
 		this.navigationCache = {
 			...this.navigationCache,
 			canGoBack: snapshot.canGoBack,
@@ -206,7 +215,10 @@ export class WizardStateManager<T extends WizardData> {
 	 * Get current machine snapshot
 	 */
 	getSnapshot(): WizardState<T> {
-		return this.machine.snapshot;
+		// FIX 12: return the cached reference (refreshed in notifySubscribers) so
+		// the same object is returned until state changes — required for
+		// useSyncExternalStore stability.
+		return this.snapshotCache;
 	}
 
 	/**
@@ -332,6 +344,84 @@ export class WizardStateManager<T extends WizardData> {
 	 */
 	getMachine(): WizardMachine<T> {
 		return this.machine;
+	}
+
+	/**
+	 * Reset the wizard to its initial state.
+	 *
+	 * Sets the loading flags + notifies "loading", calls the machine's
+	 * synchronous reset(), then clears the loading flags + notifies "loading".
+	 *
+	 * The state/navigation/validation channels are notified automatically via the
+	 * machine's onStateChange auto-routing (handleStateChange), so this method
+	 * must NOT notify them manually to avoid double-notify.
+	 */
+	async runReset(data?: T): Promise<void> {
+		this.setLoadingState({
+			isValidating: false,
+			isSubmitting: false,
+			isNavigating: false,
+		});
+		try {
+			this.machine.reset(data);
+		} finally {
+			this.setLoadingState({
+				isValidating: false,
+				isSubmitting: false,
+				isNavigating: false,
+			});
+		}
+	}
+
+	/**
+	 * Cancel the wizard.
+	 *
+	 * Sets isNavigating + notifies "loading", awaits the machine's cancel()
+	 * (which always resets, then rejects if a cancel handler threw), then clears
+	 * the loading flags + notifies "loading". Rejections from the machine
+	 * propagate to the caller.
+	 *
+	 * The state/navigation/validation channels are notified automatically via the
+	 * machine's onStateChange auto-routing.
+	 */
+	async runCancel(): Promise<void> {
+		this.setLoadingState({ isNavigating: true });
+		try {
+			await this.machine.cancel();
+		} finally {
+			this.setLoadingState({
+				isValidating: false,
+				isSubmitting: false,
+				isNavigating: false,
+			});
+		}
+	}
+
+	/**
+	 * Restore the wizard from a serialized state.
+	 *
+	 * Sets the loading flags + notifies "loading", calls the machine's
+	 * synchronous restore(), then clears the loading flags + notifies "loading".
+	 *
+	 * The state/navigation/validation channels are notified automatically via the
+	 * machine's onStateChange auto-routing (restore emits sync + async-validate
+	 * onStateChange).
+	 */
+	async runRestore(serializedState: WizardSerializedState<T>): Promise<void> {
+		this.setLoadingState({
+			isValidating: false,
+			isSubmitting: false,
+			isNavigating: false,
+		});
+		try {
+			this.machine.restore(serializedState);
+		} finally {
+			this.setLoadingState({
+				isValidating: false,
+				isSubmitting: false,
+				isNavigating: false,
+			});
+		}
 	}
 
 	/**

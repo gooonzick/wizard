@@ -6,6 +6,7 @@ import type {
 	WizardData,
 	WizardDefinition,
 	WizardProgress,
+	WizardSerializedState,
 	WizardState,
 	WizardStepDefinition,
 } from "@gooonzick/wizard-core";
@@ -114,6 +115,10 @@ export type CanSubmitFn = () => Promise<boolean>;
 export type SubmitFn = () => Promise<void>;
 export type ResetFn<T extends WizardData> = (data?: T) => void;
 export type CancelFn = () => Promise<void>;
+export type SerializeFn<T extends WizardData> = () => WizardSerializedState<T>;
+export type RestoreFn<T extends WizardData> = (
+	state: WizardSerializedState<T>,
+) => void;
 
 /**
  * Actions slice - data mutations and validation
@@ -127,6 +132,8 @@ export interface UseWizardActions<T extends WizardData> {
 	submit: SubmitFn;
 	reset: ResetFn<T>;
 	cancel: CancelFn;
+	serialize: SerializeFn<T>;
+	restore: RestoreFn<T>;
 }
 
 /**

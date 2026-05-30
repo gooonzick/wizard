@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { HistoryExample } from "./history-example";
 import { ResetCancelExample } from "./reset-cancel-example";
+import { StatePersistenceExample } from "./state-persistence-example";
 import { WizardExample } from "./wizard-example";
 
-type View = "wizard" | "history" | "reset-cancel";
+type View = "wizard" | "history" | "reset-cancel" | "persistence";
 
 export function App() {
 	const [view, setView] = useState<View>("wizard");
@@ -12,6 +13,7 @@ export function App() {
 		{ id: "wizard", label: "Registration Wizard" },
 		{ id: "history", label: "Navigation History" },
 		{ id: "reset-cancel", label: "Reset & Cancel" },
+		{ id: "persistence", label: "State Persistence" },
 	];
 
 	return (
@@ -35,6 +37,7 @@ export function App() {
 			{view === "wizard" && <WizardExample />}
 			{view === "history" && <HistoryExample />}
 			{view === "reset-cancel" && <ResetCancelExample />}
+			{view === "persistence" && <StatePersistenceExample />}
 		</div>
 	);
 }

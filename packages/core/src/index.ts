@@ -13,6 +13,7 @@ export {
 	WizardConfigurationError,
 	WizardError,
 	WizardNavigationError,
+	WizardRestoreError,
 	WizardValidationError,
 } from "./errors";
 // Transitions
@@ -39,6 +40,7 @@ export {
 	type GoToOptions,
 	type WizardEvents,
 	WizardMachine,
+	type WizardSerializedState,
 	type WizardState,
 } from "./machine/wizard-machine";
 export type {

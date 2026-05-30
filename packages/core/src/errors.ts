@@ -55,6 +55,16 @@ export class WizardConfigurationError extends WizardError {
 }
 
 /**
+ * Error thrown when serialized wizard state cannot be restored
+ */
+export class WizardRestoreError extends WizardError {
+	constructor(message: string) {
+		super(message);
+		this.name = "WizardRestoreError";
+	}
+}
+
+/**
  * Error thrown when operation is aborted
  */
 export class WizardAbortError extends WizardError {

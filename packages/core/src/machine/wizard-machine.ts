@@ -2,6 +2,7 @@ import {
 	WizardAbortError,
 	WizardConfigurationError,
 	WizardNavigationError,
+	WizardRestoreError,
 	WizardValidationError,
 } from "../errors";
 import type {
@@ -32,6 +33,21 @@ export interface WizardState<T> {
 	validationErrors?: Record<string, string>;
 	stepStatuses: Record<StepId, StepStatus>;
 	progress: WizardProgress;
+}
+
+/**
+ * JSON-safe serialized wizard runtime state
+ */
+export interface WizardSerializedState<T extends WizardData> {
+	version: 1;
+	currentStepId: StepId;
+	data: T;
+	isValid: boolean;
+	isCompleted: boolean;
+	validationErrors?: Record<string, string>;
+	stepStatuses: Record<StepId, StepStatus>;
+	visitedSteps: StepId[];
+	history: StepId[];
 }
 
 /**
@@ -66,14 +82,33 @@ export interface GoToOptions {
 /**
  * Runtime state machine for wizard execution
  */
+const SERIALIZED_STATE_VERSION = 1;
+
+const VALID_STEP_STATUSES = new Set<StepStatus>([
+	"pristine",
+	"active",
+	"visited",
+	"completed",
+	"error",
+	"skipped",
+]);
+
 export class WizardMachine<T extends WizardData> {
 	private definition: WizardDefinition<T>;
 	private context: WizardContext;
-	private state: Omit<WizardState<T>, "progress">;
+	private _state!: Omit<WizardState<T>, "progress">;
 	private events: WizardEvents<T>;
 	private visitedSteps: Set<StepId> = new Set();
 	private stepHistory: StepId[] = [];
 	private isTransitioning = false;
+	/** Abort token for reset()/cancel(): bumped to supersede in-flight transitions. */
+	private generation = 0;
+	/** Generation captured at the start of the active withTransition operation. */
+	private transitionGen: number | undefined;
+	/** Bumped on every state mutation; used to invalidate the cached progress. */
+	private stateVersion = 0;
+	private cachedProgress: WizardProgress | null = null;
+	private cachedProgressVersion = -1;
 	/** Deep-cloned snapshot of the data used to seed `reset()`. */
 	private initialData: T;
 
@@ -110,6 +145,19 @@ export class WizardMachine<T extends WizardData> {
 	}
 
 	/**
+	 * Internal state accessor. Writing bumps the state version so the cached
+	 * progress (FIX 10) is invalidated on every state mutation.
+	 */
+	private get state(): Omit<WizardState<T>, "progress"> {
+		return this._state;
+	}
+
+	private set state(next: Omit<WizardState<T>, "progress">) {
+		this._state = next;
+		this.stateVersion++;
+	}
+
+	/**
 	 * Deep-clones data for snapshotting. Uses `structuredClone` when available,
 	 * falls back to JSON round-trip otherwise.
 	 */
@@ -123,13 +171,22 @@ export class WizardMachine<T extends WizardData> {
 	 * Initializes the first step by calling lifecycle hooks
 	 */
 	private async initializeFirstStep(): Promise<void> {
+		// FIX 2: capture the generation so a stale re-enter from a superseded
+		// reset()/cancel() does not fire onStepEnter/onStateChange.
+		const gen = this.generation;
 		const initialStep = this.definition.steps[this.definition.initialStepId];
 		try {
 			if (initialStep.onEnter) {
 				await initialStep.onEnter(this.state.data, this.context);
 			}
+			if (this.generation !== gen) {
+				return;
+			}
 			this.events.onStepEnter?.(this.definition.initialStepId, this.state.data);
 			this.debug(`Entered initial step: ${this.definition.initialStepId}`);
+			// FIX 7: emit a state change after the awaited onEnter so async onEnter
+			// side effects reach subscribers (harmless when there are none yet).
+			this.notifyStateChange();
 		} catch (error) {
 			this.handleError(error);
 		}
@@ -169,7 +226,12 @@ export class WizardMachine<T extends WizardData> {
 	 * Gets the current state snapshot
 	 */
 	get snapshot(): WizardState<T> {
-		return { ...this.state, progress: this.computeProgress() };
+		const snapshot = { ...this.state, progress: this.computeProgress() };
+		// FIX 8: shallow-freeze the snapshot and its stepStatuses to prevent
+		// callers from mutating internal state. `data` is intentionally NOT
+		// frozen (user data may legitimately be mutated / re-set via updateData).
+		Object.freeze(snapshot.stepStatuses);
+		return Object.freeze(snapshot);
 	}
 
 	/**
@@ -191,6 +253,61 @@ export class WizardMachine<T extends WizardData> {
 	 */
 	get isBusy(): boolean {
 		return this.isTransitioning;
+	}
+
+	/**
+	 * Serializes the current wizard runtime state into a plain object.
+	 */
+	serialize(): WizardSerializedState<T> {
+		const snapshot = this.snapshot;
+		return {
+			version: SERIALIZED_STATE_VERSION,
+			currentStepId: snapshot.currentStepId,
+			data: this.cloneData(snapshot.data),
+			isValid: snapshot.isValid,
+			isCompleted: snapshot.isCompleted,
+			validationErrors: snapshot.validationErrors
+				? { ...snapshot.validationErrors }
+				: undefined,
+			stepStatuses: { ...snapshot.stepStatuses },
+			visitedSteps: this.visited,
+			history: this.history,
+		};
+	}
+
+	/**
+	 * Restores a previously serialized wizard runtime state.
+	 */
+	restore(serializedState: WizardSerializedState<T>): void {
+		this.assertRestorableState(serializedState);
+
+		this.stepHistory = [...serializedState.history];
+		this.visitedSteps = new Set([
+			...serializedState.visitedSteps,
+			serializedState.currentStepId,
+		]);
+
+		this.state = {
+			currentStepId: serializedState.currentStepId,
+			data: this.cloneData(serializedState.data),
+			isValid: serializedState.isValid,
+			isCompleted: serializedState.isCompleted,
+			// FIX 6: a restored state sitting on the initial step is not canGoBack,
+			// matching the first-step definition used elsewhere in the machine.
+			canGoBack:
+				serializedState.currentStepId !== this.definition.initialStepId &&
+				this.stepHistory.length > 1,
+			validationErrors: serializedState.validationErrors
+				? { ...serializedState.validationErrors }
+				: undefined,
+			stepStatuses: this.normalizeRestoredStepStatuses(serializedState),
+		};
+
+		this.notifyStateChange();
+
+		// FIX 11: re-validate the restored current step so a stale isValid:true on
+		// actually-invalid data is corrected (fire-and-forget; emits onStateChange).
+		void this.validate();
 	}
 
 	/**
@@ -328,6 +445,10 @@ export class WizardMachine<T extends WizardData> {
 			const currentStep = this.currentStep;
 			if (currentStep.onSubmit) {
 				await currentStep.onSubmit(this.state.data, this.context);
+				// FIX 2: a reset()/cancel() during onSubmit supersedes this transition.
+				if (this.isTransitionStale()) {
+					return;
+				}
 				this.events.onSubmit?.(currentStep.id, this.state.data);
 			}
 
@@ -336,6 +457,10 @@ export class WizardMachine<T extends WizardData> {
 
 			// Resolve next step
 			const nextStepId = await this.resolveNextStep();
+			// FIX 2: a reset()/cancel() during resolveNextStep supersedes this transition.
+			if (this.isTransitionStale()) {
+				return;
+			}
 			if (!nextStepId) {
 				// No next step - we're at the end
 				await this.complete();
@@ -592,6 +717,10 @@ export class WizardMachine<T extends WizardData> {
 			if (currentStep.onLeave) {
 				await currentStep.onLeave(this.state.data, this.context);
 			}
+			// FIX 2: a reset()/cancel() during onLeave supersedes this transition.
+			if (this.isTransitionStale()) {
+				return;
+			}
 			this.events.onStepLeave?.(currentStep.id, this.state.data);
 		}
 
@@ -600,7 +729,11 @@ export class WizardMachine<T extends WizardData> {
 			this.stepHistory.push(stepId);
 		}
 
-		// Update state
+		// Update state.
+		// FIX 3: preserve a "completed" status on the target step (e.g. when going
+		// back to an already-completed step); only mark it "active" otherwise.
+		const targetStatus =
+			this.state.stepStatuses[stepId] === "completed" ? "completed" : "active";
 		this.state = {
 			...this.state,
 			currentStepId: stepId,
@@ -609,7 +742,7 @@ export class WizardMachine<T extends WizardData> {
 			canGoBack: this.stepHistory.length > 1,
 			stepStatuses: {
 				...this.state.stepStatuses,
-				[stepId]: "active",
+				[stepId]: targetStatus,
 			},
 		};
 
@@ -619,6 +752,10 @@ export class WizardMachine<T extends WizardData> {
 		if (!skipLifecycle) {
 			if (targetStep.onEnter) {
 				await targetStep.onEnter(this.state.data, this.context);
+			}
+			// FIX 2: a reset()/cancel() during onEnter supersedes this transition.
+			if (this.isTransitionStale()) {
+				return;
 			}
 			this.events.onStepEnter?.(stepId, this.state.data);
 		}
@@ -660,6 +797,10 @@ export class WizardMachine<T extends WizardData> {
 	 *   snapshot. Subsequent `reset()` calls will use this new value.
 	 */
 	reset(data?: T): void {
+		// FIX 2: supersede any in-flight transition so its resuming awaits become
+		// no-ops and cannot corrupt the freshly-reset state.
+		this.generation++;
+
 		if (data !== undefined) {
 			this.initialData = this.cloneData(data);
 		}
@@ -692,6 +833,11 @@ export class WizardMachine<T extends WizardData> {
 	 * If neither handler is registered, behaves identically to `reset()`.
 	 */
 	async cancel(): Promise<void> {
+		// FIX 2: supersede any in-flight transition immediately, before awaiting
+		// the cancel handlers, so a resuming transition cannot corrupt state.
+		this.generation++;
+
+		let handlerError: unknown;
 		try {
 			if (this.definition.onCancel) {
 				await this.definition.onCancel(this.state.data, this.context);
@@ -700,11 +846,19 @@ export class WizardMachine<T extends WizardData> {
 			if (eventCancel) {
 				await eventCancel(this.state.data);
 			}
+		} catch (error) {
+			handlerError = error;
+		} finally {
+			// FIX 1: the wizard is ALWAYS returned to its initial state, even when
+			// a cancel handler throws.
 			this.reset();
 			this.debug("Wizard cancelled");
-		} catch (error) {
-			this.handleError(error);
-			throw error;
+		}
+
+		// FIX 1: surface any handler error after the reset has run.
+		if (handlerError !== undefined) {
+			this.handleError(handlerError);
+			throw handlerError;
 		}
 	}
 
@@ -758,6 +912,118 @@ export class WizardMachine<T extends WizardData> {
 		this.events.onStateChange?.(this.snapshot);
 	}
 
+	private assertRestorableState(
+		serializedState: WizardSerializedState<T>,
+	): void {
+		if (!serializedState || typeof serializedState !== "object") {
+			throw new WizardRestoreError("Serialized state must be an object");
+		}
+
+		if (serializedState.version !== SERIALIZED_STATE_VERSION) {
+			throw new WizardRestoreError(
+				`Unsupported serialized wizard state version: ${serializedState.version}`,
+			);
+		}
+
+		if (!this.isKnownStepId(serializedState.currentStepId)) {
+			throw new WizardRestoreError(
+				`Serialized current step "${serializedState.currentStepId}" does not exist`,
+			);
+		}
+
+		// FIX 5: data must be present, otherwise cloneData(undefined) yields an
+		// undefined state.data and a downstream crash.
+		if (serializedState.data === undefined) {
+			throw new WizardRestoreError(
+				"Serialized state is missing required `data`",
+			);
+		}
+
+		if (!Array.isArray(serializedState.history)) {
+			throw new WizardRestoreError("Serialized history must be an array");
+		}
+
+		if (serializedState.history.length === 0) {
+			throw new WizardRestoreError("Serialized history must not be empty");
+		}
+
+		if (
+			serializedState.history[serializedState.history.length - 1] !==
+			serializedState.currentStepId
+		) {
+			throw new WizardRestoreError(
+				"Serialized history must end with the current step",
+			);
+		}
+
+		if (!Array.isArray(serializedState.visitedSteps)) {
+			throw new WizardRestoreError("Serialized visitedSteps must be an array");
+		}
+
+		if (
+			!serializedState.stepStatuses ||
+			typeof serializedState.stepStatuses !== "object" ||
+			Array.isArray(serializedState.stepStatuses)
+		) {
+			throw new WizardRestoreError("Serialized stepStatuses must be an object");
+		}
+
+		for (const stepId of [
+			...serializedState.history,
+			...serializedState.visitedSteps,
+		]) {
+			if (!this.isKnownStepId(stepId)) {
+				throw new WizardRestoreError(
+					`Serialized step "${stepId}" does not exist`,
+				);
+			}
+		}
+
+		for (const [stepId, status] of Object.entries(
+			serializedState.stepStatuses,
+		)) {
+			if (!this.isKnownStepId(stepId)) {
+				throw new WizardRestoreError(
+					`Serialized step status references unknown step "${stepId}"`,
+				);
+			}
+			if (!VALID_STEP_STATUSES.has(status as StepStatus)) {
+				throw new WizardRestoreError(
+					`Serialized step "${stepId}" has invalid status "${status}"`,
+				);
+			}
+		}
+	}
+
+	private normalizeRestoredStepStatuses(
+		serializedState: WizardSerializedState<T>,
+	): Record<StepId, StepStatus> {
+		const statuses = this.initializeStepStatuses(serializedState.currentStepId);
+		for (const [stepId, status] of Object.entries(
+			serializedState.stepStatuses,
+		)) {
+			statuses[stepId as StepId] = status as StepStatus;
+		}
+		if (!serializedState.isCompleted) {
+			// FIX 4: preserve a meaningful serialized status for the current step;
+			// only default to "active" when there is no meaningful serialized status.
+			const serializedCurrent =
+				serializedState.stepStatuses[serializedState.currentStepId];
+			const isMeaningful =
+				serializedCurrent === "completed" ||
+				serializedCurrent === "error" ||
+				serializedCurrent === "visited";
+			if (!isMeaningful) {
+				statuses[serializedState.currentStepId] = "active";
+			}
+		}
+		return statuses;
+	}
+
+	private isKnownStepId(stepId: StepId): boolean {
+		return Object.hasOwn(this.definition.steps, stepId);
+	}
+
 	/**
 	 * Updates a step's status in the internal state without emitting a change.
 	 * Used by navigation methods that will emit their own state change afterward.
@@ -804,6 +1070,15 @@ export class WizardMachine<T extends WizardData> {
 	 * Steps whose status is "skipped" are excluded from `enabledStepIds`.
 	 */
 	private computeProgress(): WizardProgress {
+		// FIX 10: return the cached progress until the state version changes so
+		// the returned reference is stable across snapshot reads.
+		if (
+			this.cachedProgress !== null &&
+			this.cachedProgressVersion === this.stateVersion
+		) {
+			return this.cachedProgress;
+		}
+
 		const allStepIds = Object.keys(this.definition.steps);
 		const statuses = this.state.stepStatuses;
 		const enabledStepIds = allStepIds.filter(
@@ -824,16 +1099,111 @@ export class WizardMachine<T extends WizardData> {
 				? 0
 				: Math.round((completedSteps / enabledSteps) * 100);
 
-		return {
+		// FIX 9: align isFirstStep/isLastStep with the navigation-graph
+		// definition used by the state manager.
+		const isFirstStep =
+			this.state.currentStepId === this.definition.initialStepId;
+		const isLastStep = this.resolveNextStepSync() == null;
+
+		const progress: WizardProgress = {
 			totalSteps: allStepIds.length,
 			enabledSteps,
 			completedSteps,
 			currentStepIndex,
 			enabledStepIds,
 			percentage,
-			isFirstStep: enabledSteps > 0 && currentStepIndex === 0,
-			isLastStep: enabledSteps > 0 && currentStepIndex === enabledSteps - 1,
+			isFirstStep,
+			isLastStep,
 		};
+
+		this.cachedProgress = progress;
+		this.cachedProgressVersion = this.stateVersion;
+		return progress;
+	}
+
+	/**
+	 * Best-effort synchronous resolution of the next step id, mirroring the
+	 * async `resolveNextStep()` for the synchronously-resolvable cases (static
+	 * transitions, boolean / synchronous guards, synchronous conditional/resolver
+	 * branches). Returns `null` when there is no resolvable next step. If a
+	 * transition or guard resolves asynchronously (returns a Promise) the
+	 * resolution cannot be completed synchronously and `null` is returned for
+	 * that branch — `isLastStep` then reflects the best synchronous estimate.
+	 */
+	private resolveNextStepSync(): StepId | null {
+		const data = this.state.data;
+		const ctx = this.context;
+		const isPromise = (v: unknown): v is Promise<unknown> =>
+			typeof (v as { then?: unknown })?.then === "function";
+
+		const resolveTransitionSync = (
+			transition: WizardStepDefinition<T>["next"],
+		): StepId | null => {
+			if (!transition) {
+				return null;
+			}
+			switch (transition.type) {
+				case "static":
+					return transition.to;
+				case "conditional": {
+					for (const branch of transition.branches) {
+						const canProceed = branch.when(data, ctx);
+						if (isPromise(canProceed)) {
+							return null;
+						}
+						if (canProceed) {
+							return branch.to;
+						}
+					}
+					return null;
+				}
+				case "resolver": {
+					const resolved = transition.resolve(data, ctx);
+					return isPromise(resolved) ? null : resolved;
+				}
+				default:
+					return null;
+			}
+		};
+
+		const evaluateGuardSync = (
+			guard: WizardStepDefinition<T>["enabled"],
+		): boolean | null => {
+			if (guard === undefined) {
+				return true;
+			}
+			if (typeof guard === "boolean") {
+				return guard;
+			}
+			const result = guard(data, ctx);
+			return isPromise(result) ? null : result;
+		};
+
+		const visited = new Set<StepId>();
+		let stepId = resolveTransitionSync(this.currentStep.next);
+
+		while (stepId) {
+			if (visited.has(stepId)) {
+				return null;
+			}
+			visited.add(stepId);
+
+			const step = this.definition.steps[stepId];
+			if (!step) {
+				return null;
+			}
+
+			const isEnabled = evaluateGuardSync(step.enabled);
+			if (isEnabled === null || isEnabled) {
+				// Unknown (async) guard is optimistically treated as enabled so a
+				// step with an async guard does not spuriously flag isLastStep.
+				return stepId;
+			}
+
+			stepId = resolveTransitionSync(step.next);
+		}
+
+		return null;
 	}
 
 	/**
@@ -886,6 +1256,11 @@ export class WizardMachine<T extends WizardData> {
 		this.checkAborted();
 		this.ensureNotBusy();
 
+		// FIX 2: capture the abort generation for the duration of this transition.
+		// A reset()/cancel() fired mid-flight bumps `this.generation`, after which
+		// the state-writing primitives (navigateToStep / notifyStateChange) become
+		// silent no-ops so a resuming stale transition cannot corrupt fresh state.
+		this.transitionGen = this.generation;
 		this.isTransitioning = true;
 		try {
 			return await operation();
@@ -895,5 +1270,15 @@ export class WizardMachine<T extends WizardData> {
 		} finally {
 			this.isTransitioning = false;
 		}
+	}
+
+	/**
+	 * FIX 2: true when the current async transition has been superseded by a
+	 * reset()/cancel(). State writes guarded by this become no-ops.
+	 */
+	private isTransitionStale(): boolean {
+		return (
+			this.transitionGen !== undefined && this.transitionGen !== this.generation
+		);
 	}
 }
