@@ -8,8 +8,15 @@ import type {
 	WizardPlugin,
 } from "./types";
 
-/** Reports an isolated hook throw back to the machine (which routes to onError). */
-export type PluginErrorReporter = (error: unknown) => void;
+/** Reports an isolated hook throw back to the machine (which routes to onError).
+ * The optional `phase` lets callers override the default "transition" phase used
+ * by `handleError`. Lifecycle hooks (onComplete, onReset, destroy, onInit)
+ * pass "lifecycle"; transition hooks leave it undefined (defaults to "transition").
+ */
+export type PluginErrorReporter = (
+	error: unknown,
+	phase?: "validation" | "transition" | "lifecycle" | "submit",
+) => void;
 
 /**
  * Owns the ordered plugin list and all hook dispatch logic. The machine holds
@@ -45,7 +52,7 @@ export class PluginHost<TData> {
 			return;
 		}
 		const [plugin] = this.plugins.splice(index, 1);
-		await this.runIsolated(() => plugin.destroy?.());
+		await this.runIsolated(() => plugin.destroy?.(), "lifecycle");
 	}
 
 	/** Ordered (registration-order) snapshot of registered plugins. */
@@ -62,10 +69,10 @@ export class PluginHost<TData> {
 			try {
 				const result = plugin.onInit(view);
 				if (result instanceof Promise) {
-					result.catch((err) => this.reportError(err));
+					result.catch((err) => this.reportError(err, "lifecycle"));
 				}
 			} catch (err) {
-				this.reportError(err);
+				this.reportError(err, "lifecycle");
 			}
 		}
 	}
@@ -81,10 +88,10 @@ export class PluginHost<TData> {
 		try {
 			const result = plugin.onInit(view);
 			if (result instanceof Promise) {
-				result.catch((err) => this.reportError(err));
+				result.catch((err) => this.reportError(err, "lifecycle"));
 			}
 		} catch (err) {
-			this.reportError(err);
+			this.reportError(err, "lifecycle");
 		}
 	}
 
@@ -116,14 +123,14 @@ export class PluginHost<TData> {
 	/** Isolated onComplete dispatch. */
 	async dispatchComplete(data: DeepReadonly<TData>): Promise<void> {
 		for (const plugin of this.plugins) {
-			await this.runIsolated(() => plugin.onComplete?.(data));
+			await this.runIsolated(() => plugin.onComplete?.(data), "lifecycle");
 		}
 	}
 
 	/** Isolated onReset dispatch. */
 	async dispatchReset(): Promise<void> {
 		for (const plugin of this.plugins) {
-			await this.runIsolated(() => plugin.onReset?.());
+			await this.runIsolated(() => plugin.onReset?.(), "lifecycle");
 		}
 	}
 
@@ -160,16 +167,19 @@ export class PluginHost<TData> {
 		const reversed = [...this.plugins].reverse();
 		this.plugins = [];
 		for (const plugin of reversed) {
-			await this.runIsolated(() => plugin.destroy?.());
+			await this.runIsolated(() => plugin.destroy?.(), "lifecycle");
 		}
 	}
 
 	/** Awaits a hook, catching + reporting any throw/rejection. */
-	private async runIsolated(fn: () => void | Promise<void>): Promise<void> {
+	private async runIsolated(
+		fn: () => void | Promise<void>,
+		phase?: "validation" | "transition" | "lifecycle" | "submit",
+	): Promise<void> {
 		try {
 			await fn();
 		} catch (err) {
-			this.reportError(err);
+			this.reportError(err, phase);
 		}
 	}
 }
