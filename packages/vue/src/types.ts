@@ -5,6 +5,7 @@ import type {
 	WizardContext,
 	WizardData,
 	WizardDefinition,
+	WizardPlugin,
 	WizardProgress,
 	WizardSerializedState,
 	WizardState,
@@ -35,6 +36,11 @@ export interface UseWizardOptions<T extends WizardData> {
 	onCancel?: (data: T) => void | Promise<void>;
 	onReset?: () => void;
 	onError?: (error: Error) => void;
+	/**
+	 * Plugins registered once at machine creation (reference-stable — read once,
+	 * NOT reactive). Define them outside setup or hoist them.
+	 */
+	plugins?: WizardPlugin<T>[];
 }
 
 /**
