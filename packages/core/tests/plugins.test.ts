@@ -402,6 +402,85 @@ describe("WizardMachine plugin onError", () => {
 		expect(ctx).toMatchObject({ phase: "validation", stepId: "step1" });
 	});
 
+	it("fires plugin onError exactly once (phase 'validation') when the validator THROWS in goNext", async () => {
+		const onError = vi.fn();
+		const boom = new Error("validator-threw");
+		const def = createValidatedDefinition();
+		def.steps.step1.validate = async () => {
+			throw boom;
+		};
+		const m = new WizardMachine<SimpleData>(def, {}, initial, {}, [
+			{ name: "p", onError },
+		]);
+		await expect(m.goNext()).rejects.toBeTruthy();
+		// Exactly once: validate() self-reports the thrown validator error and the
+		// goNext !valid branch consumes the dedupe flag, so it does not re-report.
+		expect(onError).toHaveBeenCalledTimes(1);
+		expect(onError.mock.calls[0][0]).toBe(boom);
+		expect(onError.mock.calls[0][1]).toMatchObject({
+			phase: "validation",
+			stepId: "step1",
+		});
+	});
+
+	it("fires plugin onError exactly once (phase 'validation') when the validator THROWS in goTo", async () => {
+		const onError = vi.fn();
+		const boom = new Error("validator-threw");
+		const def = createValidatedDefinition();
+		def.steps.step1.validate = async () => {
+			throw boom;
+		};
+		const m = new WizardMachine<SimpleData>(def, {}, initial, {}, [
+			{ name: "p", onError },
+		]);
+		// goTo validates the CURRENT step before leaving (skipValidation defaults false).
+		await expect(m.goTo("step2")).rejects.toBeTruthy();
+		expect(onError).toHaveBeenCalledTimes(1);
+		expect(onError.mock.calls[0][0]).toBe(boom);
+		expect(onError.mock.calls[0][1]).toMatchObject({
+			phase: "validation",
+			stepId: "step1",
+		});
+	});
+
+	it("fires plugin onError exactly once (phase 'validation') when the validator THROWS in submit", async () => {
+		const onError = vi.fn();
+		const boom = new Error("validator-threw");
+		const def = createValidatedDefinition();
+		def.steps.step1.validate = async () => {
+			throw boom;
+		};
+		const m = new WizardMachine<SimpleData>(def, {}, initial, {}, [
+			{ name: "p", onError },
+		]);
+		await expect(m.submit()).rejects.toBeTruthy();
+		// Exactly once: validate() self-reports the throw; submit's catch skips the
+		// WizardValidationError so it is not re-reported with phase "submit".
+		expect(onError).toHaveBeenCalledTimes(1);
+		expect(onError.mock.calls[0][0]).toBe(boom);
+		expect(onError.mock.calls[0][1]).toMatchObject({
+			phase: "validation",
+			stepId: "step1",
+		});
+	});
+
+	it("fires plugin onError exactly once (phase 'validation') on a clean {valid:false} via submit", async () => {
+		const onError = vi.fn();
+		const m = new WizardMachine<SimpleData>(
+			createValidatedDefinition(),
+			{},
+			{ name: "", email: "" }, // invalid: name required on step1
+			{},
+			[{ name: "p", onError }],
+		);
+		await expect(m.submit()).rejects.toBeInstanceOf(WizardValidationError);
+		expect(onError).toHaveBeenCalledTimes(1);
+		expect(onError.mock.calls.at(-1)?.[1]).toMatchObject({
+			phase: "validation",
+			stepId: "step1",
+		});
+	});
+
 	it("a throw inside a plugin's onError is swallowed (no recursion)", async () => {
 		const spy = vi.spyOn(console, "error").mockImplementation(() => {});
 		const m = new WizardMachine<SimpleData>(
