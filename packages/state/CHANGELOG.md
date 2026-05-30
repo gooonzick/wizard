@@ -1,5 +1,18 @@
 # @gooonzick/wizard-state
 
+## 1.4.0
+
+### Minor Changes
+
+- 39c6e9c: feat: implement Progress API for wizard state tracking
+- 1f8a07a: feat: add cancel functionality
+
+### Patch Changes
+
+- Updated dependencies [39c6e9c]
+- Updated dependencies [1f8a07a]
+  - @gooonzick/wizard-core@1.4.0
+
 ## 1.3.0
 
 ### Minor Changes
