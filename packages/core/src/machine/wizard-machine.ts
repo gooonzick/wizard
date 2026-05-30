@@ -116,6 +116,13 @@ export class WizardMachine<T extends WizardData> {
 	private stateVersion = 0;
 	private cachedProgress: WizardProgress | null = null;
 	private cachedProgressVersion = -1;
+	/**
+	 * Set by `validate()` when it has already reported a thrown validator error
+	 * via `handleError(.., "validation")`. Callers (goNext/goTo/submit) consume
+	 * and clear it so they do NOT re-report the same logical validation failure,
+	 * ensuring plugin `onError` fires exactly once per failure.
+	 */
+	private validateAlreadyReported = false;
 	/** Deep-cloned snapshot of the data used to seed `reset()`. */
 	private initialData: T;
 	// WIZ-007: plugin host and the read-only facade passed to plugin hooks.
@@ -419,6 +426,9 @@ export class WizardMachine<T extends WizardData> {
 	 */
 	async validate(): Promise<ValidationResult> {
 		this.checkAborted();
+		// Reset the per-call dedupe flag; set only when this call self-reports a
+		// thrown validator error below.
+		this.validateAlreadyReported = false;
 		try {
 			const step = this.currentStep;
 			const validator = step.validate || alwaysValid;
@@ -436,7 +446,11 @@ export class WizardMachine<T extends WizardData> {
 
 			return result;
 		} catch (error) {
+			// A validator that THREW is a genuine validation failure: report it once
+			// here (phase "validation") and mark it reported so the caller's !valid
+			// branch does not re-report the same logical failure.
 			this.handleError(error, "validation");
+			this.validateAlreadyReported = true;
 			return { valid: false, errors: { general: "Validation error occurred" } };
 		}
 	}
@@ -482,7 +496,14 @@ export class WizardMachine<T extends WizardData> {
 			// Validate before submit
 			const validationResult = await this.validate();
 			if (!validationResult.valid) {
-				throw new WizardValidationError(validationResult.errors || {});
+				const err = new WizardValidationError(validationResult.errors || {});
+				// Report the validation failure exactly once, with phase "validation"
+				// (unless validate() already reported a thrown validator error). The
+				// catch below skips WizardValidationError so it is not re-reported.
+				if (!this.validateAlreadyReported) {
+					this.handleError(err, "validation");
+				}
+				throw err;
 			}
 
 			// Execute step's submit handler
@@ -497,7 +518,11 @@ export class WizardMachine<T extends WizardData> {
 				await this.complete();
 			}
 		} catch (error) {
-			this.handleError(error, "submit");
+			// A WizardValidationError was already reported above (phase "validation");
+			// do not re-report it. All other errors are reported with phase "submit".
+			if (!(error instanceof WizardValidationError)) {
+				this.handleError(error, "submit");
+			}
 			throw error;
 		}
 	}
@@ -516,7 +541,11 @@ export class WizardMachine<T extends WizardData> {
 			if (!validationResult.valid) {
 				this.setStepStatusInternal(this.state.currentStepId, "error");
 				const err = new WizardValidationError(validationResult.errors || {});
-				this.handleError(err, "validation");
+				// If validate() already reported a thrown validator error, do not
+				// re-report; otherwise this is the single reporter for the failure.
+				if (!this.validateAlreadyReported) {
+					this.handleError(err, "validation");
+				}
 				throw err;
 			}
 
@@ -680,7 +709,11 @@ export class WizardMachine<T extends WizardData> {
 				const validationResult = await this.validate();
 				if (!validationResult.valid) {
 					const err = new WizardValidationError(validationResult.errors || {});
-					this.handleError(err, "validation");
+					// If validate() already reported a thrown validator error, do not
+					// re-report; otherwise this is the single reporter for the failure.
+					if (!this.validateAlreadyReported) {
+						this.handleError(err, "validation");
+					}
 					throw err;
 				}
 			}
