@@ -34,6 +34,7 @@ export default defineConfig({
 						{ text: "Getting Started", link: "/guide/getting-started" },
 						{ text: "Core Concepts", link: "/guide/core-concepts" },
 						{ text: "Defining Wizards", link: "/guide/defining-wizards" },
+						{ text: "Plugins", link: "/guide/plugins" },
 					],
 				},
 				{

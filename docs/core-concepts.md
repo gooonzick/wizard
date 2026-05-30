@@ -599,3 +599,22 @@ This wizard demonstrates:
 - **Resolver transitions** (previous goes back to company if wantsTraining)
 - **Async operations** (onSubmit sends data, onComplete redirects)
 - **Type safety** (all steps know about OnboardingData fields)
+
+## 13. Plugins
+
+Plugins add cross-cutting behaviour — analytics, logging, error reporting, auto-save — at the machine level without modifying individual steps. A plugin is a plain object with lifecycle hooks (`beforeTransition`, `afterTransition`, `onComplete`, `onError`, `onReset`, `onInit`, `destroy`) that fire globally across every step.
+
+```typescript
+import { createLoggingPlugin } from "@gooonzick/wizard-core";
+
+const machine = new WizardMachine(definition, context, initialData, events, [
+  createLoggingPlugin({ level: "debug" }),
+]);
+
+// Or register after construction (chainable):
+machine.use(myAnalyticsPlugin).use(myAutoSavePlugin);
+```
+
+In React and Vue you pass a `plugins` array to `useWizard` or the provider. Plugins are torn down automatically when the component unmounts.
+
+For the full plugin API, hook firing order, veto semantics, and how to write your own plugin, see the [Plugins section of the API reference](./api-reference.md#plugins--middleware).
