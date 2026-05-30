@@ -593,14 +593,13 @@ export class WizardMachine<T extends WizardData> {
 		return this.withTransition(async () => {
 			// History-first: if we have history entries beyond the current step, pop back
 			if (this.stepHistory.length > 1) {
-				// Pop the current step off the stack
-				this.stepHistory.pop();
-				// The new top is our target
-				const previousStepId = this.stepHistory[this.stepHistory.length - 1];
+				// Target is the entry below the current step. Do NOT pop yet —
+				// navigateToStep pops only after beforeTransition passes.
+				const previousStepId = this.stepHistory[this.stepHistory.length - 2];
 
-				this.setStepStatusInternal(this.state.currentStepId, "visited");
 				await this.navigateToStep(previousStepId, "previous", {
 					pushToHistory: false,
+					popHistory: 1,
 				});
 				this.debug(
 					`Navigated to previous step (from history): ${previousStepId}`,
@@ -614,7 +613,6 @@ export class WizardMachine<T extends WizardData> {
 				throw new WizardNavigationError("No previous step available");
 			}
 
-			this.setStepStatusInternal(this.state.currentStepId, "visited");
 			await this.navigateToStep(previousStepId, "previous");
 			this.debug(
 				`Navigated to previous step (from resolver): ${previousStepId}`,
@@ -636,12 +634,10 @@ export class WizardMachine<T extends WizardData> {
 				);
 			}
 
-			// Pop `steps` entries from the stack
-			for (let i = 0; i < steps; i++) {
-				this.stepHistory.pop();
-			}
-
-			const targetStepId = this.stepHistory[this.stepHistory.length - 1];
+			// Compute the target without mutating the stack. navigateToStep pops
+			// `steps` entries only after beforeTransition passes.
+			const targetIndex = this.stepHistory.length - 1 - steps;
+			const targetStepId = this.stepHistory[targetIndex];
 
 			// Check if target step is still enabled
 			const targetStep = this.definition.steps[targetStepId];
@@ -669,6 +665,7 @@ export class WizardMachine<T extends WizardData> {
 
 			await this.navigateToStep(targetStepId, "previous", {
 				pushToHistory: false,
+				popHistory: steps,
 			});
 			this.debug(`Went back ${steps} steps to: ${targetStepId}`);
 		});
@@ -828,9 +825,17 @@ export class WizardMachine<T extends WizardData> {
 	private async navigateToStep(
 		stepId: StepId,
 		type: "next" | "previous" | "goTo",
-		options?: { pushToHistory?: boolean; skipLifecycle?: boolean },
+		options?: {
+			pushToHistory?: boolean;
+			skipLifecycle?: boolean;
+			popHistory?: number;
+		},
 	): Promise<void> {
-		const { pushToHistory = true, skipLifecycle = false } = options ?? {};
+		const {
+			pushToHistory = true,
+			skipLifecycle = false,
+			popHistory = 0,
+		} = options ?? {};
 		const currentStep = this.currentStep;
 		const targetStep = this.definition.steps[stepId];
 
@@ -870,9 +875,19 @@ export class WizardMachine<T extends WizardData> {
 			this.events.onStepLeave?.(currentStep.id, this.state.data);
 		}
 
-		// Update history stack
-		if (pushToHistory) {
+		// Update history stack (commit AFTER the veto/stale checks above).
+		if (popHistory > 0) {
+			for (let i = 0; i < popHistory; i++) {
+				this.stepHistory.pop();
+			}
+		} else if (pushToHistory) {
 			this.stepHistory.push(stepId);
+		}
+
+		// Backward navigation marks the departing step as visited. Deferred to
+		// here so a beforeTransition veto does not leave the status mutated.
+		if (type === "previous") {
+			this.setStepStatusInternal(fromStepId, "visited");
 		}
 
 		// Update state.
