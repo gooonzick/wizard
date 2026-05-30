@@ -544,7 +544,7 @@ export class WizardMachine<T extends WizardData> {
 			}
 
 			// Navigate to next step
-			await this.navigateToStep(nextStepId);
+			await this.navigateToStep(nextStepId, "next");
 			this.debug(`Navigated to next step: ${nextStepId}`);
 		});
 	}
@@ -564,7 +564,9 @@ export class WizardMachine<T extends WizardData> {
 				const previousStepId = this.stepHistory[this.stepHistory.length - 1];
 
 				this.setStepStatusInternal(this.state.currentStepId, "visited");
-				await this.navigateToStep(previousStepId, { pushToHistory: false });
+				await this.navigateToStep(previousStepId, "previous", {
+					pushToHistory: false,
+				});
 				this.debug(
 					`Navigated to previous step (from history): ${previousStepId}`,
 				);
@@ -578,7 +580,7 @@ export class WizardMachine<T extends WizardData> {
 			}
 
 			this.setStepStatusInternal(this.state.currentStepId, "visited");
-			await this.navigateToStep(previousStepId);
+			await this.navigateToStep(previousStepId, "previous");
 			this.debug(
 				`Navigated to previous step (from resolver): ${previousStepId}`,
 			);
@@ -630,7 +632,9 @@ export class WizardMachine<T extends WizardData> {
 				);
 			}
 
-			await this.navigateToStep(targetStepId, { pushToHistory: false });
+			await this.navigateToStep(targetStepId, "previous", {
+				pushToHistory: false,
+			});
 			this.debug(`Went back ${steps} steps to: ${targetStepId}`);
 		});
 	}
@@ -694,7 +698,7 @@ export class WizardMachine<T extends WizardData> {
 			}
 
 			this.setStepStatusInternal(this.state.currentStepId, "visited");
-			await this.navigateToStep(stepId, { skipLifecycle });
+			await this.navigateToStep(stepId, "goTo", { skipLifecycle });
 			this.debug(`Navigated to step: ${stepId}`);
 		});
 	}
@@ -782,11 +786,36 @@ export class WizardMachine<T extends WizardData> {
 	 */
 	private async navigateToStep(
 		stepId: StepId,
+		type: "next" | "previous" | "goTo",
 		options?: { pushToHistory?: boolean; skipLifecycle?: boolean },
 	): Promise<void> {
 		const { pushToHistory = true, skipLifecycle = false } = options ?? {};
 		const currentStep = this.currentStep;
 		const targetStep = this.definition.steps[stepId];
+
+		// WIZ-007: beforeTransition (sequential, veto/throw aware) at the very top,
+		// before onLeave / state write, where both from and to are known.
+		const fromStepId = currentStep.id;
+		const event = {
+			type,
+			fromStepId,
+			toStepId: stepId,
+			data: this.state.data as never,
+			timestamp: Date.now(),
+		};
+		// A beforeTransition throw aborts the transition. Do NOT report it here:
+		// it is not a WizardValidationError, so withTransition's catch is the
+		// single reporter for it (no state write has happened yet). Just rethrow
+		// so withTransition handles + reports it once.
+		const proceed = await this.pluginHost.dispatchBeforeTransition(event);
+		if (!proceed) {
+			// Veto: silent cancel. No leave/enter, no state write, no afterTransition.
+			return;
+		}
+		// A plugin may have awaited while reset()/cancel() interrupted.
+		if (this.isTransitionStale()) {
+			return;
+		}
 
 		// Call onLeave for current step
 		if (!skipLifecycle) {
@@ -837,6 +866,10 @@ export class WizardMachine<T extends WizardData> {
 		}
 
 		this.notifyStateChange();
+
+		// WIZ-007: afterTransition fires ONLY after the committed notifyStateChange
+		// (not on any stale early-return above). Isolated per-plugin.
+		await this.pluginHost.dispatchAfterTransition(event);
 	}
 
 	/**

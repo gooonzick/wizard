@@ -153,3 +153,201 @@ describe("WizardMachine plugin registration", () => {
 		expect(() => m.use({ name: "late" })).toThrow(WizardConfigurationError);
 	});
 });
+
+describe("WizardMachine before/afterTransition", () => {
+	it("beforeTransition fires before the step change with from/to/type for goNext", async () => {
+		const before = vi.fn();
+		const m = new WizardMachine<SimpleData>(
+			createSimpleLinearDefinition(),
+			{},
+			initial,
+			{},
+			[{ name: "p", beforeTransition: before }],
+		);
+		await m.goNext();
+		expect(before).toHaveBeenCalledTimes(1);
+		expect(before.mock.calls[0][0]).toMatchObject({
+			type: "next",
+			fromStepId: "step1",
+			toStepId: "step2",
+		});
+	});
+
+	it("uses type 'previous' for goPrevious and 'goTo' for goTo", async () => {
+		const events: { type: string; from: string; to: string }[] = [];
+		const m = new WizardMachine<SimpleData>(
+			createSimpleLinearDefinition(),
+			{},
+			initial,
+			{},
+			[
+				{
+					name: "p",
+					beforeTransition: (e) =>
+						void events.push({
+							type: e.type,
+							from: e.fromStepId,
+							to: e.toStepId,
+						}),
+				},
+			],
+		);
+		await m.goNext(); // step1 -> step2 (next)
+		await m.goTo("step1", { skipValidation: true }); // step2 -> step1 (goTo)
+		await m.goNext(); // step1 -> step2 (next)
+		await m.goPrevious(); // step2 -> step1 (previous)
+		expect(events.map((e) => e.type)).toEqual([
+			"next",
+			"goTo",
+			"next",
+			"previous",
+		]);
+	});
+
+	it("beforeTransition returning false silently cancels (no state change, no afterTransition)", async () => {
+		const after = vi.fn();
+		const m = new WizardMachine<SimpleData>(
+			createSimpleLinearDefinition(),
+			{},
+			initial,
+			{},
+			[{ name: "p", beforeTransition: () => false, afterTransition: after }],
+		);
+		const result = await m.goTo("step2", { skipValidation: true });
+		expect(result).toBeUndefined(); // goTo stays Promise<void>
+		expect(m.snapshot.currentStepId).toBe("step1"); // unchanged
+		expect(after).not.toHaveBeenCalled();
+	});
+
+	it("beforeTransition throwing aborts the transition, routes to onError, and rethrows", async () => {
+		const onError = vi.fn();
+		const boom = new Error("veto-throw");
+		const m = new WizardMachine<SimpleData>(
+			createSimpleLinearDefinition(),
+			{},
+			initial,
+			// NOTE: plugin onError dispatch + the `phase` arg arrive in Task 5.
+			// For now the wired reporter is `events.onError`; assert against it.
+			{ onError },
+			[
+				{
+					name: "p",
+					beforeTransition: () => {
+						throw boom;
+					},
+				},
+			],
+		);
+		await expect(m.goNext()).rejects.toBe(boom);
+		expect(m.snapshot.currentStepId).toBe("step1");
+		expect(onError).toHaveBeenCalledTimes(1);
+		expect(onError.mock.calls[0][0]).toBe(boom);
+	});
+
+	it("afterTransition fires after the committed state change", async () => {
+		let observed: string | undefined;
+		const m = new WizardMachine<SimpleData>(
+			createSimpleLinearDefinition(),
+			{},
+			initial,
+			{},
+			[
+				{
+					name: "p",
+					afterTransition: () => {
+						observed = m.snapshot.currentStepId;
+					},
+				},
+			],
+		);
+		await m.goNext();
+		expect(observed).toBe("step2");
+	});
+
+	it("before/afterTransition still fire under skipLifecycle", async () => {
+		const before = vi.fn();
+		const after = vi.fn();
+		const m = new WizardMachine<SimpleData>(
+			createSimpleLinearDefinition(),
+			{},
+			initial,
+			{},
+			[{ name: "p", beforeTransition: before, afterTransition: after }],
+		);
+		await m.goTo("step2", { skipValidation: true, skipLifecycle: true });
+		expect(before).toHaveBeenCalledTimes(1);
+		expect(after).toHaveBeenCalledTimes(1);
+	});
+
+	it("a throw in afterTransition is isolated; other plugins still run, navigation succeeds", async () => {
+		const second = vi.fn();
+		const m = new WizardMachine<SimpleData>(
+			createSimpleLinearDefinition(),
+			{},
+			initial,
+			{},
+			[
+				{
+					name: "a",
+					afterTransition: () => {
+						throw new Error("after-fail");
+					},
+				},
+				{ name: "b", afterTransition: second },
+			],
+		);
+		await m.goNext();
+		expect(m.snapshot.currentStepId).toBe("step2");
+		expect(second).toHaveBeenCalledTimes(1);
+	});
+
+	it("does not corrupt state when beforeTransition awaits while reset() runs (staleness)", async () => {
+		let release!: () => void;
+		const gate = new Promise<void>((r) => {
+			release = r;
+		});
+		const m = new WizardMachine<SimpleData>(
+			createSimpleLinearDefinition(),
+			{},
+			initial,
+			{},
+			[
+				{
+					name: "p",
+					beforeTransition: async () => {
+						await gate;
+					},
+				},
+			],
+		);
+		const nav = m.goNext();
+		m.reset(); // supersede the in-flight transition
+		release();
+		await nav;
+		expect(m.snapshot.currentStepId).toBe("step1"); // reset wins, no corruption
+	});
+
+	it("re-entrancy: a plugin calling goNext inside a hook throws busy", async () => {
+		let captured: unknown;
+		const m = new WizardMachine<SimpleData>(
+			createSimpleLinearDefinition(),
+			{},
+			initial,
+			{},
+			[
+				{
+					name: "p",
+					beforeTransition: async () => {
+						try {
+							await m.goNext();
+						} catch (e) {
+							captured = e;
+						}
+					},
+				},
+			],
+		);
+		await m.goNext();
+		expect((captured as { reason?: string })?.reason).toBe("busy");
+	});
+});
