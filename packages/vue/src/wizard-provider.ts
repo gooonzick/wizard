@@ -3,6 +3,7 @@ import type {
 	WizardContext as WizardCoreContext,
 	WizardData,
 	WizardDefinition,
+	WizardPlugin,
 	WizardState,
 } from "@gooonzick/wizard-core";
 import {
@@ -45,6 +46,7 @@ export interface WizardProviderProps<T extends WizardData> {
 	onCancel?: (data: T) => void | Promise<void>;
 	onReset?: () => void;
 	onError?: (error: Error) => void;
+	plugins?: WizardPlugin<T>[];
 }
 
 /**
@@ -82,6 +84,7 @@ export const WizardProvider = defineComponent({
 		) => void | Promise<void>,
 		onReset: Function as unknown as () => () => void,
 		onError: Function as unknown as () => (error: Error) => void,
+		plugins: Array as unknown as () => WizardPlugin<WizardData>[],
 	},
 	setup(props, { slots }) {
 		// Use the main composable - this handles all machine management
@@ -97,6 +100,7 @@ export const WizardProvider = defineComponent({
 			onCancel: props.onCancel,
 			onReset: props.onReset,
 			onError: props.onError,
+			plugins: props.plugins,
 		});
 
 		// Provide wizard context

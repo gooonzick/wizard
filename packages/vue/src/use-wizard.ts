@@ -43,6 +43,7 @@ export function useWizard<T extends WizardData>(
 		onCancel,
 		onReset,
 		onError,
+		plugins,
 	} = options;
 
 	// Callbacks captured once at setup time (composables run once per component)
@@ -63,44 +64,50 @@ export function useWizard<T extends WizardData>(
 
 	// Factory function to create machine with proper events
 	const createMachine = (data?: T): WizardMachine<T> => {
-		return new WizardMachine(definition, context, data || initialData, {
-			onStateChange: (newState: WizardState<T>) => {
-				// The machine fires this synchronously from its constructor
-				// (initializeFirstStep) before `stateRef`/`managerRef` are wired up.
-				// The initial snapshot is read directly below, so skip these early
-				// notifications instead of writing through an undefined ref.
-				if (!stateRef) {
-					return;
-				}
-				const oldState = stateRef.value;
-				stateRef.value = newState;
-				// Route the change to the manager's navigation/validation channels so
-				// async follow-up notifications (e.g. after reset/cancel/restore
-				// onEnter/validate) refresh navigation state in the view.
-				if (oldState && managerRef) {
-					managerRef.handleStateChange(newState, oldState);
-				}
-				callbacks.onStateChange?.(newState);
+		return new WizardMachine(
+			definition,
+			context,
+			data || initialData,
+			{
+				onStateChange: (newState: WizardState<T>) => {
+					// The machine fires this synchronously from its constructor
+					// (initializeFirstStep) before `stateRef`/`managerRef` are wired up.
+					// The initial snapshot is read directly below, so skip these early
+					// notifications instead of writing through an undefined ref.
+					if (!stateRef) {
+						return;
+					}
+					const oldState = stateRef.value;
+					stateRef.value = newState;
+					// Route the change to the manager's navigation/validation channels so
+					// async follow-up notifications (e.g. after reset/cancel/restore
+					// onEnter/validate) refresh navigation state in the view.
+					if (oldState && managerRef) {
+						managerRef.handleStateChange(newState, oldState);
+					}
+					callbacks.onStateChange?.(newState);
+				},
+				onStepEnter: (stepId: StepId, d: T) => {
+					callbacks.onStepEnter?.(stepId, d);
+				},
+				onStepLeave: (stepId: StepId, d: T) => {
+					callbacks.onStepLeave?.(stepId, d);
+				},
+				onComplete: (d: T) => {
+					callbacks.onComplete?.(d);
+				},
+				onCancel: async (d: T) => {
+					await callbacks.onCancel?.(d);
+				},
+				onReset: () => {
+					callbacks.onReset?.();
+				},
+				onError: (error: Error) => {
+					callbacks.onError?.(error);
+				},
 			},
-			onStepEnter: (stepId: StepId, d: T) => {
-				callbacks.onStepEnter?.(stepId, d);
-			},
-			onStepLeave: (stepId: StepId, d: T) => {
-				callbacks.onStepLeave?.(stepId, d);
-			},
-			onComplete: (d: T) => {
-				callbacks.onComplete?.(d);
-			},
-			onCancel: async (d: T) => {
-				await callbacks.onCancel?.(d);
-			},
-			onReset: () => {
-				callbacks.onReset?.();
-			},
-			onError: (error: Error) => {
-				callbacks.onError?.(error);
-			},
-		});
+			plugins,
+		);
 	};
 
 	// Initialize machine and manager immediately (not as shallowRef with null)
@@ -178,6 +185,9 @@ export function useWizard<T extends WizardData>(
 	onScopeDispose(() => {
 		stopStepWatcher();
 		unsubscribeNavigation();
+		// WIZ-007: tear down plugins (machine.destroy via the manager). Isolated
+		// rejections are handled internally — fire-and-forget here.
+		void manager.value.destroy();
 	});
 
 	// Computed values derived from reactive state
