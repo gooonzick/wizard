@@ -185,7 +185,7 @@ A.afterTransition → B.afterTransition
 
 ### Veto Semantics
 
-If `beforeTransition` returns `false`, the transition is **silently cancelled** — no error is thrown, no `afterTransition` fires. The wizard remains on the current step. This is a no-op from the user's perspective. Note that the navigation method still resolves normally: `await goTo(...)` (and `goNext`/`goPrevious`) returns `Promise<void>` and resolves rather than rejects on a veto, so callers awaiting the call will not see a rejection.
+If `beforeTransition` returns `false`, the transition is **silently cancelled** — no error is thrown, no `afterTransition` fires. A veto is a clean no-op: the wizard's current step, navigation history, and **all step statuses** are left completely unchanged (the veto is checked before any `onLeave`, history, or status mutation, so nothing is partially applied). This holds for every navigation method — `goNext`, `goTo`, `goPrevious`, and `goBack`. Note that the navigation method still resolves normally: `await goTo(...)` (and `goNext`/`goPrevious`/`goBack`) returns `Promise<void>` and resolves rather than rejects on a veto, so callers awaiting the call will not see a rejection.
 
 ### Error Semantics — Exactly Once
 
