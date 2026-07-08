@@ -54,8 +54,10 @@ export type {
 } from "./plugins/types";
 export type {
 	StepId,
+	StepValidationSummary,
 	SyncOrAsync,
 	ValidationResult,
+	ValidationSummary,
 	WizardContext,
 	WizardData,
 } from "./types/base";

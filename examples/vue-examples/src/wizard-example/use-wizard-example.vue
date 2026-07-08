@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import type { ValidationSummary } from "@gooonzick/wizard-core";
 import { useWizard } from "@gooonzick/wizard-vue";
+import { ref } from "vue";
 import Button from "@/components/ui/button.vue";
 import Card from "@/components/ui/card.vue";
 import WizardForm from "@/components/wizard-form.vue";
@@ -17,6 +19,16 @@ const { navigation, actions, state, validation } = useWizard({
 		alert("Wizard completed! Check console for data.");
 	},
 });
+
+// Review-step demo: validate every step at once and jump to the first invalid.
+const allSummary = ref<ValidationSummary | null>(null);
+const handleValidateAll = async () => {
+	const summary = await actions.validateAll({ updateStatuses: true });
+	allSummary.value = summary;
+	if (!summary.valid && summary.firstInvalidStepId) {
+		navigation.goTo(summary.firstInvalidStepId, { skipValidation: true });
+	}
+};
 </script>
 
 <template>
@@ -67,6 +79,9 @@ const { navigation, actions, state, validation } = useWizard({
 							</Button>
 						</template>
 						<template v-else>
+							<Button variant="outline" @click="handleValidateAll">
+								Validate all
+							</Button>
 							<Button
 								@click="actions.submit"
 								class="bg-green-600 hover:bg-green-700"
@@ -75,6 +90,13 @@ const { navigation, actions, state, validation } = useWizard({
 							</Button>
 						</template>
 					</div>
+
+					<p
+						v-if="allSummary && !allSummary.valid"
+						class="text-sm text-red-600 mt-2"
+					>
+						Invalid steps: {{ allSummary.invalidStepIds.join(", ") }}
+					</p>
 				</Card>
 
 				<!-- Right Column - Sidebar -->
