@@ -576,9 +576,11 @@ Plugins fire in registration order:
 
 `destroy` fires in **reverse** registration order.
 
+> **`beforeTransition` is a navigation gate, not a pre-`onSubmit` gate.** On `goNext` it fires **after** the current step's `validate()` and `onSubmit()` have already run; on `goTo` it fires after the current step has been validated (unless `skipValidation: true`). A veto reliably prevents the step change — navigation history, the current step, and all step statuses stay unchanged — but it does **not** roll back a `validate()` pass or an `onSubmit()` side effect that already executed.
+
 ##### Firing Conditions
 
-- `before/afterTransition` fire on `goNext`, `goPrevious`, and `goTo` — including `goTo` with `skipLifecycle: true`.
+- `before/afterTransition` fire on `goNext`, `goPrevious`, and `goTo` — including `goTo` with `skipLifecycle: true`. The deprecated aliases `goBack(n)` and `goToStep(stepId)` route through the same navigation path, so hooks also fire for them (`TransitionEvent.type` is `"previous"` for `goBack`, `"goTo"` for `goToStep`).
 - `before/afterTransition` do **not** fire on `complete`, `reset`, or `cancel`.
 - `onError` fires **exactly once** per error regardless of source.
 
@@ -600,7 +602,7 @@ Both `useWizard` and `<WizardProvider>` accept a `plugins?: WizardPlugin<T>[]` o
 
 ##### Tests
 
-All hook dispatch, veto, ordering, error isolation, busy-guard re-entrancy, and destroy ordering are covered in `packages/core/tests/plugins.test.ts`.
+All hook dispatch, veto, ordering, error isolation, busy-guard re-entrancy, and destroy ordering are covered by 56 tests across four files: `packages/core/tests/plugins.test.ts` (machine-level integration), `plugin-host.test.ts` (`PluginHost` unit tests), `logging-plugin.test.ts` (`createLoggingPlugin`), and `plugins-barrel.test.ts` (main-barrel + `/plugins` subpath exports).
 
 ---
 
