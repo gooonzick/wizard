@@ -158,7 +158,7 @@ Plugins are automatically destroyed via `onScopeDispose` when the component scop
 | Hook | When it fires | Can veto? | Error handling |
 |---|---|---|---|
 | `onInit` | After machine state is seeded (fire-and-forget) | No | Isolated — logged, does not throw to callers |
-| `beforeTransition` | Before every `goNext` / `goPrevious` / `goTo` (incl. `skipLifecycle`) | **Yes** — return `false` | Sequential — a throw aborts the transition and rethrows to the caller (`goNext`/`goPrevious`/`goTo` reject); reported once via `onError` with phase `"transition"` |
+| `beforeTransition` | Before every `goNext` / `goPrevious` / `goTo` (incl. `skipLifecycle`, and the deprecated `goBack` / `goToStep` aliases) | **Yes** — return `false` | Sequential — a throw aborts the transition and rethrows to the caller (`goNext`/`goPrevious`/`goTo` reject); reported once via `onError` with phase `"transition"` |
 | `afterTransition` | After the transition succeeds | No | Isolated |
 | `onError` | When any hook or validation throws | No | Single reporter — fires **exactly once** per failure |
 | `onComplete` | When the wizard completes | No | Isolated |
@@ -186,6 +186,8 @@ A.afterTransition → B.afterTransition
 ### Veto Semantics
 
 If `beforeTransition` returns `false`, the transition is **silently cancelled** — no error is thrown, no `afterTransition` fires. A veto is a clean no-op: the wizard's current step, navigation history, and **all step statuses** are left completely unchanged (the veto is checked before any `onLeave`, history, or status mutation, so nothing is partially applied). This holds for every navigation method — `goNext`, `goTo`, `goPrevious`, and `goBack`. Note that the navigation method still resolves normally: `await goTo(...)` (and `goNext`/`goPrevious`/`goBack`) returns `Promise<void>` and resolves rather than rejects on a veto, so callers awaiting the call will not see a rejection.
+
+**A veto guards navigation, not prior side effects.** `beforeTransition` is a *navigation gate*, not a pre-`onSubmit` gate. On `goNext` it fires **after** the current step's `validate()` and `onSubmit` have already run; on `goTo` it fires after the current step has been validated (unless you pass `skipValidation: true`). So while a veto reliably keeps the wizard on the current step (history, current step, and statuses stay put), it does **not** undo a `validate()` pass or an `onSubmit` that already executed. Put logic that must run *before* submit into the step's own `onSubmit`/validation, and use `beforeTransition` for cross-cutting navigation guards.
 
 ### Error Semantics — Exactly Once
 

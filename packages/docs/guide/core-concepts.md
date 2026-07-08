@@ -488,7 +488,7 @@ Statuses update automatically as users navigate:
 pristine ──(becomes currentStepId)──▶ active
 active ──(goNext succeeds)──▶ completed
 active ──(goNext validation fails)──▶ error
-active ──(goPrevious / goTo)──▶ visited
+active ──(goPrevious / goBack / goTo)──▶ visited
 completed / error ──(goTo back)──▶ active
 * ──(guard enabled=false)──▶ skipped
 skipped ──(guard enabled=true)──▶ pristine
