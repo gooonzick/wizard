@@ -2,6 +2,7 @@ import type {
 	GoToOptions,
 	StepId,
 	StepStatus,
+	ValidationSummary,
 	WizardContext,
 	WizardData,
 	WizardDefinition,
@@ -113,6 +114,9 @@ export type UpdateFieldFn<T extends WizardData> = <K extends keyof T>(
 	value: T[K],
 ) => void;
 export type ValidateFn = () => Promise<void>;
+export type ValidateAllFn = (
+	options?: { updateStatuses?: boolean },
+) => Promise<ValidationSummary>;
 export type CanSubmitFn = () => Promise<boolean>;
 export type SubmitFn = () => Promise<void>;
 export type ResetFn<T extends WizardData> = (data?: T) => void;
@@ -130,6 +134,7 @@ export interface UseWizardActions<T extends WizardData> {
 	setData: SetDataFn<T>;
 	updateField: UpdateFieldFn<T>;
 	validate: ValidateFn;
+	validateAll: ValidateAllFn;
 	canSubmit: CanSubmitFn;
 	submit: SubmitFn;
 	reset: ResetFn<T>;
@@ -359,6 +364,18 @@ export function useWizard<T extends WizardData>(
 		}
 	}, [manager]);
 
+	const validateAll = useCallback(
+		async (options?: { updateStatuses?: boolean }) => {
+			manager.setLoadingState({ isValidating: true });
+			try {
+				return await manager.getMachine().validateAll(options);
+			} finally {
+				manager.setLoadingState({ isValidating: false });
+			}
+		},
+		[manager],
+	);
+
 	const canSubmitFn = useCallback(async (): Promise<boolean> => {
 		return manager.getMachine().canSubmit();
 	}, [manager]);
@@ -525,6 +542,7 @@ export function useWizard<T extends WizardData>(
 			setData,
 			updateField,
 			validate,
+			validateAll,
 			canSubmit: canSubmitFn,
 			submit,
 			reset,
@@ -537,6 +555,7 @@ export function useWizard<T extends WizardData>(
 			setData,
 			updateField,
 			validate,
+			validateAll,
 			canSubmitFn,
 			submit,
 			reset,

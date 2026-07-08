@@ -34,6 +34,7 @@
 | Reset / Cancel (WIZ-005)                              | ✅     | `core`  |
 | State Persistence (WIZ-006)                           | ✅     | `core`  |
 | Plugin System (WIZ-007)                               | ✅     | `core`  |
+| Validate All Steps (WIZ-008)                          | ✅     | `core`  |
 
 ### Architectural Decisions
 
@@ -641,8 +642,8 @@ class WizardMachine<TData> {
 }
 
 // React
-const { validation } = useWizard({ ... });
-const summary = await validation.validateAll();
+const { actions, navigation } = useWizard({ ... });
+const summary = await actions.validateAll();
 if (!summary.valid) {
   navigation.goTo(summary.firstInvalidStepId!, { skipValidation: true });
 }

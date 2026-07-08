@@ -1,6 +1,8 @@
 import { createWizard } from "@gooonzick/wizard-core";
+import type { ValidationSummary } from "@gooonzick/wizard-core";
 import { useWizard } from "@gooonzick/wizard-react";
 import type React from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { WizardForm } from "./components/wizard-form";
 import { WizardProgress } from "./components/wizard-progress";
@@ -74,6 +76,17 @@ export const WizardExample: React.FC = () => {
 		review: "Review",
 	};
 
+	// Review-step demo: validate every step at once and jump to the first invalid.
+	const [allSummary, setAllSummary] = useState<ValidationSummary | null>(null);
+
+	const handleValidateAll = async () => {
+		const summary = await actions.validateAll({ updateStatuses: true });
+		setAllSummary(summary);
+		if (!summary.valid && summary.firstInvalidStepId) {
+			navigation.goTo(summary.firstInvalidStepId, { skipValidation: true });
+		}
+	};
+
 	return (
 		<div className="min-h-screen bg-gray-50 py-8 px-4">
 			<div className="max-w-7xl mx-auto">
@@ -124,14 +137,25 @@ export const WizardExample: React.FC = () => {
 									Next
 								</Button>
 							) : (
-								<Button
-									onClick={() => actions.submit()}
-									className="bg-green-600 hover:bg-green-700"
-								>
-									Submit
-								</Button>
+								<>
+									<Button variant="outline" onClick={handleValidateAll}>
+										Validate all
+									</Button>
+									<Button
+										onClick={() => actions.submit()}
+										className="bg-green-600 hover:bg-green-700"
+									>
+										Submit
+									</Button>
+								</>
 							)}
 						</div>
+
+						{allSummary && !allSummary.valid && (
+							<p className="text-sm text-red-600 mt-2">
+								Invalid steps: {allSummary.invalidStepIds.join(", ")}
+							</p>
+						)}
 					</div>
 
 					{/* Sidebar */}

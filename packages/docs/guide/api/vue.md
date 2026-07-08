@@ -86,6 +86,7 @@ interface UseWizardActions<T> {
   setData(data: T): void;
   updateField<K extends keyof T>(field: K, value: T[K]): void;
   validate(): Promise<void>;
+  validateAll(options?: { updateStatuses?: boolean }): Promise<ValidationSummary>;
   canSubmit(): Promise<boolean>;
   submit(): Promise<void>;
   reset(data?: T): void;

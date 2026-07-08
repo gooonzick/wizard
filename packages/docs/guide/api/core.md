@@ -134,6 +134,31 @@ interface ValidationResult {
 }
 ```
 
+### `ValidationSummary`
+
+Aggregate result of validating every enabled step (returned by `validateAll`).
+
+```ts
+interface ValidationSummary {
+  valid: boolean;                    // true iff all validated steps are valid
+  steps: StepValidationSummary[];    // one entry per validated (enabled) step
+  firstInvalidStepId: StepId | null; // first invalid step in definition order
+  invalidStepIds: StepId[];          // all invalid step ids, in definition order
+}
+```
+
+### `StepValidationSummary`
+
+Per-step entry inside a `ValidationSummary`.
+
+```ts
+interface StepValidationSummary {
+  stepId: StepId;
+  valid: boolean;
+  errors?: Record<string, string>;
+}
+```
+
 ### `WizardContext`
 
 Context passed to validators, hooks, and transitions. Extensible.
@@ -414,6 +439,8 @@ class WizardMachine<T> {
 
   // Validation & submission
   validate(): Promise<void>;
+  // Validate ALL enabled steps without navigating (dry-run).
+  validateAll(options?: { updateStatuses?: boolean }): Promise<ValidationSummary>;
   canSubmit(): Promise<boolean>;
   submit(): Promise<void>;
 

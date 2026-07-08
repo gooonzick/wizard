@@ -268,6 +268,18 @@ export function useWizardActions<T extends WizardData>(): UseWizardActions<T> {
 		}
 	}, [manager]);
 
+	const validateAll = useCallback(
+		async (options?: { updateStatuses?: boolean }) => {
+			manager.setLoadingState({ isValidating: true });
+			try {
+				return await manager.getMachine().validateAll(options);
+			} finally {
+				manager.setLoadingState({ isValidating: false });
+			}
+		},
+		[manager],
+	);
+
 	const canSubmit = useCallback(async (): Promise<boolean> => {
 		return manager.getMachine().canSubmit();
 	}, [manager]);
@@ -309,6 +321,7 @@ export function useWizardActions<T extends WizardData>(): UseWizardActions<T> {
 			setData,
 			updateField,
 			validate,
+			validateAll,
 			canSubmit,
 			submit,
 			reset,
@@ -321,6 +334,7 @@ export function useWizardActions<T extends WizardData>(): UseWizardActions<T> {
 			setData,
 			updateField,
 			validate,
+			validateAll,
 			canSubmit,
 			submit,
 			reset,

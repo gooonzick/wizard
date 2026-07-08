@@ -14,7 +14,9 @@ import type {
 } from "../plugins/types";
 import type {
 	StepId,
+	StepValidationSummary,
 	ValidationResult,
+	ValidationSummary,
 	WizardContext,
 	WizardData,
 } from "../types/base";
@@ -463,6 +465,75 @@ export class WizardMachine<T extends WizardData> {
 			this.validateAlreadyReported = true;
 			return { valid: false, errors: { general: "Validation error occurred" } };
 		}
+	}
+
+	/**
+	 * Validates every ENABLED step's validator without navigating (dry-run).
+	 * Steps without a `validate` are considered valid. Steps whose `enabled`
+	 * guard resolves to false are skipped entirely (not included in the summary).
+	 *
+	 * By default this does NOT mutate stepStatuses, isValid, or validationErrors,
+	 * does NOT fire onValidation/onStateChange, and is FULLY ISOLATED from plugins
+	 * (no plugin hook — including onError — is dispatched). With
+	 * `updateStatuses: true`, invalid steps are marked "error" in a single state
+	 * write that emits exactly one onStateChange.
+	 */
+	async validateAll(
+		options?: { updateStatuses?: boolean },
+	): Promise<ValidationSummary> {
+		this.checkAborted();
+		const { updateStatuses = false } = options ?? {};
+
+		const steps: StepValidationSummary[] = [];
+		const invalidStepIds: StepId[] = [];
+
+		// Insertion order == canonical order (matches computeProgress / Progress API).
+		for (const [stepId, step] of Object.entries(this.definition.steps)) {
+			// Skip disabled steps (boolean false OR guard resolving to false).
+			const isEnabled = await evaluateGuard(
+				step.enabled,
+				this.state.data,
+				this.context,
+			);
+			if (!isEnabled) {
+				continue;
+			}
+
+			const validator = step.validate || alwaysValid;
+
+			let result: ValidationResult;
+			try {
+				result = await validator(this.state.data, this.context);
+			} catch (error) {
+				// A thrown validator is caught here and marked invalid with the
+				// sentinel `_error` field. Do NOT call handleError / dispatch to
+				// plugins — validateAll is fully isolated from the plugin system.
+				const message = error instanceof Error ? error.message : String(error);
+				result = { valid: false, errors: { _error: message } };
+			}
+
+			steps.push({ stepId, valid: result.valid, errors: result.errors });
+			if (!result.valid) {
+				invalidStepIds.push(stepId);
+			}
+		}
+
+		// Optionally persist "error" on invalid steps in a SINGLE state write.
+		if (updateStatuses && invalidStepIds.length > 0) {
+			const nextStatuses = { ...this.state.stepStatuses };
+			for (const id of invalidStepIds) {
+				nextStatuses[id] = "error";
+			}
+			this.state = { ...this.state, stepStatuses: nextStatuses };
+			this.notifyStateChange(); // exactly one emit
+		}
+
+		return {
+			valid: invalidStepIds.length === 0,
+			steps,
+			firstInvalidStepId: invalidStepIds[0] ?? null,
+			invalidStepIds,
+		};
 	}
 
 	/**

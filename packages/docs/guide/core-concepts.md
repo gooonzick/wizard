@@ -206,6 +206,32 @@ validate: async (data, ctx) => {
 };
 ```
 
+### Validating All Steps
+
+`validate()` only checks the current step. To check every enabled step at once —
+useful on a final "Review/Summary" step — call `validateAll()`. It runs each
+enabled step's validator, skips disabled steps and steps without a validator
+(treated as valid), and returns a `ValidationSummary` without mutating live
+validation state (it is a dry-run by default):
+
+```ts
+const summary = await machine.validateAll();
+// summary.valid, summary.invalidStepIds, summary.firstInvalidStepId, summary.steps
+
+// Optionally mark invalid steps with the "error" status:
+await machine.validateAll({ updateStatuses: true });
+```
+
+In React/Vue, `validateAll` lives on the `actions` slice:
+
+```ts
+const { actions, navigation } = useWizard({ ... });
+const summary = await actions.validateAll();
+if (!summary.valid) {
+  navigation.goTo(summary.firstInvalidStepId!, { skipValidation: true });
+}
+```
+
 ## 6. Guards
 
 Guards control **whether a step is accessible**. Use them for conditional logic about step availability:

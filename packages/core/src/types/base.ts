@@ -12,6 +12,26 @@ export type ValidationResult = {
 };
 
 /**
+ * Per-step entry inside a {@link ValidationSummary}.
+ */
+export interface StepValidationSummary {
+	stepId: StepId;
+	valid: boolean;
+	errors?: Record<string, string>;
+}
+
+/**
+ * Aggregate result of validating every enabled step (returned by
+ * `WizardMachine.validateAll`).
+ */
+export interface ValidationSummary {
+	valid: boolean;
+	steps: StepValidationSummary[];
+	firstInvalidStepId: StepId | null;
+	invalidStepIds: StepId[];
+}
+
+/**
  * Base constraint for wizard data types.
  * Any object type with string keys is allowed - no need to extend Record<string, unknown>.
  *

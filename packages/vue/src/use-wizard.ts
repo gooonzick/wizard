@@ -239,6 +239,15 @@ export function useWizard<T extends WizardData>(
 		}
 	};
 
+	const validateAll = async (options?: { updateStatuses?: boolean }) => {
+		loadingState.isValidating = true;
+		try {
+			return await machine.value.validateAll(options);
+		} finally {
+			loadingState.isValidating = false;
+		}
+	};
+
 	const canSubmit = async (): Promise<boolean> => {
 		return machine.value.canSubmit();
 	};
@@ -375,6 +384,7 @@ export function useWizard<T extends WizardData>(
 		setData,
 		updateField,
 		validate,
+		validateAll,
 		canSubmit,
 		submit,
 		reset,
