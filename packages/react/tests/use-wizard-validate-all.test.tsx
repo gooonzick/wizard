@@ -48,7 +48,9 @@ describe("useWizard actions.validateAll", () => {
 			}),
 		);
 
-		let summary!: Awaited<ReturnType<typeof result.current.actions.validateAll>>;
+		let summary!: Awaited<
+			ReturnType<typeof result.current.actions.validateAll>
+		>;
 		await act(async () => {
 			summary = await result.current.actions.validateAll();
 		});

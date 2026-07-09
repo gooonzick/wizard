@@ -118,9 +118,9 @@ export type UpdateFieldFn<T extends WizardData> = <K extends keyof T>(
 	value: T[K],
 ) => void;
 export type ValidateFn = () => Promise<void>;
-export type ValidateAllFn = (
-	options?: { updateStatuses?: boolean },
-) => Promise<ValidationSummary>;
+export type ValidateAllFn = (options?: {
+	updateStatuses?: boolean;
+}) => Promise<ValidationSummary>;
 export type CanSubmitFn = () => Promise<boolean>;
 export type SubmitFn = () => Promise<void>;
 export type ResetFn<T extends WizardData> = (data?: T) => void;

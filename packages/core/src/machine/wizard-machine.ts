@@ -478,9 +478,9 @@ export class WizardMachine<T extends WizardData> {
 	 * `updateStatuses: true`, invalid steps are marked "error" in a single state
 	 * write that emits exactly one onStateChange.
 	 */
-	async validateAll(
-		options?: { updateStatuses?: boolean },
-	): Promise<ValidationSummary> {
+	async validateAll(options?: {
+		updateStatuses?: boolean;
+	}): Promise<ValidationSummary> {
 		this.checkAborted();
 		const { updateStatuses = false } = options ?? {};
 
