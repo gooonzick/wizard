@@ -3,8 +3,8 @@ import {
 	type WizardEvents,
 	WizardMachine,
 } from "../src/machine/wizard-machine";
-import type { WizardDefinition } from "../src/types/definition";
 import type { WizardPlugin } from "../src/plugins/types";
+import type { WizardDefinition } from "../src/types/definition";
 import {
 	createConditionalDefinition,
 	createValidatedDefinition,
