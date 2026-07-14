@@ -8,6 +8,8 @@ export default defineConfig({
 		alias: {
 			// Explicitly resolve 'vue' to the actual vue package, not our workspace package
 			vue: resolve(__dirname, "node_modules/vue"),
+			"@gooonzick/wizard-core": resolve(__dirname, "../core/src/index.ts"),
+			"@gooonzick/wizard-state": resolve(__dirname, "../state/src/index.ts"),
 		},
 	},
 	test: {
