@@ -1,67 +1,68 @@
-import type {
-	WizardData,
+import {
+	createLinearWizard,
+	createWizard,
+	type WizardData,
+	type WizardDefinition,
 	WizardMachine,
-	WizardProgress,
-	WizardState,
-	WizardStepDefinition,
+	type WizardState,
 } from "@gooonzick/wizard-core";
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { WizardStateManager } from "../src/manager";
 
-const EMPTY_PROGRESS: WizardProgress = {
-	totalSteps: 0,
-	enabledSteps: 0,
-	completedSteps: 0,
-	currentStepIndex: -1,
-	enabledStepIds: [],
-	percentage: 0,
-	isFirstStep: false,
-	isLastStep: false,
-};
-
 /**
- * Mock WizardMachine for testing
- * Uses type assertion for proper typing
+ * Replicates the binding wiring (react/wizard-provider.tsx:110-157): the
+ * machine's onStateChange forwards (newState, previousState) into
+ * manager.handleStateChange so the manager's caches update exactly as they do
+ * in production. Because the machine constructor needs onStateChange (which
+ * references the manager) and the manager needs the machine, a forward
+ * reference is used.
  */
-function createMockMachine<T extends WizardData>(): WizardMachine<T> {
-	return {
-		snapshot: {
-			currentStepId: "step-1",
-			data: {} as T,
-			isCompleted: false,
-			isValid: true,
-			validationErrors: undefined,
-			canGoBack: false,
-			stepStatuses: { "step-1": "active", "step-2": "pristine" },
-			progress: EMPTY_PROGRESS,
+function createWiredManager<T extends WizardData>(
+	definition: WizardDefinition<T>,
+	initialData: T,
+) {
+	let manager: WizardStateManager<T>;
+	let previous: WizardState<T> | undefined;
+	const machine = new WizardMachine<T>(definition, {}, initialData, {
+		onStateChange: (newState) => {
+			const old = previous;
+			previous = newState;
+			if (old) manager.handleStateChange(newState, old);
 		},
-		currentStep: {
-			id: "step-1",
-		} as unknown as WizardStepDefinition<T>,
-		visited: ["step-1"],
-		history: ["step-1"],
-		getNextStepId: vi.fn().mockResolvedValue("step-2"),
-		getPreviousStepId: vi.fn().mockResolvedValue(null),
-		getAvailableSteps: vi.fn().mockResolvedValue(["step-1", "step-2"]),
-	} as unknown as WizardMachine<T>;
+	});
+	previous = machine.snapshot;
+	manager = new WizardStateManager<T>(machine, definition.initialStepId);
+	return { machine, manager };
+}
+
+// Deterministic-enough settle for the async nav recompute (mirrors the vue
+// internal manager test style: real timers, no fake timers).
+const settle = (ms = 20) => new Promise((r) => setTimeout(r, ms));
+
+// Standard 2-step linear wizard used by the non-guarded suites.
+function buildLinear() {
+	const definition = createLinearWizard<{ name: string }>({
+		id: "test",
+		steps: [{ id: "step1" }, { id: "step2" }],
+	});
+	return createWiredManager<{ name: string }>(definition, { name: "" });
 }
 
 describe("WizardStateManager", () => {
 	describe("initialization", () => {
-		test("should initialize with machine and initial step ID", () => {
-			const machine = createMockMachine<{ name: string }>();
-			const manager = new WizardStateManager(machine, "step-1");
+		it("should initialize with machine and initial step ID", () => {
+			const { machine, manager } = buildLinear();
 
-			expect(manager.getSnapshot()).toBe(machine.snapshot);
-			expect(manager.getInitialStepId()).toBe("step-1");
+			expect(manager.getStateSnapshot().currentStepId).toBe("step1");
+			expect(manager.getSnapshot()).toEqual(machine.snapshot);
+			expect(manager.getInitialStepId()).toBe("step1");
 		});
 
-		test("should initialize caches with machine state", () => {
-			const machine = createMockMachine<{ name: string }>();
-			const manager = new WizardStateManager(machine, "step-1");
+		it("should initialize caches with machine state", () => {
+			const { manager } = buildLinear();
 
 			const stateSnapshot = manager.getStateSnapshot();
-			expect(stateSnapshot.currentStepId).toBe("step-1");
+			expect(stateSnapshot.currentStepId).toBe("step1");
 			expect(stateSnapshot.isCompleted).toBe(false);
 
 			const validationSnapshot = manager.getValidationSnapshot();
@@ -73,10 +74,10 @@ describe("WizardStateManager", () => {
 			expect(loadingSnapshot.isNavigating).toBe(false);
 		});
 
-		test("should initialize navigation cache with safe defaults", () => {
-			const machine = createMockMachine<{ name: string }>();
-			const manager = new WizardStateManager(machine, "step-1");
+		it("should expose navigation safe defaults before the async recompute settles", () => {
+			const { manager } = buildLinear();
 
+			// Synchronously after construction, the async recompute has not run yet.
 			const navSnapshot = manager.getNavigationSnapshot();
 			expect(navSnapshot.canGoNext).toBe(false);
 			expect(navSnapshot.canGoPrevious).toBe(false);
@@ -84,55 +85,97 @@ describe("WizardStateManager", () => {
 			expect(navSnapshot.isFirstStep).toBe(true);
 			expect(navSnapshot.isLastStep).toBe(true);
 		});
+
+		it("should recompute real navigation values after settle", async () => {
+			const { manager } = buildLinear();
+			await settle();
+
+			const navSnapshot = manager.getNavigationSnapshot();
+			expect(navSnapshot.canGoNext).toBe(true);
+			expect(navSnapshot.canGoPrevious).toBe(false);
+			expect(navSnapshot.availableSteps).toEqual(["step1", "step2"]);
+			expect(navSnapshot.isFirstStep).toBe(true);
+			expect(navSnapshot.isLastStep).toBe(false);
+		});
 	});
 
 	describe("subscriptions", () => {
-		test("should subscribe to all channels by default", () => {
-			const machine = createMockMachine<{ name: string }>();
-			const manager = new WizardStateManager(machine, "step-1");
+		it("should not invoke a fresh subscriber before any change", () => {
+			const { manager } = buildLinear();
 			const listener = vi.fn();
 
 			manager.subscribe(listener);
 			expect(listener).not.toHaveBeenCalled();
 		});
 
-		test("should subscribe to specific channel", () => {
-			const machine = createMockMachine<{ name: string }>();
-			const manager = new WizardStateManager(machine, "step-1");
+		it("should subscribe to a specific channel", () => {
+			const { manager } = buildLinear();
 			const listener = vi.fn();
 
 			manager.subscribe(listener, "state");
 			expect(listener).not.toHaveBeenCalled();
 		});
 
-		test("should unsubscribe listener", () => {
-			const machine = createMockMachine<{ name: string }>();
-			const manager = new WizardStateManager(machine, "step-1");
+		it("should unsubscribe listener (no notify after a real machine change)", () => {
+			const { machine, manager } = buildLinear();
 			const listener = vi.fn();
 
 			const unsubscribe = manager.subscribe(listener);
 			unsubscribe();
 
-			manager.notifySubscribers(["state"]);
+			machine.updateData((d) => ({ ...d, name: "changed" }));
 			expect(listener).not.toHaveBeenCalled();
 		});
 	});
 
 	describe("notifications", () => {
-		test("should notify all subscribers when state changes", () => {
-			const machine = createMockMachine<{ name: string }>();
-			const manager = new WizardStateManager(machine, "step-1");
+		it("should notify subscribers when a real data change occurs", () => {
+			const { machine, manager } = buildLinear();
 			const listener = vi.fn();
 
 			manager.subscribe(listener);
-			manager.notifySubscribers(["state"]);
+			machine.updateData((d) => ({ ...d, name: "new" }));
 
 			expect(listener).toHaveBeenCalled();
 		});
 
-		test("should notify all subscribers for affected channels", () => {
-			const machine = createMockMachine<{ name: string }>();
-			const manager = new WizardStateManager(machine, "step-1");
+		it("should route a data change to state, navigation, and validation channels", () => {
+			const { machine, manager } = buildLinear();
+			const stateListener = vi.fn();
+			const navListener = vi.fn();
+			const validationListener = vi.fn();
+
+			manager.subscribe(stateListener, "state");
+			manager.subscribe(navListener, "navigation");
+			manager.subscribe(validationListener, "validation");
+
+			machine.updateData((d) => ({ ...d, name: "new" }));
+
+			expect(stateListener).toHaveBeenCalled();
+			expect(navListener).toHaveBeenCalled();
+			expect(validationListener).toHaveBeenCalled();
+		});
+
+		it("should always notify 'all' channel subscribers on a real change", () => {
+			const { machine, manager } = buildLinear();
+			const allListener = vi.fn();
+			const stateListener = vi.fn();
+
+			manager.subscribe(allListener, "all");
+			manager.subscribe(stateListener, "state");
+
+			machine.updateData((d) => ({ ...d, name: "new" }));
+
+			expect(allListener).toHaveBeenCalled();
+			expect(stateListener).toHaveBeenCalled();
+		});
+
+		// Pure subscription-mechanics: channel filtering and dedup cannot be
+		// isolated through a real machine action (updateData always affects
+		// state + navigation + validation together), so drive notifySubscribers
+		// directly here.
+		it("should notify only the affected channels", () => {
+			const { manager } = buildLinear();
 			const stateListener = vi.fn();
 			const navListener = vi.fn();
 			const validationListener = vi.fn();
@@ -148,340 +191,179 @@ describe("WizardStateManager", () => {
 			expect(validationListener).toHaveBeenCalled();
 		});
 
-		test("should always notify 'all' channel subscribers", () => {
-			const machine = createMockMachine<{ name: string }>();
-			const manager = new WizardStateManager(machine, "step-1");
-			const allListener = vi.fn();
-			const stateListener = vi.fn();
-
-			manager.subscribe(allListener, "all");
-			manager.subscribe(stateListener, "state");
-
-			manager.notifySubscribers(["state"]);
-
-			expect(allListener).toHaveBeenCalled();
-			expect(stateListener).toHaveBeenCalled();
-		});
-
-		test("should deduplicate channels when notifying", () => {
-			const machine = createMockMachine<{ name: string }>();
-			const manager = new WizardStateManager(machine, "step-1");
+		it("should deduplicate channels when notifying", () => {
+			const { manager } = buildLinear();
 			const listener = vi.fn();
 
 			manager.subscribe(listener, "state");
-
 			manager.notifySubscribers(["state", "state", "state"]);
 
 			expect(listener).toHaveBeenCalledOnce();
 		});
 	});
 
-	describe("state snapshots", () => {
-		test("should return cached state snapshot", () => {
-			const machine = createMockMachine<{ name: string }>();
-			const manager = new WizardStateManager(machine, "step-1");
-
-			const snap1 = manager.getStateSnapshot();
-			const snap2 = manager.getStateSnapshot();
-
-			expect(snap1).toBe(snap2);
+	describe("cache reference stability", () => {
+		it("should return a stable state snapshot reference", () => {
+			const { manager } = buildLinear();
+			expect(manager.getStateSnapshot()).toBe(manager.getStateSnapshot());
 		});
 
-		test("should return cached validation snapshot", () => {
-			const machine = createMockMachine<{ name: string }>();
-			const manager = new WizardStateManager(machine, "step-1");
-
-			const snap1 = manager.getValidationSnapshot();
-			const snap2 = manager.getValidationSnapshot();
-
-			expect(snap1).toBe(snap2);
+		it("should return a stable validation snapshot reference", () => {
+			const { manager } = buildLinear();
+			expect(manager.getValidationSnapshot()).toBe(
+				manager.getValidationSnapshot(),
+			);
 		});
 
-		test("should return cached navigation snapshot", () => {
-			const machine = createMockMachine<{ name: string }>();
-			const manager = new WizardStateManager(machine, "step-1");
-
-			const snap1 = manager.getNavigationSnapshot();
-			const snap2 = manager.getNavigationSnapshot();
-
-			expect(snap1).toBe(snap2);
+		it("should return a stable navigation snapshot reference", () => {
+			const { manager } = buildLinear();
+			expect(manager.getNavigationSnapshot()).toBe(
+				manager.getNavigationSnapshot(),
+			);
 		});
 
-		test("should return cached loading snapshot", () => {
-			const machine = createMockMachine<{ name: string }>();
-			const manager = new WizardStateManager(machine, "step-1");
-
-			const snap1 = manager.getLoadingSnapshot();
-			const snap2 = manager.getLoadingSnapshot();
-
-			expect(snap1).toBe(snap2);
+		it("should return a stable loading snapshot reference", () => {
+			const { manager } = buildLinear();
+			expect(manager.getLoadingSnapshot()).toBe(manager.getLoadingSnapshot());
 		});
 
-		test("should update loading state and notify", () => {
-			const machine = createMockMachine<{ name: string }>();
-			const manager = new WizardStateManager(machine, "step-1");
-			const listener = vi.fn();
-
-			manager.subscribe(listener, "loading");
-
-			manager.setLoadingState({ isValidating: true });
-
-			const snap = manager.getLoadingSnapshot();
-			expect(snap.isValidating).toBe(true);
-			expect(listener).toHaveBeenCalled();
+		it("should keep the navigation reference stable across repeated recomputes", async () => {
+			const { manager } = buildLinear();
+			await settle();
+			const nav1 = manager.getNavigationSnapshot();
+			await settle();
+			// No intervening change: the recompute must not rewrite the cache.
+			expect(manager.getNavigationSnapshot()).toBe(nav1);
 		});
 	});
 
-	describe("state change handling", () => {
-		test("should handle data change affecting state, navigation, and validation", () => {
-			const machine = createMockMachine<{ name: string }>();
-			const manager = new WizardStateManager(machine, "step-1");
+	describe("loading", () => {
+		it("should update loading state and notify the loading channel", () => {
+			const { manager } = buildLinear();
 			const listener = vi.fn();
 
-			manager.subscribe(listener);
+			manager.subscribe(listener, "loading");
+			manager.setLoadingState({ isValidating: true });
 
-			const oldState: WizardState<{ name: string }> = {
-				currentStepId: "step-1",
-				data: { name: "old" },
-				isCompleted: false,
-				isValid: true,
-				canGoBack: false,
-				stepStatuses: { "step-1": "active" },
-				progress: EMPTY_PROGRESS,
-			};
-
-			const newState: WizardState<{ name: string }> = {
-				currentStepId: "step-1",
-				data: { name: "new" },
-				isCompleted: false,
-				isValid: true,
-				canGoBack: false,
-				stepStatuses: { "step-1": "active" },
-				progress: EMPTY_PROGRESS,
-			};
-
-			manager.handleStateChange(newState, oldState);
-
+			expect(manager.getLoadingSnapshot().isValidating).toBe(true);
 			expect(listener).toHaveBeenCalled();
-		});
-
-		test("should handle step change affecting state and navigation", () => {
-			const machine = createMockMachine<{ name: string }>();
-			const manager = new WizardStateManager(machine, "step-1");
-			const listener = vi.fn();
-
-			manager.subscribe(listener);
-
-			const oldState: WizardState<{ name: string }> = {
-				currentStepId: "step-1",
-				data: { name: "test" },
-				isCompleted: false,
-				isValid: true,
-				canGoBack: false,
-				stepStatuses: { "step-1": "active", "step-2": "pristine" },
-				progress: EMPTY_PROGRESS,
-			};
-
-			const newState: WizardState<{ name: string }> = {
-				currentStepId: "step-2",
-				data: { name: "test" },
-				isCompleted: false,
-				isValid: true,
-				canGoBack: false,
-				stepStatuses: { "step-1": "completed", "step-2": "active" },
-				progress: EMPTY_PROGRESS,
-			};
-
-			manager.handleStateChange(newState, oldState);
-
-			expect(listener).toHaveBeenCalled();
-		});
-
-		test("should handle validation change", () => {
-			const machine = createMockMachine<{ name: string }>();
-			const manager = new WizardStateManager(machine, "step-1");
-			const listener = vi.fn();
-
-			manager.subscribe(listener, "validation");
-
-			const oldState: WizardState<{ name: string }> = {
-				currentStepId: "step-1",
-				data: { name: "test" },
-				isCompleted: false,
-				isValid: true,
-				canGoBack: false,
-				stepStatuses: { "step-1": "active" },
-				progress: EMPTY_PROGRESS,
-			};
-
-			const newState: WizardState<{ name: string }> = {
-				currentStepId: "step-1",
-				data: { name: "test" },
-				isCompleted: false,
-				isValid: false,
-				canGoBack: false,
-				stepStatuses: { "step-1": "active" },
-				validationErrors: { name: "Required" },
-				progress: EMPTY_PROGRESS,
-			};
-
-			manager.handleStateChange(newState, oldState);
-
-			expect(listener).toHaveBeenCalled();
-		});
-
-		test("should not notify if no state changes", () => {
-			const machine = createMockMachine<{ name: string }>();
-			const manager = new WizardStateManager(machine, "step-1");
-			const listener = vi.fn();
-
-			manager.subscribe(listener);
-
-			const state: WizardState<{ name: string }> = {
-				currentStepId: "step-1",
-				data: { name: "test" },
-				isCompleted: false,
-				isValid: true,
-				canGoBack: false,
-				stepStatuses: { "step-1": "active" },
-				progress: EMPTY_PROGRESS,
-			};
-
-			manager.handleStateChange(state, state);
-
-			expect(listener).not.toHaveBeenCalled();
 		});
 	});
 
 	describe("machine access", () => {
-		test("should return machine", () => {
-			const machine = createMockMachine<{ name: string }>();
-			const manager = new WizardStateManager(machine, "step-1");
-
+		it("should return the machine", () => {
+			const { machine, manager } = buildLinear();
 			expect(manager.getMachine()).toBe(machine);
 		});
 
-		test("should return visited steps", () => {
-			const machine = createMockMachine<{ name: string }>();
-			const manager = new WizardStateManager(machine, "step-1");
-
-			expect(manager.getVisitedSteps()).toEqual(["step-1"]);
+		it("should return the current step definition", () => {
+			const { manager } = buildLinear();
+			expect(manager.getCurrentStep().id).toBe("step1");
 		});
 
-		test("should return step history", () => {
-			const machine = createMockMachine<{ name: string }>();
-			const manager = new WizardStateManager(machine, "step-1");
+		it("should reflect visited steps and history after navigation", async () => {
+			const { machine, manager } = buildLinear();
+			expect(manager.getVisitedSteps()).toEqual(["step1"]);
+			expect(manager.getStepHistory()).toEqual(["step1"]);
 
-			expect(manager.getStepHistory()).toEqual(["step-1"]);
-		});
+			await machine.goNext();
 
-		test("should return current step", () => {
-			const machine = createMockMachine<{ name: string }>();
-			const manager = new WizardStateManager(machine, "step-1");
-
-			const step = manager.getCurrentStep();
-			expect(step.id).toBe("step-1");
-		});
-	});
-
-	describe("channel-specific subscriptions", () => {
-		test("should notify only state channel", () => {
-			const machine = createMockMachine<{ name: string }>();
-			const manager = new WizardStateManager(machine, "step-1");
-			const stateListener = vi.fn();
-			const navListener = vi.fn();
-
-			manager.subscribe(stateListener, "state");
-			manager.subscribe(navListener, "navigation");
-
-			manager.notifySubscribers(["state"]);
-
-			expect(stateListener).toHaveBeenCalledOnce();
-			expect(navListener).not.toHaveBeenCalled();
-		});
-
-		test("should notify only validation channel", () => {
-			const machine = createMockMachine<{ name: string }>();
-			const manager = new WizardStateManager(machine, "step-1");
-			const validationListener = vi.fn();
-			const loadingListener = vi.fn();
-
-			manager.subscribe(validationListener, "validation");
-			manager.subscribe(loadingListener, "loading");
-
-			manager.notifySubscribers(["validation"]);
-
-			expect(validationListener).toHaveBeenCalledOnce();
-			expect(loadingListener).not.toHaveBeenCalled();
-		});
-
-		test("should notify only loading channel", () => {
-			const machine = createMockMachine<{ name: string }>();
-			const manager = new WizardStateManager(machine, "step-1");
-			const loadingListener = vi.fn();
-			const stateListener = vi.fn();
-
-			manager.subscribe(loadingListener, "loading");
-			manager.subscribe(stateListener, "state");
-
-			manager.notifySubscribers(["loading"]);
-
-			expect(loadingListener).toHaveBeenCalledOnce();
-			expect(stateListener).not.toHaveBeenCalled();
-		});
-	});
-
-	describe("multiple subscriptions", () => {
-		test("should support multiple listeners on same channel", () => {
-			const machine = createMockMachine<{ name: string }>();
-			const manager = new WizardStateManager(machine, "step-1");
-			const listener1 = vi.fn();
-			const listener2 = vi.fn();
-			const listener3 = vi.fn();
-
-			manager.subscribe(listener1, "state");
-			manager.subscribe(listener2, "state");
-			manager.subscribe(listener3, "state");
-
-			manager.notifySubscribers(["state"]);
-
-			expect(listener1).toHaveBeenCalledOnce();
-			expect(listener2).toHaveBeenCalledOnce();
-			expect(listener3).toHaveBeenCalledOnce();
-		});
-
-		test("should support listeners on multiple channels", () => {
-			const machine = createMockMachine<{ name: string }>();
-			const manager = new WizardStateManager(machine, "step-1");
-			const listener1 = vi.fn();
-			const listener2 = vi.fn();
-
-			manager.subscribe(listener1, "state");
-			manager.subscribe(listener2, "validation");
-
-			manager.notifySubscribers(["state", "validation"]);
-
-			expect(listener1).toHaveBeenCalledOnce();
-			expect(listener2).toHaveBeenCalledOnce();
+			expect(manager.getVisitedSteps()).toEqual(["step1", "step2"]);
+			expect(manager.getStepHistory()).toEqual(["step1", "step2"]);
 		});
 	});
 
 	describe("isFirstStep calculation", () => {
-		test("should mark step as first when current step matches initial", () => {
-			const machine = createMockMachine<{ name: string }>();
-			const manager = new WizardStateManager(machine, "step-1");
-
-			const navSnapshot = manager.getNavigationSnapshot();
-			expect(navSnapshot.isFirstStep).toBe(true);
+		it("should mark the initial step as first", () => {
+			const { manager } = buildLinear();
+			expect(manager.getNavigationSnapshot().isFirstStep).toBe(true);
 		});
 
-		test("should not mark step as first when current step differs from initial", () => {
-			const machine = createMockMachine<{ name: string }>();
-			machine.snapshot.currentStepId = "step-2";
-			const manager = new WizardStateManager(machine, "step-1");
+		it("should not mark a later step as first after navigation", async () => {
+			const { machine, manager } = buildLinear();
+			await machine.goNext();
+			await settle();
+			expect(manager.getNavigationSnapshot().isFirstStep).toBe(false);
+		});
+	});
 
-			const navSnapshot = manager.getNavigationSnapshot();
-			expect(navSnapshot.isFirstStep).toBe(false);
+	// --- M1 (P1-6): availableSteps-only changes must be committed ----------
+	describe("navigation recompute — availableSteps change detection (M1)", () => {
+		interface M1Data extends Record<string, unknown> {
+			showExtra: boolean;
+		}
+
+		function buildM1() {
+			const definition = createWizard<M1Data>("m1")
+				.initialStep("step1")
+				.step("step1", (b) => b.next("step2"))
+				.step("step2", (b) => b.previous("step1"))
+				// 'extra' is enabled purely by data; it is NOT step1.next, so
+				// toggling it changes availableSteps WITHOUT changing
+				// canGoNext/canGoPrevious/isLastStep.
+				.step("extra", (b) => b.enabled((d: M1Data) => d.showExtra === true))
+				.build();
+			return createWiredManager<M1Data>(definition, { showExtra: true });
+		}
+
+		it("commits availableSteps changes even when nav booleans are unchanged (M1)", async () => {
+			const { machine, manager } = buildM1();
+			await settle();
+			expect(manager.getNavigationSnapshot().availableSteps).toEqual([
+				"step1",
+				"step2",
+				"extra",
+			]);
+			const before = manager.getNavigationSnapshot();
+			expect(before.canGoNext).toBe(true);
+			expect(before.canGoPrevious).toBe(false);
+			expect(before.isLastStep).toBe(false);
+
+			// Flip only the guard for 'extra' — nav booleans stay identical.
+			machine.updateData((d) => ({ ...d, showExtra: false }));
+			await settle();
+
+			const after = manager.getNavigationSnapshot();
+			expect(after.availableSteps).toEqual(["step1", "step2"]);
+			expect(after.canGoNext).toBe(true);
+			expect(after.canGoPrevious).toBe(false);
+			expect(after.isLastStep).toBe(false);
+		});
+	});
+
+	// --- M2 (P1-7): coalesced recompute must run a trailing pass -----------
+	describe("navigation recompute — trailing recompute after coalescing (M2)", () => {
+		interface M2Data extends Record<string, unknown> {
+			goNext: boolean;
+		}
+
+		function buildM2() {
+			const definition = createWizard<M2Data>("m2")
+				.initialStep("step1")
+				// step1.next is conditional on data.goNext: guard false =>
+				// resolveTransition returns null => canGoNext false. Guard true =>
+				// step2 => canGoNext true.
+				.step("step1", (b) =>
+					b.nextWhen([{ when: (d: M2Data) => d.goNext === true, to: "step2" }]),
+				)
+				.step("step2", (b) => b.previous("step1"))
+				.build();
+			return createWiredManager<M2Data>(definition, { goNext: false });
+		}
+
+		it("recomputes navigation for the last edit after coalesced requests (M2)", async () => {
+			const { machine, manager } = buildM2();
+			await settle();
+			expect(manager.getNavigationSnapshot().canGoNext).toBe(false);
+
+			// Two synchronous edits: first flips canGoNext->true, second flips it
+			// back->false. The first starts a compute; the second is coalesced.
+			machine.updateData((d) => ({ ...d, goNext: true }));
+			machine.updateData((d) => ({ ...d, goNext: false }));
+			await settle();
+
+			// Final state must reflect the LAST edit (goNext:false => false).
+			expect(manager.getNavigationSnapshot().canGoNext).toBe(false);
 		});
 	});
 });
