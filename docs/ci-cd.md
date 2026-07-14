@@ -1,3 +1,4 @@
+
 # GitHub Actions Workflows
 
 This directory contains automated CI/CD workflows for the wizard-vite monorepo.
@@ -15,25 +16,7 @@ Runs on every push to `main`/`develop` branches and on all pull requests.
 - **Build** - Builds all packages and uploads artifacts
 - **Test** - Runs tests on Node 18, 20, and 22
 
-### 2. Changesets (`changesets.yml`)
-
-Manages semantic versioning and changelogs with Changesets.
-
-**Triggers:**
-
-- Push to `main`
-- Manual workflow dispatch
-
-**Features:**
-
-- ✅ Creates a release PR with version bumps and changelogs
-- ✅ Publishes packages on merge to `main`
-
-**Required Secrets:**
-
-- `NPM_TOKEN` - npm authentication token with publish access
-
-### 3. Publish (`publish.yml`)
+### 2. Publish (`publish.yml`)
 
 Publishes packages to npm registry.
 
@@ -58,7 +41,7 @@ Publishes packages to npm registry.
 
 - `NPM_TOKEN` - npm authentication token with publish access
 
-### 4. PR Checks (`pr-checks.yml`)
+### 3. PR Checks (`pr-checks.yml`)
 
 Additional checks for pull requests.
 
@@ -68,7 +51,7 @@ Additional checks for pull requests.
 - **Validate package.json** - Ensures all package.json files are valid
 - **PR Labeler** - Auto-labels PRs based on changed files
 
-### 5. Release (`release.yml`)
+### 4. Release (`release.yml`)
 
 Creates GitHub releases from git tags.
 
@@ -112,14 +95,31 @@ Ensure GitHub Actions is enabled in repository Settings → Actions → General.
 
 ### Automated Publishing (Recommended)
 
-1. Create a changeset in your branch:
+1. Update version in package.json:
 
    ```bash
-   pnpm changeset
+   # For all packages
+   pnpm version patch  # or minor, major
+
+   # For specific package
+   cd packages/core
+   pnpm version patch
    ```
 
-2. Merge the Changesets release PR created by the workflow
-3. On merge, the workflow will publish updated packages automatically
+2. Create and push a git tag:
+
+   ```bash
+   # For all packages
+   git tag v1.2.3
+   git push origin v1.2.3
+
+   # For specific package
+   git tag @gooonzick/wizard-core@1.2.3
+   git push origin @gooonzick/wizard-core@1.2.3
+   ```
+
+3. Create a GitHub Release from the tag
+4. Publish workflow will automatically run
 
 ### Manual Publishing
 

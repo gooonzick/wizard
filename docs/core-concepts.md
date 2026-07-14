@@ -1,3 +1,4 @@
+
 # Core Concepts
 
 Understanding these fundamental concepts will help you build effective wizards with WizardForm.
@@ -199,6 +200,32 @@ validate: async (data, ctx) => {
     errors: isAvailable ? undefined : { email: "Email already taken" },
   };
 };
+```
+
+### Validating All Steps
+
+`validate()` only checks the current step. To check every enabled step at once —
+useful on a final "Review/Summary" step — call `validateAll()`. It runs each
+enabled step's validator, skips disabled steps and steps without a validator
+(treated as valid), and returns a `ValidationSummary` without mutating live
+validation state (it is a dry-run by default):
+
+```ts
+const summary = await machine.validateAll();
+// summary.valid, summary.invalidStepIds, summary.firstInvalidStepId, summary.steps
+
+// Optionally mark invalid steps with the "error" status:
+await machine.validateAll({ updateStatuses: true });
+```
+
+In React/Vue, `validateAll` lives on the `actions` slice:
+
+```ts
+const { actions, navigation } = useWizard({ ... });
+const summary = await actions.validateAll();
+if (!summary.valid) {
+  navigation.goTo(summary.firstInvalidStepId!, { skipValidation: true });
+}
 ```
 
 ## 6. Guards
@@ -511,7 +538,7 @@ machine.setStepStatus("personal", "error");
 
 ### Building a Progress Bar
 
-For a precomputed snapshot, read [`state.progress`](./api-reference.md#wizardprogress)
+For a precomputed snapshot, read [`state.progress`](./api/core.md#wizardprogress)
 (also exposed as `progress: WizardProgress` on `WizardState`). Step statuses
 still make per-step indicators easy:
 
@@ -599,22 +626,3 @@ This wizard demonstrates:
 - **Resolver transitions** (previous goes back to company if wantsTraining)
 - **Async operations** (onSubmit sends data, onComplete redirects)
 - **Type safety** (all steps know about OnboardingData fields)
-
-## 13. Plugins
-
-Plugins add cross-cutting behaviour — analytics, logging, error reporting, auto-save — at the machine level without modifying individual steps. A plugin is a plain object with lifecycle hooks (`beforeTransition`, `afterTransition`, `onComplete`, `onError`, `onReset`, `onInit`, `destroy`) that fire globally across every step.
-
-```typescript
-import { createLoggingPlugin } from "@gooonzick/wizard-core";
-
-const machine = new WizardMachine(definition, context, initialData, events, [
-  createLoggingPlugin({ level: "debug" }),
-]);
-
-// Or register after construction (chainable):
-machine.use(myAnalyticsPlugin).use(myAutoSavePlugin);
-```
-
-In React and Vue you pass a `plugins` array to `useWizard` or the provider. Plugins are torn down automatically when the component unmounts.
-
-For the full plugin API, hook firing order, veto semantics, and how to write your own plugin, see the [Plugins section of the API reference](./api-reference.md#plugins--middleware).

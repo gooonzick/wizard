@@ -1,7 +1,3 @@
----
-title: React API
-description: API reference for the @gooonzick/wizard-react package
----
 
 # React Package (`@gooonzick/wizard-react`)
 

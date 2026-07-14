@@ -45,10 +45,12 @@ Install the core package:
 npm install @gooonzick/wizard-core
 ```
 
-For React integration:
+For React or Vue integration:
 
 ```bash
 npm install @gooonzick/wizard-react
+# or
+npm install @gooonzick/wizard-vue
 ```
 
 ## Define Your First Wizard
@@ -56,20 +58,25 @@ npm install @gooonzick/wizard-react
 ```typescript
 import { createWizard } from "@gooonzick/wizard-core";
 
-const wizard = createWizard()
+type FormData = { name: string; email: string };
+
+const wizard = createWizard<FormData>("signup")
+  .initialStep("personal-info")
   .addStep({
     id: "personal-info",
-    validate: (data) => {
-      if (!data.name) return { valid: false, errors: ["Name is required"] };
-      return { valid: true };
-    },
+    next: { type: "static", to: "contact-info" },
+    validate: (data) => ({
+      valid: Boolean(data.name),
+      errors: data.name ? undefined : { name: "Name is required" },
+    }),
   })
   .addStep({
     id: "contact-info",
-    validate: (data) => {
-      if (!data.email) return { valid: false, errors: ["Email is required"] };
-      return { valid: true };
-    },
+    previous: { type: "static", to: "personal-info" },
+    validate: (data) => ({
+      valid: Boolean(data.email),
+      errors: data.email ? undefined : { email: "Email is required" },
+    }),
   })
   .build();
 ```
@@ -77,5 +84,5 @@ const wizard = createWizard()
 ## Next Steps
 
 - 📖 [Getting Started Guide](/guide/getting-started) - Learn the basics
-- 🎨 [React Integration](/guide/react-integration) - Use with React or Vue
+- 🎨 [React Integration](/guide/react-integration) · [Vue Integration](/guide/vue-integration)
 - 📚 [API Reference](/guide/api/core) - Detailed API documentation

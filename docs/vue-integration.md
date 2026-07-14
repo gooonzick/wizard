@@ -1,7 +1,3 @@
----
-title: Vue Integration
-description: How to use the useWizard composable to integrate wizards into your Vue 3 application
----
 
 # Vue Integration Guide
 

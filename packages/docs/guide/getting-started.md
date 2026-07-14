@@ -12,19 +12,24 @@ This guide will help you get up and running with the WizardForm framework in min
 ### Using npm
 
 ```bash
+# React
 npm install @gooonzick/wizard-core @gooonzick/wizard-react
+# Vue
+npm install @gooonzick/wizard-core @gooonzick/wizard-vue
 ```
 
 ### Using yarn
 
 ```bash
 yarn add @gooonzick/wizard-core @gooonzick/wizard-react
+# or: yarn add @gooonzick/wizard-core @gooonzick/wizard-vue
 ```
 
 ### Using pnpm
 
 ```bash
 pnpm add @gooonzick/wizard-core @gooonzick/wizard-react
+# or: pnpm add @gooonzick/wizard-core @gooonzick/wizard-vue
 ```
 
 ## Core vs Framework Integrations
