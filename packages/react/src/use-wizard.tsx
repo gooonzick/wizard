@@ -84,6 +84,10 @@ export interface UseWizardNavigationState {
 export interface UseWizardNavigationActions {
 	goNext: () => Promise<void>;
 	goPrevious: () => Promise<void>;
+	/**
+	 * @deprecated Use `goPrevious()` instead. `goBack(1)` is equivalent;
+	 * for multiple steps call `goPrevious()` repeatedly.
+	 */
 	goBack: (steps?: number) => Promise<void>;
 	goTo: (stepId: StepId, options?: GoToOptions) => Promise<void>;
 	/** @deprecated Use goTo(stepId) instead */

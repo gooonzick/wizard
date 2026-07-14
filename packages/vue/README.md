@@ -181,15 +181,18 @@ Main composable for wizard state management. Returns organized state slices.
 - `onStepEnter?: (stepId, data) => void` - Step enter callback
 - `onStepLeave?: (stepId, data) => void` - Step leave callback
 - `onComplete?: (data) => void` - Completion callback
+- `onCancel?: (data) => void | Promise<void>` - Cancel callback
+- `onReset?: () => void` - Reset callback
 - `onError?: (error) => void` - Error callback
+- `plugins?: WizardPlugin<T>[]` - Reference-stable plugins (read once at setup)
 
 **Returns:**
 
-- `state` - Current step and data (reactive refs)
+- `state` - Current step, data, `stepStatuses`, `progress` (`ComputedRef`s)
 - `validation` - Validation state and errors
-- `navigation` - Navigation state and methods
+- `navigation` - Navigation state and methods (`goPrevious`, `goTo`, …)
 - `loading` - Async operation states
-- `actions` - Data mutations and validation
+- `actions` - Data mutations, `validate` / `validateAll`, `submit`, `reset` / `cancel`, `serialize` / `restore`
 
 #### Granular Composables (require WizardProvider)
 
@@ -197,8 +200,9 @@ Main composable for wizard state management. Returns organized state slices.
 - `useWizardNavigation()` - Navigation slice only
 - `useWizardValidation()` - Validation slice only
 - `useWizardLoading()` - Loading slice only
-- `useWizardActions<T>()` - Actions slice only
-- `useWizardField<T>()` - Writable field binding for `v-model`
+- `useWizardActions<T>()` - Actions slice only (`validateAll`, `cancel`, …)
+- `useWizardField(wizard, field)` or `useWizardField(field)` inside Provider - `v-model` binding
+- `createTypedWizardProvider<T>()` - Pre-typed Provider + granular helpers
 
 ### Components
 

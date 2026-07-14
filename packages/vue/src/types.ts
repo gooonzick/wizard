@@ -87,6 +87,10 @@ export interface UseWizardNavigationState {
 export interface UseWizardNavigationActions {
 	goNext: () => Promise<void>;
 	goPrevious: () => Promise<void>;
+	/**
+	 * @deprecated Use `goPrevious()` instead. `goBack(1)` is equivalent;
+	 * for multiple steps call `goPrevious()` repeatedly.
+	 */
 	goBack: (steps?: number) => Promise<void>;
 	goTo: (stepId: StepId, options?: GoToOptions) => Promise<void>;
 	/** @deprecated Use goTo(stepId) instead */
@@ -118,12 +122,14 @@ export type UpdateFieldFn<T extends WizardData> = <K extends keyof T>(
 	value: T[K],
 ) => void;
 export type ValidateFn = () => Promise<void>;
+/** Dry-run validators on every enabled step (see `actions.validateAll`). */
 export type ValidateAllFn = (options?: {
 	updateStatuses?: boolean;
 }) => Promise<ValidationSummary>;
 export type CanSubmitFn = () => Promise<boolean>;
 export type SubmitFn = () => Promise<void>;
 export type ResetFn<T extends WizardData> = (data?: T) => void;
+/** Abandon the wizard: await onCancel handlers, then reset. */
 export type CancelFn = () => Promise<void>;
 export type SerializeFn<T extends WizardData> = () => WizardSerializedState<T>;
 export type RestoreFn<T extends WizardData> = (

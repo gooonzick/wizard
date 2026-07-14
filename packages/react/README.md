@@ -164,9 +164,22 @@ actions.updateField("name", "John");
 actions.updateData((d) => ({ ...d, name: "John" }));
 actions.setData(newData);
 actions.validate();
+actions.validateAll(); // dry-run all enabled steps → ValidationSummary
 actions.canSubmit();
 actions.submit();
 actions.reset();
+actions.cancel(); // onCancel + reset
+actions.serialize(); // / actions.restore(saved)
+```
+
+### Plugins
+
+Pass a **reference-stable** `plugins` array (hoist or `useMemo`) — read once at machine creation:
+
+```tsx
+const plugins = useMemo(() => [createLoggingPlugin({ level: "info" })], []);
+
+useWizard({ definition, initialData, plugins });
 ```
 
 ## Hook API
@@ -182,7 +195,10 @@ interface UseWizardOptions<T> {
   onStepEnter?: (stepId: string, data: T) => void;
   onStepLeave?: (stepId: string, data: T) => void;
   onComplete?: (data: T) => void;
+  onCancel?: (data: T) => void | Promise<void>;
+  onReset?: () => void;
   onError?: (error: Error) => void;
+  plugins?: WizardPlugin<T>[];
 }
 ```
 
@@ -240,9 +256,13 @@ interface UseWizardActions<T> {
   setData(data: T): void;
   updateField<K extends keyof T>(field: K, value: T[K]): void;
   validate(): Promise<void>;
+  validateAll(options?: { updateStatuses?: boolean }): Promise<ValidationSummary>;
   canSubmit(): Promise<boolean>;
   submit(): Promise<void>;
   reset(data?: T): void;
+  cancel(): Promise<void>;
+  serialize(): WizardSerializedState<T>;
+  restore(state: WizardSerializedState<T>): void;
 }
 ```
 

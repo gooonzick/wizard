@@ -8,7 +8,8 @@ type Approach =
 	| "field-binding"
 	| "history"
 	| "reset-cancel"
-	| "persistence";
+	| "persistence"
+	| "plugins";
 
 interface Props {
 	modelValue: Approach;
@@ -61,6 +62,12 @@ defineEmits<
 			@click="$emit('update:modelValue', 'persistence')"
 		>
 			Persistence
+		</Button>
+		<Button
+			:variant="modelValue === 'plugins' ? 'default' : 'outline'"
+			@click="$emit('update:modelValue', 'plugins')"
+		>
+			Plugins
 		</Button>
 	</div>
 </template>

@@ -1,5 +1,7 @@
 # @gooonzick/wizard-state
 
+**Internal adapter package** — used by `@gooonzick/wizard-react` and `@gooonzick/wizard-vue`. Most applications should depend on the React/Vue packages only; import `WizardStateManager` from those packages when needed for advanced integrations.
+
 A state management layer for multi-step wizards. Provides fine-grained subscription channels for efficient React component rendering when using `useSyncExternalStore`.
 
 ## Overview
