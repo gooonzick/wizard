@@ -422,7 +422,10 @@ export class WizardMachine<T extends WizardData> {
 
 		// FIX 11: re-validate the restored current step so a stale isValid:true on
 		// actually-invalid data is corrected (fire-and-forget; emits onStateChange).
-		void this.validate();
+		// FIX M-b: validate() calls checkAborted() outside its try, so an aborted
+		// signal makes it return a rejected promise; without a `.catch` this
+		// fire-and-forget call would surface as an unhandled rejection.
+		void this.validate().catch(() => {});
 	}
 
 	/**
@@ -444,9 +447,14 @@ export class WizardMachine<T extends WizardData> {
 	 */
 	setData(data: T): void {
 		const newStatuses = this.recalculateSkippedStatuses();
+		// FIX M-d: clone the caller's input (matching the constructor/reset/
+		// serialize contract) so a later external mutation of `data` cannot
+		// silently mutate `state.data` while bypassing notifyStateChange.
+		// `updateData`'s updater-return is a separate, documented in/out
+		// contract and is intentionally left as-is.
 		this.state = {
 			...this.state,
-			data,
+			data: this.cloneData(data),
 			stepStatuses: newStatuses,
 		};
 		this.notifyStateChange();
@@ -702,6 +710,15 @@ export class WizardMachine<T extends WizardData> {
 			}
 
 			// Submit current step
+			// DOCUMENT (M-e): an `onSubmit` throw here is not locally caught, so it
+			// bubbles to `withTransition`'s catch and is reported with the default
+			// phase `"transition"` — whereas the same throw inside `submit()` is
+			// reported with phase `"submit"` (see that method's inner try/catch).
+			// This phase-label inconsistency between the two `onSubmit` call sites
+			// is a known, accepted-for-release finding; unifying it would require a
+			// `submitAlreadyReported` flag (mirroring `validateAlreadyReported`) that
+			// `withTransition` consumes to skip re-reporting, to avoid a second
+			// `handleError` call for the same throw. Not fixed in this pass.
 			const currentStep = this.currentStep;
 			if (currentStep.onSubmit) {
 				await currentStep.onSubmit(this.state.data, this.context);
@@ -754,6 +771,15 @@ export class WizardMachine<T extends WizardData> {
 			}
 
 			// Fallback: use transition resolver when history is empty
+			// DOCUMENT (M-f): navigateToStep is called here with the default
+			// `pushToHistory: true`, so a resolver-based "previous" step is treated
+			// as a forward commit onto the history stack (it grows) rather than a
+			// pop — reachable only when history was cleared/restored to a single
+			// entry while the step defines an explicit `previous` transition. This
+			// still runs entirely inside navigateToStep after the beforeTransition
+			// veto (see the veto-safety invariant), so no invariant is violated.
+			// The alternative — popping — has no correct target when history has
+			// only one entry, so the push-based behavior is intentionally kept.
 			const previousStepId = await this.resolvePreviousStep();
 			if (!previousStepId) {
 				throw new WizardNavigationError("No previous step available");
@@ -1382,6 +1408,16 @@ export class WizardMachine<T extends WizardData> {
 	/**
 	 * Recalculates skipped statuses based on static boolean `enabled` guards.
 	 * Function guards are deferred to navigation time to keep data updates synchronous.
+	 *
+	 * DOCUMENT (M-c): this method only inspects `typeof step.enabled ===
+	 * "boolean"`. It is intentionally inert for *function* (and async) `enabled`
+	 * guards — evaluating those here would require running arbitrary, possibly
+	 * async, user code synchronously inside `updateData`/`setData`. Practical
+	 * effect: a data change that would flip the result of a function guard does
+	 * NOT update `stepStatuses`/`skipped` (and therefore does not affect
+	 * `WizardProgress.enabledStepIds`/`percentage`) until the next navigation
+	 * re-evaluates the guard. Do not attempt synchronous evaluation of function
+	 * guards here.
 	 */
 	private recalculateSkippedStatuses(): Record<StepId, StepStatus> {
 		const current = this.state.stepStatuses;
@@ -1462,6 +1498,12 @@ export class WizardMachine<T extends WizardData> {
 			isLastStep,
 		};
 
+		// FIX M-a: freeze progress (and its enabledStepIds array) before caching
+		// so `snapshot.progress.enabledStepIds.push(...)` (or reassigning a field)
+		// can't corrupt the shared reference returned across reads for this
+		// stateVersion. Freezing an already-frozen object is a safe no-op.
+		Object.freeze(progress.enabledStepIds);
+		Object.freeze(progress);
 		this.cachedProgress = progress;
 		this.cachedProgressVersion = this.stateVersion;
 

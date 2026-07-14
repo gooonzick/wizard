@@ -283,4 +283,22 @@ describe("Progress API", () => {
 			expect(snapshot.progress.percentage).toBe(20);
 		});
 	});
+
+	describe("progress immutability (M-a)", () => {
+		it("freezes snapshot.progress and its enabledStepIds", () => {
+			const machine = createMachine(linearDefinition());
+			const { progress } = machine.snapshot;
+
+			expect(Object.isFrozen(progress)).toBe(true);
+			expect(Object.isFrozen(progress.enabledStepIds)).toBe(true);
+			expect(() => {
+				progress.enabledStepIds.push("intruder");
+			}).toThrow();
+			// A later, unrelated snapshot read for the same stateVersion must not
+			// have been corrupted by the mutation attempt above.
+			expect(machine.snapshot.progress.enabledStepIds).toEqual(
+				progress.enabledStepIds,
+			);
+		});
+	});
 });
