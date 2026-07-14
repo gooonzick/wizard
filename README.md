@@ -1,8 +1,8 @@
 # 🧙‍♂️ WizardForm TypeScript Framework
 
-[![CI](https://github.com/YOUR_USERNAME/wizard-vite/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_USERNAME/wizard-vite/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/YOUR_USERNAME/wizard-vite/branch/main/graph/badge.svg)](https://codecov.io/gh/YOUR_USERNAME/wizard-vite)
-[![npm version](https://badge.fury.io/js/@wizard%2Fcore.svg)](https://www.npmjs.com/package/@gooonzick/wizard-core)
+[![CI](https://github.com/gooonzick/wizard/actions/workflows/ci.yml/badge.svg)](https://github.com/gooonzick/wizard/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/gooonzick/wizard/branch/main/graph/badge.svg)](https://codecov.io/gh/gooonzick/wizard)
+[![npm version](https://badge.fury.io/js/@gooonzick%2Fwizard-core.svg)](https://www.npmjs.com/package/@gooonzick/wizard-core)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A declarative, type-safe, and extensible framework for building multi-step wizards in TypeScript.
@@ -285,7 +285,7 @@ validate: (data, ctx) => {
 
   return {
     valid: Object.keys(errors).length === 0,
-    errors: errors.length > 0 ? errors : undefined,
+    errors: Object.keys(errors).length > 0 ? errors : undefined,
   };
 };
 ```

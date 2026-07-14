@@ -17,9 +17,17 @@
 			"project": ["src/**/*.ts", "tests/**/*.ts"],
 			"ignore": ["src/examples/**"]
 		},
+		"packages/state": {
+			"entry": ["src/index.ts!"],
+			"project": ["src/**/*.ts", "tests/**/*.ts"]
+		},
 		"packages/react": {
 			"entry": ["src/index.ts!"],
 			"project": ["src/**/*.{ts,tsx}", "tests/**/*.{ts,tsx}"]
+		},
+		"packages/vue": {
+			"entry": ["src/index.ts!"],
+			"project": ["src/**/*.{ts,tsx,vue}", "tests/**/*.{ts,tsx,vue}"]
 		},
 		"examples/react-examples": {
 			"entry": ["src/main.tsx"],
