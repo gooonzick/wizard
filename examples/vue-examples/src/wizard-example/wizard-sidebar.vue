@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useWizardData, useWizardNavigation } from "@gooonzick/wizard-vue";
-import { AlertCircle, CheckCircle2, Circle } from "lucide-vue-next";
+import { AlertCircle, CheckCircle2, Circle } from "@lucide/vue";
 import Card from "@/components/ui/card.vue";
 import type { RegistrationData } from "../types/wizard-data";
 import { fieldLabels, stepIds, stepTitles } from "./constants";

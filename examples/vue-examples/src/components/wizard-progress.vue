@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { StepStatus, WizardProgress } from "@gooonzick/wizard-core";
-import { CheckCircle2, AlertCircle } from "lucide-vue-next";
+import { CheckCircle2, AlertCircle } from "@lucide/vue";
 
 interface Props {
 	progress: WizardProgress;

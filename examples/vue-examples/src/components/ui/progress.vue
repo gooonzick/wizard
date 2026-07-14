@@ -1,6 +1,6 @@
 <!-- eslint-disable vue/multi-word-component-names -->
 <script setup lang="ts">
-import { CheckCircle } from "lucide-vue-next";
+import { CheckCircle } from "@lucide/vue";
 
 interface StepTitle {
 	[key: string]: string;
