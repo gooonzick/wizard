@@ -102,6 +102,18 @@ const VALID_STEP_STATUSES = new Set<StepStatus>([
 	"skipped",
 ]);
 
+/**
+ * Result of a best-effort synchronous next-step resolution.
+ * - `resolved`: a next step was determined synchronously.
+ * - `terminal`: definitively no next step (current path ends here).
+ * - `unknown`: cannot be determined synchronously (async transition/guard, a
+ *   user callback threw, a dangling reference, or a cycle).
+ */
+type SyncResolution =
+	| { kind: "resolved"; stepId: StepId }
+	| { kind: "terminal" }
+	| { kind: "unknown" };
+
 export class WizardMachine<T extends WizardData> {
 	private definition: WizardDefinition<T>;
 	private context: WizardContext;
@@ -118,6 +130,13 @@ export class WizardMachine<T extends WizardData> {
 	private stateVersion = 0;
 	private cachedProgress: WizardProgress | null = null;
 	private cachedProgressVersion = -1;
+	/**
+	 * FIX F2: first error thrown by a user callback (guard/branch/resolver) during
+	 * a synchronous progress computation. Reporting is deferred out of the snapshot
+	 * call stack and deduped per `stateVersion` (see `computeProgress`).
+	 */
+	private pendingProgressError: unknown = undefined;
+	private reportedProgressErrorVersion = -1;
 	/**
 	 * Set by `validate()` when it has already reported a thrown validator error
 	 * via `handleError(.., "validation")`. Callers (goNext/goTo/submit) consume
@@ -441,11 +460,21 @@ export class WizardMachine<T extends WizardData> {
 		// Reset the per-call dedupe flag; set only when this call self-reports a
 		// thrown validator error below.
 		this.validateAlreadyReported = false;
+		// FIX F6: capture the generation so a reset()/cancel() during the awaited
+		// validator supersedes this validation (mirrors isTransitionStale).
+		const gen = this.generation;
 		try {
 			const step = this.currentStep;
 			const validator = step.validate || alwaysValid;
 
 			const result = await validator(this.state.data, this.context);
+
+			// FIX F6: a reset()/cancel() during the awaited validator supersedes this
+			// validation. Return the computed result but do NOT clobber the fresh
+			// state or emit against it.
+			if (this.generation !== gen) {
+				return result;
+			}
 
 			this.state = {
 				...this.state,
@@ -458,6 +487,13 @@ export class WizardMachine<T extends WizardData> {
 
 			return result;
 		} catch (error) {
+			// FIX F6: if superseded, do not report or write against stale state.
+			if (this.generation !== gen) {
+				return {
+					valid: false,
+					errors: { general: "Validation error occurred" },
+				};
+			}
 			// A validator that THREW is a genuine validation failure: report it once
 			// here (phase "validation") and mark it reported so the caller's !valid
 			// branch does not re-report the same logical failure.
@@ -563,18 +599,37 @@ export class WizardMachine<T extends WizardData> {
 	}
 
 	/**
-	 * Submits current step
+	 * Submits current step.
+	 *
+	 * Reject-when-busy contract (FIX F5): `submit()` acquires the same busy lock
+	 * as the navigation methods. A `submit()` (or navigation) already in flight
+	 * causes a concurrent `submit()` to reject synchronously with a
+	 * `WizardNavigationError` (reason `"busy"`) — this prevents a double-click or
+	 * a `submit()`/`goNext()` race from invoking `onSubmit` twice. The lock is
+	 * released in `finally` and `isBusy` is `true` for the duration.
+	 *
+	 * Not routed through `withTransition`: its catch reports non-validation errors
+	 * with the default phase `"transition"`, which would double-report `onSubmit`
+	 * throws already reported here with phase `"submit"`. The inner catch below
+	 * keeps the phase-`"submit"` reporting.
 	 */
 	async submit(): Promise<void> {
 		this.checkAborted();
-		if (this.state.isCompleted) {
-			throw new WizardNavigationError("Wizard is already completed");
-		}
-
+		// FIX F5: reject-when-busy, acquired synchronously (no await between the
+		// guard and the flag) so the losing concurrent caller observes the lock.
+		this.ensureNotBusy();
+		// FIX F5: participate in the generation-supersede model so a reset()/cancel()
+		// mid-submit cannot make complete() re-complete the freshly-reset state.
+		this.transitionGen = this.generation;
+		this.isTransitioning = true;
 		try {
+			if (this.state.isCompleted) {
+				throw new WizardNavigationError("Wizard is already completed");
+			}
+
 			const step = this.currentStep;
 
-			// Validate before submit
+			// Validate before submit (validate() is generation-guarded per F6)
 			const validationResult = await this.validate();
 			if (!validationResult.valid) {
 				const err = new WizardValidationError(validationResult.errors || {});
@@ -590,11 +645,19 @@ export class WizardMachine<T extends WizardData> {
 			// Execute step's submit handler
 			if (step.onSubmit) {
 				await step.onSubmit(this.state.data, this.context);
+				// FIX F5: a reset()/cancel() during onSubmit supersedes this submit.
+				if (this.isTransitionStale()) {
+					return;
+				}
 				this.events.onSubmit?.(step.id, this.state.data);
 			}
 
 			// Check if this is the last step
 			const nextStepId = await this.resolveNextStep();
+			// FIX F5: a reset()/cancel() during resolveNextStep supersedes this submit.
+			if (this.isTransitionStale()) {
+				return;
+			}
 			if (!nextStepId) {
 				await this.complete();
 			}
@@ -605,6 +668,8 @@ export class WizardMachine<T extends WizardData> {
 				this.handleError(error, "submit");
 			}
 			throw error;
+		} finally {
+			this.isTransitioning = false;
 		}
 	}
 
@@ -621,6 +686,12 @@ export class WizardMachine<T extends WizardData> {
 			const validationResult = await this.validate();
 			if (!validationResult.valid) {
 				this.setStepStatusInternal(this.state.currentStepId, "error");
+				// FIX F1: broadcast the errored step. setStepStatusInternal does not
+				// emit, and this branch runs on the validation gate BEFORE any
+				// navigateToStep, so without this emit subscribers never observe the
+				// "error" status. This write is non-navigational (pre-navigation) and
+				// therefore outside the veto invariant.
+				this.notifyStateChange();
 				const err = new WizardValidationError(validationResult.errors || {});
 				// If validate() already reported a thrown validator error, do not
 				// re-report; otherwise this is the single reporter for the failure.
@@ -895,6 +966,11 @@ export class WizardMachine<T extends WizardData> {
 	 * @param stepId Target step ID
 	 * @param options.pushToHistory Whether to push the target step onto the history stack (default: true).
 	 *   Set to false when navigating backward (the target is already in the stack).
+	 *
+	 * FIX F4: if `onEnter` throws, the machine remains on the target step (the
+	 * state was already committed before `onEnter`) and emits one `onStateChange`;
+	 * `onStepEnter` and `afterTransition` do not fire; the error is reported once
+	 * (phase `transition`).
 	 */
 	private async navigateToStep(
 		stepId: StepId,
@@ -993,7 +1069,20 @@ export class WizardMachine<T extends WizardData> {
 		// Call onEnter for new step
 		if (!skipLifecycle) {
 			if (targetStep.onEnter) {
-				await targetStep.onEnter(this.state.data, this.context);
+				try {
+					await targetStep.onEnter(this.state.data, this.context);
+				} catch (err) {
+					// FIX F4: state is already committed to the target step (above,
+					// after the beforeTransition veto). Guarantee subscribers observe
+					// the committed target snapshot before the error propagates.
+					// onStepEnter / afterTransition are intentionally skipped (they
+					// signal a SUCCESSFUL entry). The error is reported once by
+					// withTransition (phase "transition"). No rollback.
+					if (!this.isTransitionStale()) {
+						this.notifyStateChange();
+					}
+					throw err;
+				}
 			}
 			// FIX 2: a reset()/cancel() during onEnter supersedes this transition.
 			if (this.isTransitionStale()) {
@@ -1355,7 +1444,12 @@ export class WizardMachine<T extends WizardData> {
 		// definition used by the state manager.
 		const isFirstStep =
 			this.state.currentStepId === this.definition.initialStepId;
-		const isLastStep = this.resolveNextStepSync() == null;
+		// FIX F2/F3: isLastStep is TRUE only for a genuinely terminal current path.
+		// "unknown" (async transition/guard, a resolver that threw, or a cycle) is
+		// reported conservatively as NOT last, so an async `next` never shows
+		// "Finish". For an authoritative async answer, await getNextStepId().
+		const nextResolution = this.resolveNextStepSync();
+		const isLastStep = nextResolution.kind === "terminal";
 
 		const progress: WizardProgress = {
 			totalSteps: allStepIds.length,
@@ -1370,19 +1464,52 @@ export class WizardMachine<T extends WizardData> {
 
 		this.cachedProgress = progress;
 		this.cachedProgressVersion = this.stateVersion;
+
+		// FIX F2: flush any error recorded by a user callback during the sync
+		// resolution above, OUT of the snapshot/notify call stack (queueMicrotask)
+		// and at most once per stateVersion. Deferring escapes reentrancy: a user
+		// onError that reads snapshot cannot re-enter computeProgress recursively.
+		if (
+			this.pendingProgressError !== undefined &&
+			this.reportedProgressErrorVersion !== this.stateVersion
+		) {
+			const err = this.pendingProgressError;
+			this.reportedProgressErrorVersion = this.stateVersion;
+			this.pendingProgressError = undefined;
+			queueMicrotask(() => this.handleError(err, "transition"));
+		} else {
+			// Clear even if not reported this pass (already reported for this version).
+			this.pendingProgressError = undefined;
+		}
+
 		return progress;
 	}
 
 	/**
-	 * Best-effort synchronous resolution of the next step id, mirroring the
-	 * async `resolveNextStep()` for the synchronously-resolvable cases (static
-	 * transitions, boolean / synchronous guards, synchronous conditional/resolver
-	 * branches). Returns `null` when there is no resolvable next step. If a
-	 * transition or guard resolves asynchronously (returns a Promise) the
-	 * resolution cannot be completed synchronously and `null` is returned for
-	 * that branch — `isLastStep` then reflects the best synchronous estimate.
+	 * Records the first error thrown by a user callback during a synchronous
+	 * progress computation. Reporting is deferred + deduped in `computeProgress`
+	 * to avoid re-entering the snapshot call stack (see the reentrancy hazard).
 	 */
-	private resolveNextStepSync(): StepId | null {
+	private recordProgressError(err: unknown): void {
+		// Keep only the first error for this compute pass; report is deferred+deduped.
+		if (this.pendingProgressError === undefined) {
+			this.pendingProgressError = err;
+		}
+	}
+
+	/**
+	 * Best-effort synchronous resolution of the next step, mirroring the async
+	 * `resolveNextStep()` for the synchronously-resolvable cases (static
+	 * transitions, boolean / synchronous guards, synchronous conditional/resolver
+	 * branches). Returns a tri-state (FIX F2/F3):
+	 * - `resolved` when a next step is determined synchronously,
+	 * - `terminal` when there is definitively no next step,
+	 * - `unknown` when it cannot be determined synchronously (async transition or
+	 *   guard, a user callback threw, a dangling reference, or a cycle).
+	 * Never throws: every user call is wrapped and downgraded to `unknown` while
+	 * recording the first thrown error for deferred reporting.
+	 */
+	private resolveNextStepSync(): SyncResolution {
 		const data = this.state.data;
 		const ctx = this.context;
 		const isPromise = (v: unknown): v is Promise<unknown> =>
@@ -1390,72 +1517,99 @@ export class WizardMachine<T extends WizardData> {
 
 		const resolveTransitionSync = (
 			transition: WizardStepDefinition<T>["next"],
-		): StepId | null => {
+		): SyncResolution => {
 			if (!transition) {
-				return null;
+				return { kind: "terminal" };
 			}
 			switch (transition.type) {
 				case "static":
-					return transition.to;
+					return { kind: "resolved", stepId: transition.to };
 				case "conditional": {
 					for (const branch of transition.branches) {
-						const canProceed = branch.when(data, ctx);
+						let canProceed: unknown;
+						try {
+							canProceed = branch.when(data, ctx);
+						} catch (err) {
+							this.recordProgressError(err);
+							return { kind: "unknown" };
+						}
 						if (isPromise(canProceed)) {
-							return null;
+							return { kind: "unknown" };
 						}
 						if (canProceed) {
-							return branch.to;
+							return { kind: "resolved", stepId: branch.to };
 						}
 					}
-					return null;
+					// All branches evaluated false ⇒ definitively terminal.
+					return { kind: "terminal" };
 				}
 				case "resolver": {
-					const resolved = transition.resolve(data, ctx);
-					return isPromise(resolved) ? null : resolved;
+					let resolved: unknown;
+					try {
+						resolved = transition.resolve(data, ctx);
+					} catch (err) {
+						this.recordProgressError(err);
+						return { kind: "unknown" };
+					}
+					if (isPromise(resolved)) {
+						return { kind: "unknown" };
+					}
+					return resolved
+						? { kind: "resolved", stepId: resolved as StepId }
+						: { kind: "terminal" };
 				}
 				default:
-					return null;
+					return { kind: "terminal" };
 			}
 		};
 
 		const evaluateGuardSync = (
 			guard: WizardStepDefinition<T>["enabled"],
-		): boolean | null => {
+		): boolean | "unknown" => {
 			if (guard === undefined) {
 				return true;
 			}
 			if (typeof guard === "boolean") {
 				return guard;
 			}
-			const result = guard(data, ctx);
-			return isPromise(result) ? null : result;
+			let result: unknown;
+			try {
+				result = guard(data, ctx);
+			} catch (err) {
+				this.recordProgressError(err);
+				return "unknown";
+			}
+			return isPromise(result) ? "unknown" : (result as boolean);
 		};
 
 		const visited = new Set<StepId>();
-		let stepId = resolveTransitionSync(this.currentStep.next);
+		let res = resolveTransitionSync(this.currentStep.next);
 
-		while (stepId) {
+		while (res.kind === "resolved") {
+			const stepId = res.stepId;
 			if (visited.has(stepId)) {
-				return null;
+				// Cycle: cannot determine the terminal state synchronously.
+				return { kind: "unknown" };
 			}
 			visited.add(stepId);
 
 			const step = this.definition.steps[stepId];
 			if (!step) {
-				return null;
+				// Dangling reference: unknown, not terminal.
+				return { kind: "unknown" };
 			}
 
 			const isEnabled = evaluateGuardSync(step.enabled);
-			if (isEnabled === null || isEnabled) {
+			if (isEnabled === "unknown" || isEnabled) {
 				// Unknown (async) guard is optimistically treated as enabled so a
 				// step with an async guard does not spuriously flag isLastStep.
-				return stepId;
+				return { kind: "resolved", stepId };
 			}
 
-			stepId = resolveTransitionSync(step.next);
+			res = resolveTransitionSync(step.next);
 		}
 
-		return null;
+		return res; // "terminal" or "unknown"
 	}
 
 	/**

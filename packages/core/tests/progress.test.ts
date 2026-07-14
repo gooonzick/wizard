@@ -176,6 +176,97 @@ describe("Progress API", () => {
 		});
 	});
 
+	describe("isLastStep resolution (F2/F3)", () => {
+		it("does not throw from snapshot/serialize when a resolver throws synchronously", () => {
+			const def: WizardDefinition<TestData> = {
+				id: "x",
+				initialStepId: "a",
+				steps: {
+					a: {
+						id: "a",
+						next: {
+							type: "resolver",
+							resolve: () => {
+								throw new TypeError("boom");
+							},
+						},
+					},
+					b: { id: "b" },
+				},
+			};
+			const machine = createMachine(def);
+
+			expect(() => machine.snapshot).not.toThrow();
+			expect(() => machine.serialize()).not.toThrow();
+			// "unknown" (resolver threw) is reported conservatively as NOT last.
+			expect(machine.snapshot.progress.isLastStep).toBe(false);
+			expect(() => machine.updateData((d) => d)).not.toThrow();
+		});
+
+		it("reports a throwing resolver at most once per state change", async () => {
+			const onError = vi.fn();
+			const def: WizardDefinition<TestData> = {
+				id: "x",
+				initialStepId: "a",
+				steps: {
+					a: {
+						id: "a",
+						next: {
+							type: "resolver",
+							resolve: () => {
+								throw new TypeError("boom");
+							},
+						},
+					},
+					b: { id: "b" },
+				},
+			};
+			const machine = createMachine(def, {}, { onError });
+
+			// Read the snapshot several times without mutating state.
+			void machine.snapshot;
+			void machine.snapshot;
+			void machine.snapshot;
+
+			// Error routing is deferred out of the snapshot call stack.
+			await Promise.resolve();
+			expect(onError.mock.calls.length).toBeLessThanOrEqual(1);
+		});
+
+		it("reports isLastStep false when the current step's next is async", () => {
+			const def: WizardDefinition<TestData> = {
+				id: "x",
+				initialStepId: "b",
+				steps: {
+					b: {
+						id: "b",
+						next: { type: "resolver", resolve: async () => "c" },
+					},
+					c: { id: "c" },
+				},
+			};
+			const machine = createMachine(def);
+
+			expect(machine.snapshot.progress.isLastStep).toBe(false);
+		});
+
+		it("reports isLastStep false when the next step's enabled guard is async", () => {
+			const def: WizardDefinition<TestData> = {
+				id: "x",
+				initialStepId: "b",
+				steps: {
+					b: { id: "b", next: { type: "static", to: "c" } },
+					c: { id: "c", enabled: async () => true },
+				},
+			};
+			const machine = createMachine(def);
+
+			// Async guard is treated optimistically as enabled ⇒ a resolvable next
+			// exists ⇒ not last.
+			expect(machine.snapshot.progress.isLastStep).toBe(false);
+		});
+	});
+
 	describe("event emissions", () => {
 		it("includes progress in onStateChange snapshot", async () => {
 			const onStateChange = vi.fn();
