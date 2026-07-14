@@ -9,6 +9,7 @@ import type {
 	UseWizardActions,
 	UseWizardLoading,
 	UseWizardNavigation,
+	UseWizardReturn,
 	UseWizardState,
 	UseWizardValidation,
 } from "./use-wizard";
@@ -343,4 +344,58 @@ export function useWizardActions<T extends WizardData>(): UseWizardActions<T> {
 			restore,
 		],
 	);
+}
+
+/**
+ * Controlled-input binding for a single wizard field.
+ * Returns a `[value, setValue]` tuple. React has no two-way-binding primitive,
+ * so this is the analogue of Vue's `useWizardField` (which returns a WritableComputedRef).
+ *
+ * Provider mode (inside <WizardProvider>):
+ *   const [name, setName] = useWizardField<MyData, "name">("name");
+ * Direct mode (with a useWizard() return):
+ *   const wizard = useWizard({ definition, initialData });
+ *   const [name, setName] = useWizardField(wizard, "name");
+ *
+ * Hooks-rules caveat: a single call site must not switch between the two styles
+ * across renders (the provider-mode branch calls hooks). Pick one style per call
+ * site — the same contract Vue's `useWizardField` carries.
+ */
+export function useWizardField<T extends WizardData, K extends keyof T>(
+	field: K,
+): [T[K], (value: T[K]) => void];
+export function useWizardField<T extends WizardData, K extends keyof T>(
+	wizard: UseWizardReturn<T>,
+	field: K,
+): [T[K], (value: T[K]) => void];
+export function useWizardField<T extends WizardData, K extends keyof T>(
+	fieldOrWizard: K | UseWizardReturn<T>,
+	maybeField?: K,
+): [T[K], (value: T[K]) => void] {
+	if (maybeField === undefined) {
+		// Provider mode — compose the granular hooks (both consume the shared manager).
+		// A single call site always uses one style (chosen by argument count), so the
+		// hook order is stable per call site even though the branches call hooks. See
+		// the JSDoc contract above.
+		const field = fieldOrWizard as K;
+		// biome-ignore lint/correctness/useHookAtTopLevel: call site uses exactly one style; order is stable
+		const { data } = useWizardData<T>();
+		// biome-ignore lint/correctness/useHookAtTopLevel: call site uses exactly one style; order is stable
+		const { updateField } = useWizardActions<T>();
+		// biome-ignore lint/correctness/useHookAtTopLevel: call site uses exactly one style; order is stable
+		const setValue = useCallback(
+			(value: T[K]) => updateField(field, value),
+			[updateField, field],
+		);
+		return [data[field], setValue];
+	}
+	// Direct mode — read the passed useWizard() return.
+	const wizard = fieldOrWizard as UseWizardReturn<T>;
+	const field = maybeField;
+	// biome-ignore lint/correctness/useHookAtTopLevel: call site uses exactly one style; order is stable
+	const setValue = useCallback(
+		(value: T[K]) => wizard.actions.updateField(field, value),
+		[wizard, field],
+	);
+	return [wizard.state.data[field], setValue];
 }

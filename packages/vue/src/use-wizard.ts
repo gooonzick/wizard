@@ -303,6 +303,12 @@ export function useWizard<T extends WizardData>(
 		return goTo(stepId, { skipValidation: true });
 	};
 
+	// NOTE (loading semantics): reset/cancel/restore call the machine directly and
+	// mirror the loading flags on this local `loadingState` reactive, rather than
+	// routing through `manager.runReset`/`runCancel`/`runRestore`. The shared
+	// `WizardStateManager.getLoadingSnapshot()` therefore reflects React's binding
+	// but NOT Vue's. In Vue, read loading via the composable's `loading` slice, not
+	// the manager.
 	const reset = (data?: T) => {
 		loadingState.isValidating = false;
 		loadingState.isSubmitting = false;

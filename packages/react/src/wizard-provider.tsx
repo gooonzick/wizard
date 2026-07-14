@@ -34,8 +34,23 @@ const WizardContext = createContext<WizardProviderContextValue<any> | null>(
 );
 
 export interface WizardProviderProps<T extends WizardData> {
+	/**
+	 * Read ONCE at mount and captured — NOT reactive. Changing this prop after the
+	 * first render has no effect (the machine is created once). To reconfigure,
+	 * remount the provider with a new `key`.
+	 */
 	definition: WizardDefinition<T>;
+	/**
+	 * Read ONCE at mount and captured — NOT reactive. Changing this prop after the
+	 * first render has no effect (the machine is created once). To reconfigure,
+	 * remount the provider with a new `key`.
+	 */
 	initialData: T;
+	/**
+	 * Read ONCE at mount and captured — NOT reactive. Changing this prop after the
+	 * first render has no effect (the machine is created once). To reconfigure,
+	 * remount the provider with a new `key`.
+	 */
 	context?: WizardCoreContext;
 	onStateChange?: (state: WizardState<T>) => void;
 	onStepEnter?: (stepId: StepId, data: T) => void;
@@ -47,6 +62,10 @@ export interface WizardProviderProps<T extends WizardData> {
 	/**
 	 * Plugins registered once at machine creation (reference-stable — read once,
 	 * NOT reactive). Define them outside render or memoize them.
+	 *
+	 * `onInit` may run for a manager that is later discarded/recreated under React
+	 * StrictMode or concurrent rendering, so `onInit` must be idempotent and any
+	 * resource it acquires must be released in `destroy()`.
 	 */
 	plugins?: WizardPlugin<T>[];
 	children: ReactNode;
@@ -101,10 +120,10 @@ export function WizardProvider<T extends WizardData>({
 	// Track previous state for change detection
 	const previousStateRef = useRef<WizardState<T> | null>(null);
 
-	// Holds the live manager. `managerStateRef` mirrors the state value so the
-	// events closure (created once per manager) can always reach the current
-	// manager without re-creating the closure.
-	const managerStateRef = useRef<WizardStateManager<T> | null>(null);
+	// Holds the live manager. The events closure (created once per manager) reads
+	// `managerRef.current` so it can always reach the current manager without
+	// re-creating the closure.
+	const managerRef = useRef<WizardStateManager<T> | null>(null);
 
 	// Factory: build a fresh manager re-applying the same plugins/definition.
 	const createManager = useCallback((): WizardStateManager<T> => {
@@ -114,8 +133,8 @@ export function WizardProvider<T extends WizardData>({
 				previousStateRef.current = newState;
 
 				// Notify subscribers via channel-based system
-				if (oldState && managerStateRef.current) {
-					managerStateRef.current.handleStateChange(newState, oldState);
+				if (oldState && managerRef.current) {
+					managerRef.current.handleStateChange(newState, oldState);
 				}
 
 				callbacksRef.current.onStateChange?.(newState);
@@ -156,23 +175,19 @@ export function WizardProvider<T extends WizardData>({
 		return newManager;
 	}, []);
 
-	// Manager state (created once; native machine.reset() handles resets).
-	const [managerState, setManagerState] = useState<WizardStateManager<T>>(
-		() => {
-			const m = createManager();
-			managerStateRef.current = m;
-			return m;
-		},
-	);
-
-	// WIZ-007: if the StrictMode mount->unmount->remount probe destroyed the
-	// manager, recreate it (re-applying the same plugins). Production never trips
-	// this: with no probe, isDestroyed stays false on a live manager.
-	const manager = managerState.isDestroyed ? createManager() : managerState;
-	if (manager !== managerState) {
-		managerStateRef.current = manager;
-		setManagerState(manager); // re-render with the live manager; subscriptions rebind
+	// Ref-guarded lazy creation. useRef persists across StrictMode's double
+	// render (same fiber) and across a discarded-then-retried render, so the
+	// side-effecting `new WizardMachine(...)` (plugin onInit) runs exactly once
+	// per live manager. Never construct in a useState initializer (double-invoked)
+	// or unconditionally in render.
+	if (managerRef.current === null || managerRef.current.isDestroyed) {
+		// isDestroyed is only true after the StrictMode mount->unmount->remount
+		// probe tore the previous manager down; recreate re-applies the plugins.
+		managerRef.current = createManager();
 	}
+	// `useState` holds the identity so a recreate triggers a re-render + resubscribe.
+	const [, forceRerender] = useState(0);
+	const manager = managerRef.current;
 
 	// Re-render the provider when the manager emits, so a navigation issued by a
 	// consumer (which destroys/leaves M1 a zombie under StrictMode) drives the
@@ -190,6 +205,12 @@ export function WizardProvider<T extends WizardData>({
 	useEffect(() => {
 		return () => {
 			void manager.destroy();
+			if (managerRef.current === manager) {
+				// Drop the destroyed instance so the next render recreates it
+				// (StrictMode remount, or a future live remount).
+				managerRef.current = null;
+				forceRerender((n) => n + 1);
+			}
 		};
 	}, [manager]);
 

@@ -18,7 +18,7 @@ export default defineConfig({
 			fileName: "index",
 		},
 		rollupOptions: {
-			external: ["vue", "@gooonzick/wizard-core"],
+			external: ["vue", "@gooonzick/wizard-core", "@gooonzick/wizard-state"],
 			output: {
 				globals: {
 					vue: "Vue",

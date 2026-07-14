@@ -1,7 +1,7 @@
 import { createLinearWizard } from "@gooonzick/wizard-core";
 import { mount } from "@vue/test-utils";
 import { describe, expect, it, vi } from "vitest";
-import { defineComponent } from "vue";
+import { defineComponent, nextTick } from "vue";
 import type { UseWizardReturn } from "../src/types";
 import { useWizard } from "../src/use-wizard";
 
@@ -214,6 +214,31 @@ describe("useWizard", () => {
 		expect(wizard.loading.isNavigating.value).toBe(false);
 	});
 
+	it("flips isValidating true during a real async validator", async () => {
+		const definition = createLinearWizard<{ name: string }>({
+			id: "async-validate",
+			steps: [
+				{
+					id: "step1",
+					title: "Step 1",
+					validate: async () => {
+						await new Promise((r) => setTimeout(r, 20));
+						return { valid: true };
+					},
+				},
+			],
+		});
+		const { wizard } = mountWizard({ definition, initialData: { name: "" } });
+		expect(wizard.loading.isValidating.value).toBe(false);
+
+		const p = wizard.actions.validate(); // do not await yet
+		await nextTick(); // let the sync `loadingState.isValidating = true` flush to the computed
+		expect(wizard.loading.isValidating.value).toBe(true);
+
+		await p;
+		expect(wizard.loading.isValidating.value).toBe(false);
+	});
+
 	it("should expose validation state", async () => {
 		const definition = createLinearWizard<{ name: string }>({
 			id: "test-wizard",
@@ -252,26 +277,31 @@ describe("useWizard", () => {
 		wrapper.unmount();
 	});
 
-	it("should call onError when navigation state update fails", async () => {
+	it("calls onError when a validator throws", async () => {
 		const definition = createLinearWizard<{ name: string }>({
-			id: "test-wizard",
-			steps: [{ id: "step1", title: "Step 1" }],
+			id: "throwing-validate",
+			steps: [
+				{
+					id: "step1",
+					title: "Step 1",
+					validate: async () => {
+						throw new Error("boom");
+					},
+				},
+			],
 		});
-
 		const onError = vi.fn();
-		const consoleError = vi
-			.spyOn(console, "error")
-			.mockImplementation(() => {});
-
 		const { wizard } = mountWizard({
 			definition,
 			initialData: { name: "" },
 			onError,
 		});
 
-		expect(wizard.state.currentStepId.value).toBe("step1");
+		await wizard.actions.validate();
+		await nextTick();
 
-		consoleError.mockRestore();
+		expect(onError).toHaveBeenCalled();
+		expect(onError.mock.calls[0][0]).toBeInstanceOf(Error);
 	});
 
 	it("should return currentStep computed ref", async () => {
@@ -423,9 +453,9 @@ describe("useWizard", () => {
 				{
 					id: "step1",
 					title: "Step 1",
-					validate: () => ({
+					validate: async () => ({
 						valid: false,
-						errors: { name: "Required" },
+						errors: { name: "Required" } as Record<string, string>,
 					}),
 				},
 				{ id: "step2", title: "Step 2" },

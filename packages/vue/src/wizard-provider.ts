@@ -36,8 +36,27 @@ const WizardInjectionKey: InjectionKey<WizardContextValue<WizardData>> =
 	Symbol("wizard");
 
 export interface WizardProviderProps<T extends WizardData> {
+	/**
+	 * Read ONCE at setup and captured — NOT reactive. Changing this prop after the
+	 * component mounts has no effect (the machine is created once). To reconfigure,
+	 * remount the provider with a new `key`.
+	 */
 	definition: WizardDefinition<T>;
+	/**
+	 * Read ONCE at setup and captured — NOT reactive. Changing this prop after the
+	 * component mounts has no effect (the machine is created once). To reconfigure,
+	 * remount the provider with a new `key`.
+	 *
+	 * Must be structured-cloneable and nested Vue reactivity is stripped: the
+	 * machine deep-clones via `structuredClone`, so pass plain serializable form
+	 * data (no functions, symbols, or class instances).
+	 */
 	initialData: T;
+	/**
+	 * Read ONCE at setup and captured — NOT reactive. Changing this prop after the
+	 * component mounts has no effect (the machine is created once). To reconfigure,
+	 * remount the provider with a new `key`.
+	 */
 	context?: WizardCoreContext;
 	onStateChange?: (state: WizardState<T>) => void;
 	onStepEnter?: (stepId: StepId, data: T) => void;

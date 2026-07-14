@@ -26,6 +26,7 @@ export default defineConfig({
 				"react/jsx-runtime",
 				// "react/jsx-dev-runtime",
 				"@gooonzick/wizard-core",
+				"@gooonzick/wizard-state",
 			],
 			output: {
 				globals: {
@@ -34,6 +35,7 @@ export default defineConfig({
 					"react/jsx-runtime": "ReactJSXRuntime",
 					// "react/jsx-dev-runtime": "ReactJSXDevRuntime",
 					"@gooonzick/wizard-core": "WizardCore",
+					"@gooonzick/wizard-state": "WizardState",
 				},
 			},
 		},
