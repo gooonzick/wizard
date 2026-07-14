@@ -26,7 +26,7 @@
 		"lint:fix": "biome check . --write"
 	},
 	"peerDependencies": {
-		"vue": "^3.5.27"
+		"vue": "^3.5.39"
 	},
 	"dependencies": {
 		"@gooonzick/wizard-core": "workspace:*",
@@ -34,7 +34,7 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.5.3",
-		"@types/node": "^24.13.3",
+		"@types/node": "^26.1.1",
 		"@vitejs/plugin-vue": "^6.0.8",
 		"@vitest/coverage-v8": "^4.1.10",
 		"@vue/test-utils": "^2.4.11",
