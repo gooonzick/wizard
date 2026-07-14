@@ -47,7 +47,7 @@ Welcome to the WizardForm framework documentation. This directory mirrors the pu
 - **@gooonzick/wizard-core**: [packages/core/README.md](../packages/core/README.md)
 - **@gooonzick/wizard-react**: [packages/react/README.md](../packages/react/README.md)
 - **@gooonzick/wizard-vue**: [packages/vue/README.md](../packages/vue/README.md)
-- **@gooonzick/wizard-state**: [packages/state/README.md](../packages/state/README.md) (internal adapter state layer)
+- **@gooonzick/wizard-state**: [packages/state/README.md](../packages/state/README.md) — **internal** adapter (`WizardStateManager`); prefer `@gooonzick/wizard-react` / `@gooonzick/wizard-vue`
 
 ## Examples
 

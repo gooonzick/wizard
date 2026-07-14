@@ -105,8 +105,28 @@ const machine = new WizardMachine(definition, context, initialData, {
 });
 
 await machine.goNext();
-await machine.validate();
+const current = await machine.validate(); // ValidationResult for the current step
+const all = await machine.validateAll(); // ValidationSummary for every enabled step
+await machine.cancel(); // onCancel handlers, then reset
+const snapshot = machine.serialize(); // JSON-safe runtime state
+machine.restore(snapshot);
 ```
+
+### Plugins
+
+```typescript
+import { createLoggingPlugin, type WizardPlugin } from "@gooonzick/wizard-core";
+// or: import { createLoggingPlugin } from "@gooonzick/wizard-core/plugins";
+
+const plugins: WizardPlugin<MyData>[] = [
+  createLoggingPlugin({ level: "debug" }),
+];
+
+const machine = new WizardMachine(definition, {}, initialData, events, plugins);
+// or: machine.use(createLoggingPlugin());
+```
+
+See the [Plugins guide](../../docs/plugins.md) for veto semantics and lifecycle hooks.
 
 ### Three Transition Types
 

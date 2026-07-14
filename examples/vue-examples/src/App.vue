@@ -3,6 +3,7 @@ import { onMounted, ref, watch } from "vue";
 import ApproachToggle from "./components/approach-toggle.vue";
 import FieldBindingExample from "./wizard-example/field-binding-example.vue";
 import HistoryExample from "./wizard-example/history-example.vue";
+import PluginsExample from "./wizard-example/plugins-example.vue";
 import ProviderExample from "./wizard-example/provider-example.vue";
 import ResetCancelExample from "./wizard-example/reset-cancel-example.vue";
 import StatePersistenceExample from "./wizard-example/state-persistence-example.vue";
@@ -14,7 +15,8 @@ type Approach =
 	| "field-binding"
 	| "history"
 	| "reset-cancel"
-	| "persistence";
+	| "persistence"
+	| "plugins";
 
 const approaches: Approach[] = [
 	"use-wizard",
@@ -23,6 +25,7 @@ const approaches: Approach[] = [
 	"history",
 	"reset-cancel",
 	"persistence",
+	"plugins",
 ];
 
 const approach = ref<Approach>("use-wizard");
@@ -56,7 +59,8 @@ watch(approach, (newVal) => {
 			<FieldBindingExample v-else-if="approach === 'field-binding'" />
 			<HistoryExample v-else-if="approach === 'history'" />
 			<ResetCancelExample v-else-if="approach === 'reset-cancel'" />
-			<StatePersistenceExample v-else />
+			<StatePersistenceExample v-else-if="approach === 'persistence'" />
+			<PluginsExample v-else-if="approach === 'plugins'" />
 		</div>
 	</div>
 </template>

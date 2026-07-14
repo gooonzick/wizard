@@ -14,6 +14,7 @@ export {
 	WizardStateManager,
 } from "@gooonzick/wizard-state";
 export {
+	type CancelFn,
 	type CanSubmitFn,
 	type ResetFn,
 	type RestoreFn,
@@ -31,6 +32,7 @@ export {
 	type UseWizardState,
 	type UseWizardValidation,
 	useWizard,
+	type ValidateAllFn,
 	type ValidateFn,
 } from "./use-wizard";
 

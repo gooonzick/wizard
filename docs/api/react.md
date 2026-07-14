@@ -169,3 +169,19 @@ interface WizardProviderProps<T> {
   children: React.ReactNode;
 }
 ```
+
+## Exported helper types
+
+Action function aliases are exported for typing callbacks and wrappers:
+
+```ts
+import type {
+  ValidateFn,
+  ValidateAllFn,
+  CanSubmitFn,
+  CancelFn,
+  SerializeFn,
+  RestoreFn,
+  // …
+} from "@gooonzick/wizard-react";
+```

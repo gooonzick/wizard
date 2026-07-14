@@ -14,6 +14,7 @@ export {
 
 // Types from types.ts
 export type {
+	CancelFn,
 	CanSubmitFn,
 	ResetFn,
 	RestoreFn,
@@ -31,6 +32,7 @@ export type {
 	UseWizardReturn,
 	UseWizardState,
 	UseWizardValidation,
+	ValidateAllFn,
 	ValidateFn,
 } from "./types";
 

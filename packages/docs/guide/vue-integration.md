@@ -109,6 +109,18 @@ const email = useWizardField(wizard, "email");
 
 Use `useWizardField()` when you want `v-model` ergonomics without introducing a second reactive source of truth. The binding reads from the wizard state and writes through `actions.updateField()`.
 
+**Overloads:**
+
+```ts
+// 1) Pass the useWizard() return value (standalone)
+const name = useWizardField(wizard, "name");
+
+// 2) Field-only form inside WizardProvider (uses inject)
+const email = useWizardField<{ email: string }, "email">("email");
+```
+
+Return type is a writable computed ref (`WritableComputedRef<T[K]>` / `Ref<T[K]>`).
+
 ### Schema Validation
 
 You do not need to manually translate schema issues into wizard errors when your form library uses a Standard Schema compatible validator.
@@ -669,7 +681,7 @@ const name = useWizardField<{ name: string }, "name">("name");
 | `useWizardValidation()` | isValid, validationErrors                | Error display             |
 | `useWizardLoading()`    | isValidating, isSubmitting, isNavigating | Loading indicators        |
 | `useWizardActions<T>()` | updateField, validateAll, submit, reset, cancel, serialize, restore | Form handlers             |
-| `useWizardField<T>()`   | Writable computed ref for one field      | `v-model` field binding   |
+| `useWizardField<T>()`   | Writable computed ref (`wizard, field` or field-only in Provider) | `v-model` field binding   |
 
 ### When to Use Granular Composables
 

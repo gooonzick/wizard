@@ -101,16 +101,24 @@ interface UseWizardActions<T> {
 
 ## useWizardField Composable
 
-Writable computed ref for `v-model` binding:
+Writable computed ref for `v-model` binding. Two overloads:
 
 ```ts
-function useWizardField<T, K extends keyof T>(
+// Inside WizardProvider — field only (uses inject)
+function useWizardField<T extends WizardData, K extends keyof T>(
+  field: K,
+): WritableComputedRef<T[K]>;
+
+// With an explicit useWizard() return value
+function useWizardField<T extends WizardData, K extends keyof T>(
   wizard: UseWizardReturn<T>,
   field: K,
 ): WritableComputedRef<T[K]>;
 ```
 
-**Example:**
+Reads from wizard state and writes through `actions.updateField()` — no second reactive store.
+
+**With `useWizard()`:**
 
 ```vue
 <script setup lang="ts">
@@ -120,6 +128,19 @@ const name = useWizardField(wizard, "name");
 
 <template>
   <input v-model="name" />
+</template>
+```
+
+**Inside `WizardProvider`:**
+
+```vue
+<script setup lang="ts">
+// No wizard argument — resolves via provide/inject
+const email = useWizardField<{ email: string }, "email">("email");
+</script>
+
+<template>
+  <input v-model="email" />
 </template>
 ```
 
@@ -174,6 +195,22 @@ const {
   useValidation,
   useLoading,
 } = createTypedWizardProvider<MyFormData>();
+```
+
+## Exported helper types
+
+Action function aliases are exported for typing callbacks and wrappers:
+
+```ts
+import type {
+  ValidateFn,
+  ValidateAllFn,
+  CanSubmitFn,
+  CancelFn,
+  SerializeFn,
+  RestoreFn,
+  // …
+} from "@gooonzick/wizard-vue";
 ```
 
 ## Related Documentation
