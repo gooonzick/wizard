@@ -11,7 +11,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
-import type { RegistrationData } from "@/wizard-example";
+import type { RegistrationData } from "@/registration-wizard";
 import { StepTransition } from "./step-transition";
 import { ValidationMessage } from "./validation-message";
 

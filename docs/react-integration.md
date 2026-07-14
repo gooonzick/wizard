@@ -1,3 +1,4 @@
+
 # React Integration Guide
 
 This guide covers how to use the `useWizard` hook to integrate wizards into your React application.
@@ -113,9 +114,11 @@ interface UseWizardOptions<T> {
   onStepEnter?: (stepId: string, data: T) => void;
   onStepLeave?: (stepId: string, data: T) => void;
   onComplete?: (data: T) => void;
-  onCancel?: (data: T) => void;
+  onCancel?: (data: T) => void | Promise<void>;
   onReset?: () => void;
   onError?: (error: Error) => void;
+  /** Reference-stable — read once at machine creation. */
+  plugins?: WizardPlugin<T>[];
 }
 ```
 
@@ -183,6 +186,8 @@ actions.updateField("name", "John");
 
 // Validation
 actions.validate(); // Manually validate (result goes to validation slice)
+actions.validateAll(); // Dry-run all enabled steps → ValidationSummary
+actions.validateAll({ updateStatuses: true }); // Also mark invalid steps as "error"
 actions.canSubmit(); // Can current step be submitted?
 actions.submit(); // Submit current step
 
@@ -190,12 +195,16 @@ actions.submit(); // Submit current step
 actions.reset(); // Rewind to initial step + initial data, fires onReset
 actions.reset(newData); // Rewind with replacement data
 actions.cancel(); // Awaits definition.onCancel + onCancel event, then resets
+
+// Persistence
+actions.serialize(); // JSON-safe runtime snapshot
+actions.restore(savedState); // Re-apply snapshot (throws WizardRestoreError if incompatible)
 ```
 
 ## Reset & Cancel
 
-Use `actions.reset()` to rewind the wizard to its initial step and original data
-— for example after an error, or to let the user start over.
+Use `actions.reset()` to rewind the wizard to its initial step and original
+data — for example after an error, or to let the user start over.
 
 ```tsx
 <button onClick={() => actions.reset()}>Start over</button>
@@ -362,7 +371,13 @@ export function PersistentWizard() {
 }
 ```
 
-See `examples/react-examples/src/state-persistence-example.tsx` for a working example.
+See `examples/react-examples` for working demos:
+
+- `src/wizard-example.tsx` — basic flow + `validateAll`
+- `src/provider-example.tsx` — `WizardProvider` + granular hooks
+- `src/state-persistence-example.tsx` — serialize / restore
+- `src/plugins-example.tsx` — logging + custom plugins
+- `src/reset-cancel-example.tsx`, `src/history-example.tsx`
 
 ### Handling Errors
 
@@ -401,7 +416,7 @@ export function SafeWizard() {
 
 ### Tracking Progress
 
-The `state.progress` slice exposes a precomputed [`WizardProgress`](./api-reference.md#wizardprogress)
+The `state.progress` slice exposes a precomputed [`WizardProgress`](./api/core.md#wizardprogress)
 snapshot, so you don't need to derive totals or percentages by hand.
 
 ```tsx
@@ -420,16 +435,17 @@ export function ProgressWizard() {
         {progress.completedSteps} completed ({progress.percentage}%)
       </p>
 
-      <div className="steps">
-        {progress.enabledStepIds.map((stepId) => (
-          <div
-            key={stepId}
-            className={`step step-${state.stepStatuses[stepId]}`}
-          >
-            {stepId} — {state.stepStatuses[stepId]}
-          </div>
-        ))}
-      </div>
+      {state.currentStepId === "review" && (
+        <div className="review">
+          {progress.enabledStepIds.map((stepId) => (
+            <div key={stepId}>
+              <h4>
+                {stepId} — {state.stepStatuses[stepId]}
+              </h4>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -511,8 +527,6 @@ state.data; // Current form data
 state.currentStepId; // Current step
 state.currentStep; // Current step definition
 state.isCompleted; // Is wizard completed?
-state.stepStatuses; // Status of each step (pristine/active/visited/completed/error/skipped)
-state.progress; // { totalSteps, enabledSteps, completedSteps, currentStepIndex, percentage, isFirstStep, isLastStep, enabledStepIds }
 
 // Validation slice
 validation.isValid; // Is current step valid?
@@ -521,14 +535,15 @@ validation.validationErrors; // Field validation errors
 // Navigation slice - state and methods
 navigation.canGoNext; // Can move forward?
 navigation.canGoPrevious; // Can move backward?
+navigation.canGoBack; // Can go back via history stack?
 navigation.isFirstStep; // Is on first step?
 navigation.isLastStep; // Is on last step?
 navigation.visitedSteps; // Visited step IDs
 navigation.availableSteps; // Enabled step IDs
-navigation.stepHistory; // Navigation history
+navigation.stepHistory; // Navigation history stack
 navigation.goNext(); // Navigate to next
-navigation.goPrevious(); // Navigate to previous
-navigation.goBack(n); // Go back n steps
+navigation.goPrevious(); // Navigate to previous (pops history)
+navigation.goBack(n); // Go back n steps (deprecated)
 navigation.goTo(id); // Jump to specific step (validates first)
 
 // Loading slice
@@ -610,7 +625,7 @@ function MyWizardForm() {
 | `useWizardNavigation()` | canGoNext, goNext, goBack, etc.          | Navigation buttons        |
 | `useWizardValidation()` | isValid, validationErrors                | Error display             |
 | `useWizardLoading()`    | isValidating, isSubmitting, isNavigating | Loading indicators        |
-| `useWizardActions<T>()` | updateField, submit, reset               | Form handlers             |
+| `useWizardActions<T>()` | updateField, validateAll, submit, reset, cancel, serialize, restore | Form handlers             |
 
 ### When to Use Granular Hooks
 

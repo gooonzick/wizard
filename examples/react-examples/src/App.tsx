@@ -1,19 +1,29 @@
 import { useState } from "react";
 import { HistoryExample } from "./history-example";
+import { PluginsExample } from "./plugins-example";
+import { ProviderExample } from "./provider-example";
 import { ResetCancelExample } from "./reset-cancel-example";
 import { StatePersistenceExample } from "./state-persistence-example";
 import { WizardExample } from "./wizard-example";
 
-type View = "wizard" | "history" | "reset-cancel" | "persistence";
+type View =
+	| "wizard"
+	| "provider"
+	| "history"
+	| "reset-cancel"
+	| "persistence"
+	| "plugins";
 
 export function App() {
 	const [view, setView] = useState<View>("wizard");
 
 	const tabs: Array<{ id: View; label: string }> = [
 		{ id: "wizard", label: "Registration Wizard" },
+		{ id: "provider", label: "Provider + Hooks" },
 		{ id: "history", label: "Navigation History" },
 		{ id: "reset-cancel", label: "Reset & Cancel" },
 		{ id: "persistence", label: "State Persistence" },
+		{ id: "plugins", label: "Plugins" },
 	];
 
 	return (
@@ -35,9 +45,11 @@ export function App() {
 				))}
 			</div>
 			{view === "wizard" && <WizardExample />}
+			{view === "provider" && <ProviderExample />}
 			{view === "history" && <HistoryExample />}
 			{view === "reset-cancel" && <ResetCancelExample />}
 			{view === "persistence" && <StatePersistenceExample />}
+			{view === "plugins" && <PluginsExample />}
 		</div>
 	);
 }

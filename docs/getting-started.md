@@ -1,3 +1,4 @@
+
 # Getting Started with WizardForm
 
 This guide will help you get up and running with the WizardForm framework in minutes.
@@ -7,19 +8,24 @@ This guide will help you get up and running with the WizardForm framework in min
 ### Using npm
 
 ```bash
+# React
 npm install @gooonzick/wizard-core @gooonzick/wizard-react
+# Vue
+npm install @gooonzick/wizard-core @gooonzick/wizard-vue
 ```
 
 ### Using yarn
 
 ```bash
 yarn add @gooonzick/wizard-core @gooonzick/wizard-react
+# or: yarn add @gooonzick/wizard-core @gooonzick/wizard-vue
 ```
 
 ### Using pnpm
 
 ```bash
 pnpm add @gooonzick/wizard-core @gooonzick/wizard-react
+# or: pnpm add @gooonzick/wizard-core @gooonzick/wizard-vue
 ```
 
 ## Core vs Framework Integrations
@@ -193,13 +199,13 @@ await machine.submit();
 - **Validation**: Field-level rules that must pass before moving forward
 - **Context**: A way to pass utilities (API client, logger, etc.) to validators and hooks
 
-Learn more about these in the [Core Concepts](./core-concepts.md) guide.
+Learn more about these in the [Core Concepts](./core-concepts) guide.
 
 ## Next Steps
 
-1. Read [Core Concepts](./core-concepts.md) to understand the framework better
-2. Explore [Defining Wizards](./defining-wizards.md) to learn about different definition patterns
-3. Check [React Integration](./react-integration.md) for React-specific features
+1. Read [Core Concepts](./core-concepts) to understand the framework better
+2. Explore [Defining Wizards](./defining-wizards) to learn about different definition patterns
+3. Check [React Integration](./react-integration) for React-specific features
 4. Review [API Reference](./api-reference.md) for detailed type information
 
 ## Common Questions
@@ -214,4 +220,4 @@ A: Yes! The wizard is agnostic to your form library. You can use it with React H
 A: Validators return `SyncOrAsync<ValidationResult>`, so they support both sync and async operations.
 
 **Q: What about complex branching logic?**
-A: Use conditional transitions or resolver transitions. See [Core Concepts](./core-concepts.md) for details.
+A: Use conditional transitions or resolver transitions. See [Core Concepts](./core-concepts) for details.

@@ -1,7 +1,3 @@
----
-title: Core API
-description: API reference for the @gooonzick/wizard-core package
----
 
 # Core Package (`@gooonzick/wizard-core`)
 
@@ -907,7 +903,7 @@ const machine = new WizardMachine(definition, context, initialData, {
 
 ## Plugin Types (WIZ-007)
 
-See the [Plugins guide](/guide/plugins) for full usage documentation.
+See the [Plugins guide](../plugins.md) for full usage documentation.
 
 ### `WizardPlugin<TData>`
 

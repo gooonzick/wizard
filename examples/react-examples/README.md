@@ -1,85 +1,31 @@
-# React + TypeScript + Vite
+# React Examples
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Demo app for `@gooonzick/wizard-core` + `@gooonzick/wizard-react`.
 
-Currently, two official plugins are available:
+## Available Demos
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+Switch tabs in the app UI:
 
-## React Compiler
+| Tab | File | What it shows |
+| --- | --- | --- |
+| **Registration Wizard** | `src/wizard-example.tsx` | Basic multi-step flow, progress, sidebar, **`actions.validateAll()`** on the review step |
+| **Provider + Hooks** | `src/provider-example.tsx` | `WizardProvider` + granular hooks (`useWizardData`, `useWizardNavigation`, …) in nested components |
+| **Navigation History** | `src/history-example.tsx` | Conditional branching + history stack (`canGoBack`, `stepHistory`, `goPrevious`) |
+| **Reset & Cancel** | `src/reset-cancel-example.tsx` | `actions.reset()`, `actions.cancel()`, `onReset` / `onCancel` / definition `.onCancel()` |
+| **State Persistence** | `src/state-persistence-example.tsx` | `actions.serialize()` / `actions.restore()` with `localStorage` |
+| **Plugins** | `src/plugins-example.tsx` | `createLoggingPlugin` + custom `afterTransition` / `onError` plugin |
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Shared definition: `src/registration-wizard.ts`.
 
-## Expanding the ESLint configuration
+## Run
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(["dist"]),
-  {
-    files: ["**/*.{ts,tsx}"],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ["./tsconfig.node.json", "./tsconfig.app.json"],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-]);
+```sh
+pnpm --filter @gooonzick/wizard-react-examples dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Build And Typecheck
 
-```js
-// eslint.config.js
-import reactX from "eslint-plugin-react-x";
-import reactDom from "eslint-plugin-react-dom";
-
-export default defineConfig([
-  globalIgnores(["dist"]),
-  {
-    files: ["**/*.{ts,tsx}"],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs["recommended-typescript"],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ["./tsconfig.node.json", "./tsconfig.app.json"],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-]);
+```sh
+pnpm --filter @gooonzick/wizard-react-examples typecheck
+pnpm --filter @gooonzick/wizard-react-examples build
 ```
-
-## Wizard Example
-
-This project includes an example of how to use the `@gooonzick/wizard-core` and `@gooonzick/wizard-react` packages to create a multi-step wizard.
-
-The example is located in `src/WizardExample.tsx` and is rendered in `src/App.tsx`.
-
-To run the example:
-
-1.  Ensure dependencies are installed: `pnpm install` (from the root of the monorepo)
-2.  Start the development server: `pnpm dev`
-3.  Open your browser at the URL shown in the terminal (usually `http://localhost:5173`)

@@ -1,14 +1,23 @@
 # Vue Examples
 
-This example app demonstrates three ways to build with `@gooonzick/wizard-vue`.
+Demo app for `@gooonzick/wizard-core` + `@gooonzick/wizard-vue`.
 
-## Available Tabs
+## Available Demos
 
-- `useWizard`: a standalone wizard with the full adapter return value in one component tree.
-- `Provider`: a provider-based example using granular hooks in nested components.
-- `useWizardField`: a focused `v-model` example showing writable field bindings without mirroring wizard state into a second reactive object.
+Switch approaches in the app UI:
 
-## Run The Example
+| Approach | File | What it shows |
+| --- | --- | --- |
+| **useWizard** | `src/wizard-example/use-wizard-example.vue` | Full composable API in one tree, **`actions.validateAll()`** on review |
+| **Provider** | `src/wizard-example/provider-example.vue` | `WizardProvider` + granular composables in nested components |
+| **useWizardField** | `src/wizard-example/field-binding-example.vue` | `v-model` via `useWizardField()` without a second reactive store |
+| **History** | `src/wizard-example/history-example.vue` | Conditional branching + history stack |
+| **Reset & Cancel** | `src/wizard-example/reset-cancel-example.vue` | `reset` / `cancel` and lifecycle events |
+| **Persistence** | `src/wizard-example/state-persistence-example.vue` | `serialize` / `restore` with `localStorage` |
+
+Shared definition/helpers live under `src/wizard-example/` (`wizard-definition.ts`, validators, guards).
+
+## Run
 
 ```sh
 pnpm --filter @gooonzick/wizard-vue-examples dev

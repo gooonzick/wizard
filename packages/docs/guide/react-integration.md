@@ -118,9 +118,11 @@ interface UseWizardOptions<T> {
   onStepEnter?: (stepId: string, data: T) => void;
   onStepLeave?: (stepId: string, data: T) => void;
   onComplete?: (data: T) => void;
-  onCancel?: (data: T) => void;
+  onCancel?: (data: T) => void | Promise<void>;
   onReset?: () => void;
   onError?: (error: Error) => void;
+  /** Reference-stable — read once at machine creation. */
+  plugins?: WizardPlugin<T>[];
 }
 ```
 
@@ -188,6 +190,8 @@ actions.updateField("name", "John");
 
 // Validation
 actions.validate(); // Manually validate (result goes to validation slice)
+actions.validateAll(); // Dry-run all enabled steps → ValidationSummary
+actions.validateAll({ updateStatuses: true }); // Also mark invalid steps as "error"
 actions.canSubmit(); // Can current step be submitted?
 actions.submit(); // Submit current step
 
@@ -195,6 +199,10 @@ actions.submit(); // Submit current step
 actions.reset(); // Rewind to initial step + initial data, fires onReset
 actions.reset(newData); // Rewind with replacement data
 actions.cancel(); // Awaits definition.onCancel + onCancel event, then resets
+
+// Persistence
+actions.serialize(); // JSON-safe runtime snapshot
+actions.restore(savedState); // Re-apply snapshot (throws WizardRestoreError if incompatible)
 ```
 
 ## Reset & Cancel
@@ -367,7 +375,13 @@ export function PersistentWizard() {
 }
 ```
 
-See `examples/react-examples/src/state-persistence-example.tsx` for a working example.
+See `examples/react-examples` for working demos:
+
+- `src/wizard-example.tsx` — basic flow + `validateAll`
+- `src/provider-example.tsx` — `WizardProvider` + granular hooks
+- `src/state-persistence-example.tsx` — serialize / restore
+- `src/plugins-example.tsx` — logging + custom plugins
+- `src/reset-cancel-example.tsx`, `src/history-example.tsx`
 
 ### Handling Errors
 
@@ -615,7 +629,7 @@ function MyWizardForm() {
 | `useWizardNavigation()` | canGoNext, goNext, goBack, etc.          | Navigation buttons        |
 | `useWizardValidation()` | isValid, validationErrors                | Error display             |
 | `useWizardLoading()`    | isValidating, isSubmitting, isNavigating | Loading indicators        |
-| `useWizardActions<T>()` | updateField, submit, reset               | Form handlers             |
+| `useWizardActions<T>()` | updateField, validateAll, submit, reset, cancel, serialize, restore | Form handlers             |
 
 ### When to Use Granular Hooks
 

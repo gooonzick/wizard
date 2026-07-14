@@ -1,7 +1,3 @@
----
-title: Vue API
-description: API reference for the @gooonzick/wizard-vue package
----
 
 # Vue Package (`@gooonzick/wizard-vue`)
 

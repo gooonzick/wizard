@@ -1,5 +1,4 @@
 import type { ValidationSummary } from "@gooonzick/wizard-core";
-import { createWizard } from "@gooonzick/wizard-core";
 import { useWizard } from "@gooonzick/wizard-react";
 import type React from "react";
 import { useState } from "react";
@@ -7,74 +6,27 @@ import { Button } from "@/components/ui/button";
 import { WizardForm } from "./components/wizard-form";
 import { WizardProgress } from "./components/wizard-progress";
 import { WizardSidebar } from "./components/wizard-sidebar";
+import {
+	registrationFieldLabels,
+	registrationInitialData,
+	registrationStepIds,
+	registrationStepTitles,
+	registrationWizard,
+} from "./registration-wizard";
 
-// 1. Define Data Type
-export type RegistrationData = {
-	firstName: string;
-	lastName: string;
-	email: string;
-	newsletter: boolean;
-	theme: "light" | "dark";
-};
+// Re-export type for components that import from this module historically.
+export type { RegistrationData } from "./registration-wizard";
 
-// 2. Define Wizard
-const registrationWizard = createWizard<RegistrationData>("registration")
-	.initialStep("personal")
-	.step("personal", (step) =>
-		step
-			.title("Personal Information")
-			.required("firstName", "lastName", "email")
-			.next("preferences"),
-	)
-	.step("preferences", (step) =>
-		step.title("Preferences").next("review").previous("personal"),
-	)
-	.step("review", (step) =>
-		step
-			.title("Review")
-			.description("Please review your information")
-			.previous({
-				type: "resolver",
-				resolve: (data) => (data.newsletter ? "preferences" : "personal"),
-			}),
-	)
-	.build();
-
-const initialData: RegistrationData = {
-	firstName: "",
-	lastName: "",
-	email: "",
-	newsletter: false,
-	theme: "light",
-};
-
-// Field labels for sidebar display
-const fieldLabels: Record<string, string> = {
-	firstName: "First Name",
-	lastName: "Last Name",
-	email: "Email",
-	newsletter: "Newsletter",
-	theme: "Theme",
-};
-
-// 3. Component
 export const WizardExample: React.FC = () => {
 	const { navigation, actions, state, validation } = useWizard({
 		definition: registrationWizard,
-		initialData,
+		initialData: registrationInitialData,
 		onComplete: (finalData) => {
 			console.log(
 				`Wizard Completed! Data: ${JSON.stringify(finalData, null, 2)}`,
 			);
 		},
 	});
-
-	const stepIds = ["personal", "preferences", "review"];
-	const stepTitles: Record<string, string> = {
-		personal: "Personal",
-		preferences: "Preferences",
-		review: "Review",
-	};
 
 	// Review-step demo: validate every step at once and jump to the first invalid.
 	const [allSummary, setAllSummary] = useState<ValidationSummary | null>(null);
@@ -103,7 +55,7 @@ export const WizardExample: React.FC = () => {
 				{/* Progress */}
 				<WizardProgress
 					progress={state.progress}
-					stepTitles={stepTitles}
+					stepTitles={registrationStepTitles}
 					stepStatuses={state.stepStatuses}
 					onStepClick={(stepId) => navigation.goTo(stepId)}
 				/>
@@ -162,10 +114,10 @@ export const WizardExample: React.FC = () => {
 					<WizardSidebar
 						data={state.data}
 						currentStepId={state.currentStep.id}
-						stepIds={stepIds}
-						stepTitles={stepTitles}
+						stepIds={registrationStepIds}
+						stepTitles={registrationStepTitles}
 						stepStatuses={state.stepStatuses}
-						fieldLabels={fieldLabels}
+						fieldLabels={registrationFieldLabels}
 						onStepClick={(stepId) => navigation.goTo(stepId)}
 					/>
 				</div>
