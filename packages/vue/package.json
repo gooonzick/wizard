@@ -34,14 +34,15 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.5.3",
+		"@microsoft/api-extractor": "^7.58.9",
 		"@types/node": "^26.1.1",
 		"@vitejs/plugin-vue": "^6.0.8",
 		"@vitest/coverage-v8": "^4.1.10",
 		"@vue/test-utils": "^2.4.11",
 		"happy-dom": "^20.10.6",
 		"typescript": "^6.0.3",
-		"vite": "^7.3.6",
-		"vite-plugin-dts": "^4.5.4",
+		"vite": "^8.1.4",
+		"vite-plugin-dts": "^5.0.3",
 		"vitest": "^4.1.10",
 		"vue": "^3.5.39"
 	},
