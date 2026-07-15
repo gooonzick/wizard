@@ -70,14 +70,13 @@ The published version is **1.5.1** (`core`, `react`, `vue`, and `state` are fixe
 | **Reset / Cancel**        | ✅                 | ❌               | ❌                | ❌          | ❌          | ✅           | ✅             | ✅          | ✅       | ❌                 | ❌           |
 | **State persistence**     | ✅                 | ❌               | ❌                | ❌          | ❌          | ✅ persist   | ✅ sessions    | ✅          | ❌       | ✅ server          | ❌           |
 | **Middleware / plugins**  | ✅ WIZ-007         | ❌               | ❌                | ❌          | ❌          | ✅ actions   | ✅             | ❌          | ❌       | ❌                 | ❌           |
-| **Router integration**    | ❌                 | ❌               | ❌                | ❌          | ✅          | ❌           | ❌             | ❌          | ❌       | ❌                 | ✅           |
 | **Sub-wizards**           | ❌                 | ❌               | ❌                | ✅ nested   | ❌          | ✅ spawn     | ✅             | ✅ pages    | ❌       | ❌                 | ❌           |
 | **Validate all steps**    | ✅                 | ❌               | ❌                | ❌          | ❌          | ❌           | ❌             | ✅          | ❌       | ❌                 | ❌           |
 | **DevTools / visualizer** | ❌                 | ❌               | ❌                | ❌          | ❌          | ✅ Stately   | ✅ outline     | ✅          | ❌       | ❌                 | ❌           |
 
 ### Key Takeaway
 
-`gooonzick/wizard` already outperforms most competitors in its foundation: typing, declarative approach, framework-agnostic architecture, conditional branching, guard combinators, and Standard Schema. Its **runtime capabilities** are now complete too — navigation (including `goTo` and history), step status tracking, progress, reset/cancel, persistence, plugins, and all-steps validation (WIZ-001 through WIZ-008) have all shipped. The remaining differentiators on the horizon are router integration, sub-wizards, and DevTools/visualization — closing those will make the library an undisputed leader in its niche.
+`gooonzick/wizard` already outperforms most competitors in its foundation: typing, declarative approach, framework-agnostic architecture, conditional branching, guard combinators, and Standard Schema. Its **runtime capabilities** are now complete too — navigation (including `goTo` and history), step status tracking, progress, reset/cancel, persistence, plugins, and all-steps validation (WIZ-001 through WIZ-008) have all shipped. The remaining differentiators on the horizon are sub-wizards and DevTools/visualization — closing those will make the library an undisputed leader in its niche.
 
 ---
 
@@ -694,101 +693,7 @@ If `updateStatuses: true` — set `error` for invalid steps.
 
 ---
 
-#### WIZ-009: Router Integration
-
-**Status:** 📋 Planned
-**Priority:** 🟡 High
-**Effort:** M (4–6 hours)
-**Package:** `@gooonzick/wizard-router-react` (new package)
-
-##### Problem
-
-When using a wizard in an SPA, each step should have its own URL to support:
-
-- Browser "Back" button
-- Deeplinks (link to a specific step)
-- Refresh (page reload does not lose the current step)
-- SEO (for public wizards)
-
-Competitors `react-albus` and `@robo-wizard/react-router` solve this via React Router integration.
-
-##### Solution
-
-A separate package with two-way URL ↔ stepId synchronization.
-
-##### API
-
-```typescript
-// @gooonzick/wizard-router-react
-
-import { useRoutedWizard } from '@gooonzick/wizard-router-react';
-
-function App() {
-  const wizard = useRoutedWizard({
-    definition: signupWizard,
-    initialData: { ... },
-    routing: {
-      basePath: '/signup',               // URL prefix
-      strategy: 'path',                  // 'path' | 'hash' | 'query'
-      // path  → /signup/personal, /signup/plan
-      // hash  → /signup#personal, /signup#plan
-      // query → /signup?step=personal
-      paramName: 'step',                 // for strategy: 'query'
-      history: browserHistory,           // react-router history or window.history
-    },
-    onComplete: (data) => router.push('/dashboard'),
-  });
-}
-
-// Or a wrapper for React Router v6+
-import { WizardRoutes } from '@gooonzick/wizard-router-react';
-
-<WizardRoutes
-  definition={signupWizard}
-  basePath="/signup"
-  initialData={{ ... }}
->
-  {({ state, navigation, actions }) => (
-    <CurrentStepComponent
-      data={state.data}
-      onNext={() => navigation.goNext()}
-    />
-  )}
-</WizardRoutes>
-```
-
-##### Synchronization
-
-**URL → Machine:**
-
-- On mount: read the current URL, extract stepId, call `goTo(stepId, { skipValidation: true })`
-- On popstate (browser Back button): extract stepId, call `goPrevious()` or `goTo()`
-
-**Machine → URL:**
-
-- On every `onStateChange` → update URL via `history.pushState` or `history.replaceState`
-- `goNext()` → `pushState`
-- `goPrevious()` → `back()` or `pushState` (configurable)
-- `goTo()` → `pushState`
-- `reset()` → `replaceState` with initialStepId
-
-##### Dependencies
-
-- Depends on WIZ-002 (goTo)
-- Optional peer dependency: `react-router-dom >= 6`
-
-##### Tests
-
-- URL updates on goNext
-- Browser back → goPrevious
-- Deeplink → goTo the correct step
-- Refresh → current step is preserved
-- Invalid stepId in URL → fallback to initialStep
-- All three strategies (path / hash / query)
-
----
-
-#### WIZ-010: onDataChange Event / Field-level Subscriptions ✅
+#### WIZ-010: onDataChange Event / Field-level Subscriptions
 
 **Status:** 📋 Planned
 **Priority:** 🟠 Medium
@@ -1296,7 +1201,6 @@ Phase 3 (Ecosystem):
   WIZ-008 Validate All         ── depends on WIZ-003
 
 Phase 4 (Integrations):
-  WIZ-009 Router               ── depends on WIZ-002
   WIZ-010 onDataChange         ── independent
   WIZ-016 Analytics Plugin     ── depends on WIZ-007
 
@@ -1310,15 +1214,15 @@ Phase 5 (Advanced):
 
 ## Appendix B: Breaking Changes Summary
 
-| Task                | Breaking change                 | Mitigation                                  |
-| ------------------- | ------------------------------- | ------------------------------------------- |
-| WIZ-001 History     | `goPrevious()` changes behavior | `useHistory: boolean` option in config      |
-| WIZ-003 Step Status | New field in `WizardState`      | Additive, non-breaking                      |
-| WIZ-004 Progress    | New field in `WizardState`      | Additive, non-breaking                      |
-| WIZ-005 Reset       | New methods                     | Additive, non-breaking                      |
+| Task                | Breaking change                          | Mitigation                                  |
+| ------------------- | ---------------------------------------- | ------------------------------------------- |
+| WIZ-001 History     | `goPrevious()` changes behavior          | `useHistory: boolean` option in config      |
+| WIZ-003 Step Status | New field in `WizardState`               | Additive, non-breaking                      |
+| WIZ-004 Progress    | New field in `WizardState`               | Additive, non-breaking                      |
+| WIZ-005 Reset       | New methods                              | Additive, non-breaking                      |
 | WIZ-006 Persistence | New instance methods (serialize/restore) | Additive, non-breaking                      |
-| WIZ-007 Plugins     | New `use()` method              | Additive, non-breaking                      |
-| WIZ-011 Sub-wizards | New step type                   | Additive, non-breaking                      |
-| WIZ-013 Lazy Steps  | Steps can be a function         | Requires `typeof step === 'function'` check |
+| WIZ-007 Plugins     | New `use()` method                       | Additive, non-breaking                      |
+| WIZ-011 Sub-wizards | New step type                            | Additive, non-breaking                      |
+| WIZ-013 Lazy Steps  | Steps can be a function                  | Requires `typeof step === 'function'` check |
 
 **Recommendation:** combine Phase 1 + Phase 2 into a single minor release (v1.1.0), Phase 3 into v1.2.0, Phase 4 into v1.3.0, and Phase 5 into v2.0.0 (if there is a breaking change with `useHistory` enabled by default).
