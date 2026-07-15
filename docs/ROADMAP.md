@@ -35,6 +35,7 @@
 | State Persistence (WIZ-006)                           | ✅     | `core`  |
 | Plugin System (WIZ-007)                               | ✅     | `core`  |
 | Validate All Steps (WIZ-008)                          | ✅     | `core`  |
+| onDataChange / Field Subscriptions (WIZ-010)          | ✅     | `core`  |
 
 ### Architectural Decisions
 
@@ -528,7 +529,14 @@ interface WizardPlugin<TData = unknown> {
   // On reset/cancel.
   onReset?: () => void | Promise<void>;
 
-  // NOTE: onDataChange is NOT included — deferred to WIZ-010.
+  // After a data mutation that changed at least one top-level field (WIZ-010).
+  // Data params are DeepReadonly; fire-and-forget; throws routed to onError
+  // (phase "data").
+  onDataChange?: (
+    prevData: DeepReadonly<TData>,
+    nextData: DeepReadonly<TData>,
+    changedFields: readonly (keyof TData)[],
+  ) => void | Promise<void>;
 
   // Cleanup when the machine is destroyed.
   destroy?: () => void | Promise<void>;
@@ -544,7 +552,7 @@ interface TransitionEvent<TData> {
 
 interface ErrorContext<TData> {
   stepId: StepId;
-  phase: "validation" | "transition" | "lifecycle" | "submit";
+  phase: "validation" | "transition" | "lifecycle" | "submit" | "data";
   data: DeepReadonly<TData>;
 }
 
@@ -564,7 +572,7 @@ class WizardMachine<TData> {
 }
 ```
 
-> **Note:** The builder-level `.use()` from the original spec was NOT implemented. Registration goes through the constructor's 5th argument or `machine.use()` after construction. `onDataChange` was also not implemented — it is deferred to WIZ-010.
+> **Note:** The builder-level `.use()` from the original spec was NOT implemented. Registration goes through the constructor's 5th argument or `machine.use()` after construction. The `onDataChange` plugin hook shipped in WIZ-010.
 
 ##### Execution Order
 
@@ -772,11 +780,12 @@ import { WizardRoutes } from '@gooonzick/wizard-router-react';
 
 ---
 
-#### WIZ-010: onDataChange Event / Field-level Subscriptions
+#### WIZ-010: onDataChange Event / Field-level Subscriptions ✅
 
 **Priority:** 🟠 Medium
 **Effort:** S (2–3 hours)
 **Package:** `@gooonzick/wizard-core`
+**Status:** ✅ DONE
 
 ##### Problem
 
@@ -825,6 +834,16 @@ When `updateData(updater)` is called → shallow diff of keys between `prevData`
 ##### Note: Plugin Integration (non-breaking)
 
 WIZ-010 should also add `onDataChange` to the `WizardPlugin` interface so plugins can react to data mutations without subscribing to the full `onStateChange`. This is an additive, non-breaking extension of the plugin API shipped in WIZ-007. The existing plugin hook set intentionally omitted `onDataChange` pending this work.
+
+##### Shipped vs. specced deltas
+
+- The config interface is `WizardEvents<T>` (this spec called it `WizardCallbacks`); its `onDataChange` params are plain `T`, matching the other machine events.
+- `updateField(field, value)` was added to the **core** machine (previously framework-only sugar over `updateData`); the React/Vue `updateField` hooks now delegate to it, so `changedFields = [field]` is authoritative.
+- `setData` also fires `onDataChange` (shallow diff of top-level keys) — beyond the two methods named in the original spec — so plugins/watchers react to every data mutation.
+- A no-op `updateField` (new value is `Object.is`-equal to the current one) now fires **nothing** — no `onStateChange`, no `onDataChange`, no watchers/plugin hook. Previously the framework `updateData` sugar always created a new object and fired `onStateChange`.
+- The **plugin** `onDataChange` receives `DeepReadonly<TData>` data params (consistent with WIZ-007), and a new `"data"` value was added to `ErrorContext.phase` so isolated subscriber throws are attributed correctly via `onError`.
+- `reset()` and `restore()` do NOT fire `onDataChange` / watchers / the plugin hook.
+- `watchField` is core-only for this ticket (reachable via `manager.getMachine().watchField(...)`); the framework surface only gains the `onDataChange` option.
 
 ---
 

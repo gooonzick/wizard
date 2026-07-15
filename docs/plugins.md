@@ -3,7 +3,7 @@
 
 Plugins let you intercept wizard transitions and lifecycle events globally, across every step — ideal for analytics, logging, error reporting, and auto-save. A plugin is a plain object implementing the `WizardPlugin` interface; you register instances on the machine.
 
-> `onDataChange` is **not** part of the plugin interface yet — it is deferred to WIZ-010 and will be added as a non-breaking extension.
+> `onDataChange(prevData, nextData, changedFields)` is part of the plugin interface (WIZ-010). It fires after any data mutation (`updateField` / `updateData` / `setData`) that changes at least one top-level field, with `DeepReadonly` data payloads. It is fire-and-forget (may be async) and isolated — a throw or rejection is routed to `onError` with `phase: "data"`.
 
 ## The `WizardPlugin` Interface
 
@@ -31,6 +31,13 @@ interface WizardPlugin<TData = unknown> {
 
   onReset?(): void | Promise<void>;
 
+  /** Fired after a data mutation that changed at least one top-level field. */
+  onDataChange?(
+    prevData: DeepReadonly<TData>,
+    nextData: DeepReadonly<TData>,
+    changedFields: readonly (keyof TData)[],
+  ): void | Promise<void>;
+
   destroy?(): void | Promise<void>;
 }
 ```
@@ -52,7 +59,7 @@ interface TransitionEvent<TData> {
 /** Context passed to a plugin's onError hook. */
 interface ErrorContext<TData> {
   stepId: StepId;
-  phase: "validation" | "transition" | "lifecycle" | "submit";
+  phase: "validation" | "transition" | "lifecycle" | "submit" | "data";
   data: DeepReadonly<TData>;
 }
 

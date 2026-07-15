@@ -43,6 +43,7 @@ export function useWizard<T extends WizardData>(
 		onCancel,
 		onReset,
 		onError,
+		onDataChange,
 		plugins,
 	} = options;
 
@@ -55,6 +56,7 @@ export function useWizard<T extends WizardData>(
 		onCancel,
 		onReset,
 		onError,
+		onDataChange,
 	};
 
 	// Forward reference for state - needed for createMachine callback
@@ -104,6 +106,9 @@ export function useWizard<T extends WizardData>(
 				},
 				onError: (error: Error) => {
 					callbacks.onError?.(error);
+				},
+				onDataChange: (prev: T, next: T, changedFields: (keyof T)[]) => {
+					callbacks.onDataChange?.(prev, next, changedFields);
 				},
 			},
 			plugins,
@@ -222,11 +227,8 @@ export function useWizard<T extends WizardData>(
 	};
 
 	const updateField = <K extends keyof T>(field: K, value: T[K]) => {
-		updateData((data: T) => ({
-			...data,
-			[field]: value,
-		}));
-		// updateNavigationState() is already called in updateData
+		machine.value.updateField(field, value);
+		updateNavigationState();
 	};
 
 	// Validation

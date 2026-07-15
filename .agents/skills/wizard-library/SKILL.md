@@ -22,6 +22,9 @@ Use this skill to execute Wizard tasks with high correctness and minimal regress
 - Keep transition logic centralized in `resolveTransition()` semantics.
 - Keep guard functions pure (boolean result, no side effects).
 - Build validators via composition (`combineValidators`, `requiredFields`, custom validator).
+- Data-change notifications (WIZ-010): `updateField` (Object.is no-op),
+  `onDataChange` event, `watchField` (core-only), and the plugin `onDataChange`
+  hook. See `references/api_reference.md`.
 
 ### React (`@gooonzick/wizard-react`)
 

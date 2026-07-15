@@ -441,6 +441,10 @@ class WizardMachine<T> {
   // Data operations
   updateData(updater: (data: T) => T): void;
   setData(data: T): void;
+  /** Update one top-level field. Object.is no-op guard. Fires onDataChange with changedFields=[field]. (WIZ-010) */
+  updateField<K extends keyof T>(field: K, value: T[K]): void;
+  /** Subscribe to one field. Returns an unsubscribe function. (WIZ-010) */
+  watchField<K extends keyof T>(field: K, callback: (newValue: T[K], oldValue: T[K]) => void): () => void;
 
   // Validation & submission
   validate(): Promise<ValidationResult>;
@@ -510,6 +514,17 @@ interface WizardEvents<T> {
   /** Fired after `reset()` (and after `cancel()`'s implicit reset). */
   onReset?: () => void;
   onError?: (error: Error) => void;
+  /**
+   * Fired after a data mutation (updateField/updateData/setData) that changes
+   * at least one top-level field. Fires after onStateChange; NOT fired on
+   * reset(), restore(), or navigation. changedFields are the changed top-level
+   * keys (Object.is). (WIZ-010)
+   */
+  onDataChange?: (
+    prevData: T,
+    nextData: T,
+    changedFields: (keyof T)[],
+  ) => void;
 }
 ```
 
@@ -858,6 +873,15 @@ machine.updateData((d) => ({ ...d, name: "John" }));
 // Replace all data
 machine.setData({ name: "Jane", email: "jane@example.com" });
 
+// Update one field (no-op if the value is Object.is-equal to the current value)
+machine.updateField("name", "John");
+
+// React to data changes (fires after onStateChange; not on reset/restore/navigation)
+const stop = machine.watchField("name", (next, prev) => {
+  console.log(`name: ${prev} → ${next}`);
+});
+stop(); // unsubscribe
+
 // Validate
 const result = await machine.validate();
 if (result.valid) {
@@ -926,6 +950,12 @@ interface WizardPlugin<TData = unknown> {
   ): void | Promise<void>;
   onComplete?(data: DeepReadonly<TData>): void | Promise<void>;
   onReset?(): void | Promise<void>;
+  /** Fired after a data mutation that changed ≥1 top-level field. Fire-and-forget; DeepReadonly payloads; errors routed to onError phase "data". (WIZ-010) */
+  onDataChange?(
+    prevData: DeepReadonly<TData>,
+    nextData: DeepReadonly<TData>,
+    changedFields: readonly (keyof TData)[],
+  ): void | Promise<void>;
   destroy?(): void | Promise<void>;
 }
 ```
@@ -951,7 +981,7 @@ Context passed to `onError`.
 ```ts
 interface ErrorContext<TData> {
   stepId: StepId;
-  phase: "validation" | "transition" | "lifecycle" | "submit";
+  phase: "validation" | "transition" | "lifecycle" | "submit" | "data";
   data: DeepReadonly<TData>;
 }
 ```

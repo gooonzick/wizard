@@ -108,5 +108,6 @@ export function createEventSpies<T extends Record<string, unknown>>(): Required<
 		onCancel: vi.fn(),
 		onReset: vi.fn(),
 		onError: vi.fn(),
+		onDataChange: vi.fn(),
 	};
 }

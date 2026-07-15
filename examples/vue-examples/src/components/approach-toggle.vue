@@ -9,7 +9,8 @@ type Approach =
 	| "history"
 	| "reset-cancel"
 	| "persistence"
-	| "plugins";
+	| "plugins"
+	| "data-change";
 
 interface Props {
 	modelValue: Approach;
@@ -68,6 +69,12 @@ defineEmits<
 			@click="$emit('update:modelValue', 'plugins')"
 		>
 			Plugins
+		</Button>
+		<Button
+			:variant="modelValue === 'data-change' ? 'default' : 'outline'"
+			@click="$emit('update:modelValue', 'data-change')"
+		>
+			Data Change
 		</Button>
 	</div>
 </template>

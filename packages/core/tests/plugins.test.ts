@@ -1,6 +1,7 @@
 import { describe, expect, expectTypeOf, it, test, vi } from "vitest";
 import type { WizardError } from "../src/errors";
 import { WizardConfigurationError, WizardValidationError } from "../src/errors";
+import type { WizardEvents } from "../src/machine/wizard-machine";
 import { WizardMachine } from "../src/machine/wizard-machine";
 import type {
 	DeepReadonly,
@@ -48,7 +49,7 @@ describe("plugin types", () => {
 
 	test("ErrorContext phase is a fixed union", () => {
 		expectTypeOf<ErrorContext<Data>["phase"]>().toEqualTypeOf<
-			"validation" | "transition" | "lifecycle" | "submit"
+			"validation" | "transition" | "lifecycle" | "submit" | "data"
 		>();
 	});
 
@@ -69,10 +70,22 @@ describe("plugin types", () => {
 		expectTypeOf(veto).not.toBeUndefined();
 	});
 
-	test("WizardPlugin does NOT include onDataChange (deferred to WIZ-010)", () => {
-		// @ts-expect-error onDataChange is intentionally not part of the interface
-		const _p: WizardPlugin<Data> = { name: "x", onDataChange: () => {} };
-		void _p;
+	test("WizardPlugin accepts an onDataChange hook with DeepReadonly payloads (WIZ-010)", () => {
+		const p: WizardPlugin<Data> = {
+			name: "x",
+			onDataChange: (prev, next, changedFields) => {
+				expectTypeOf(prev).toEqualTypeOf<DeepReadonly<Data>>();
+				expectTypeOf(next).toEqualTypeOf<DeepReadonly<Data>>();
+				expectTypeOf(changedFields).toEqualTypeOf<readonly (keyof Data)[]>();
+			},
+		};
+		expectTypeOf(p.onDataChange).returns.toEqualTypeOf<void | Promise<void>>();
+	});
+
+	test("WizardEvents onDataChange uses plain T params (WIZ-010)", () => {
+		expectTypeOf<
+			NonNullable<WizardEvents<Data>["onDataChange"]>
+		>().parameters.toEqualTypeOf<[Data, Data, (keyof Data)[]]>();
 	});
 });
 
@@ -729,5 +742,119 @@ describe("WizardMachine onComplete / onReset boundaries", () => {
 		const [err, ctx] = onError.mock.calls[0];
 		expect(err).toBe(boom);
 		expect(ctx).toMatchObject({ phase: "lifecycle" });
+	});
+});
+
+describe("WizardMachine onDataChange plugin hook (WIZ-010)", () => {
+	it("fires a plugin's onDataChange after updateField with (prev, next, changedFields)", async () => {
+		const onDataChange = vi.fn();
+		const m = new WizardMachine<SimpleData>(
+			createSimpleLinearDefinition(),
+			{},
+			initial,
+			{},
+			[{ name: "p", onDataChange }],
+		);
+		m.updateField("name", "b");
+		await flush();
+		expect(onDataChange).toHaveBeenCalledTimes(1);
+		const [prev, next, changedFields] = onDataChange.mock.calls[0];
+		expect(prev.name).toBe("a");
+		expect(next.name).toBe("b");
+		expect(changedFields).toEqual(["name"]);
+	});
+
+	it("fires a plugin's onDataChange after updateData with the shallow diff", async () => {
+		const onDataChange = vi.fn();
+		const m = new WizardMachine<SimpleData>(
+			createSimpleLinearDefinition(),
+			{},
+			initial,
+			{},
+			[{ name: "p", onDataChange }],
+		);
+		m.updateData((d) => ({ ...d, name: "b" }));
+		await flush();
+		expect(onDataChange).toHaveBeenCalledTimes(1);
+		expect(onDataChange.mock.calls[0][2]).toEqual(["name"]);
+	});
+
+	it("isolates a rejected async plugin onDataChange and routes it to onError (phase 'data')", async () => {
+		const boom = new Error("async boom");
+		const onError = vi.fn();
+		const m = new WizardMachine<SimpleData>(
+			createSimpleLinearDefinition(),
+			{},
+			initial,
+			{},
+			[
+				{
+					name: "p",
+					onDataChange: async () => {
+						throw boom;
+					},
+					onError,
+				},
+			],
+		);
+		m.updateField("name", "b");
+		await flush();
+		expect(m.snapshot.data.name).toBe("b");
+		expect(onError).toHaveBeenCalledTimes(1);
+		const [err, ctx] = onError.mock.calls[0];
+		expect(err).toBe(boom);
+		expect(ctx).toMatchObject({ phase: "data" });
+	});
+
+	it("a throwing plugin onDataChange does not prevent other plugins and routes to every onError", async () => {
+		const boom = new Error("sync boom");
+		const onErrorA = vi.fn();
+		const onDataChangeB = vi.fn();
+		const onErrorB = vi.fn();
+		const m = new WizardMachine<SimpleData>(
+			createSimpleLinearDefinition(),
+			{},
+			initial,
+			{},
+			[
+				{
+					name: "a",
+					onDataChange: () => {
+						throw boom;
+					},
+					onError: onErrorA,
+				},
+				{ name: "b", onDataChange: onDataChangeB, onError: onErrorB },
+			],
+		);
+		m.updateField("name", "b");
+		await flush();
+		expect(onDataChangeB).toHaveBeenCalledTimes(1);
+		expect(onErrorA).toHaveBeenCalledWith(
+			boom,
+			expect.objectContaining({ phase: "data" }),
+		);
+		expect(onErrorB).toHaveBeenCalledWith(
+			boom,
+			expect.objectContaining({ phase: "data" }),
+		);
+		expect(m.snapshot.data.name).toBe("b");
+	});
+
+	it("plugins registered via constructor AND via use() both receive onDataChange", async () => {
+		const ctorHook = vi.fn();
+		const lateHook = vi.fn();
+		const m = new WizardMachine<SimpleData>(
+			createSimpleLinearDefinition(),
+			{},
+			initial,
+			{},
+			[{ name: "ctor", onDataChange: ctorHook }],
+		);
+		m.use({ name: "late", onDataChange: lateHook });
+		m.updateField("name", "b");
+		await flush();
+		expect(ctorHook).toHaveBeenCalledTimes(1);
+		expect(lateHook).toHaveBeenCalledTimes(1);
 	});
 });

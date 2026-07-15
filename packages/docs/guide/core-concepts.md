@@ -373,6 +373,11 @@ interface WizardEvents<T> {
   onSubmit?: (stepId: string, data: T) => void;
   onComplete?: (data: T) => void;
   onError?: (error: Error) => void;
+  onDataChange?: (
+    prevData: T,
+    nextData: T,
+    changedFields: (keyof T)[],
+  ) => void;
 }
 ```
 
@@ -389,6 +394,30 @@ const machine = new WizardMachine(definition, context, initialData, {
     showErrorMessage(error.message);
   },
 });
+```
+
+### Reacting to data changes
+
+`onDataChange` fires after any data mutation (`updateField`, `updateData`, or `setData`) that actually changes at least one top-level field, with the previous data, the next data, and the list of changed keys. It fires **after** `onStateChange`, and is **not** fired by `reset()`, `restore()`, or navigation. A no-op update (setting a field to its current value) fires nothing.
+
+```typescript
+const machine = new WizardMachine(definition, context, initialData, {
+  onDataChange: (prev, next, changedFields) => {
+    if (changedFields.includes("plan")) {
+      // Recompute a dependent field when the plan changes.
+      machine.updateField("price", PRICES[next.plan]);
+    }
+  },
+});
+```
+
+For a single field, `watchField` subscribes to just that key and returns an unsubscribe function (core-only; not exposed through the React/Vue hooks):
+
+```typescript
+const stop = machine.watchField("email", (newEmail, oldEmail) => {
+  console.log(`email changed: ${oldEmail} → ${newEmail}`);
+});
+// later: stop();
 ```
 
 ## 10. Type Safety

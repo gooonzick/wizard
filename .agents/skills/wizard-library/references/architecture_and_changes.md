@@ -44,6 +44,16 @@ Do not re-implement machine behavior in React/Vue adapters.
 3. Vue adapter (`useWizard` callbacks and state slices)
 4. Documentation and examples that expose callbacks
 
+When touching data-mutation events specifically (WIZ-010 `onDataChange` /
+`watchField` / plugin `onDataChange`):
+- Fire data-change notifications only from `updateField` / `updateData` /
+  `setData`, and only when the shallow top-level diff is non-empty — never from
+  `reset()`, `restore()`, or navigation (those write state directly).
+- Emit AFTER `onStateChange`, matching the `navigateToStep` precedent.
+- Isolate every subscriber (event, watcher, plugin hook): a throw routes to
+  `onError` with `phase: "data"` and must not corrupt the committed update or
+  block other subscribers.
+
 ### Change validators
 
 1. Validator utility behavior (`requiredFields`, `combineValidators`, custom validators)
@@ -87,3 +97,6 @@ Then run project quality gates:
   "Finish"). For an authoritative async answer, `await machine.getNextStepId()` and
   treat `null` as last. Do not change `isLastStep` to optimistically return `true` for
   async paths.
+- Reacting to `onDataChange` by writing a field to a freshly-allocated
+  object/array every time — it never satisfies the `Object.is` no-op guard and
+  loops. React to `changedFields` and set converging (usually primitive) values.

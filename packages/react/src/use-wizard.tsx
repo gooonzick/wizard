@@ -52,6 +52,7 @@ export interface UseWizardOptions<T extends WizardData> {
 	onCancel?: (data: T) => void | Promise<void>;
 	onReset?: () => void;
 	onError?: (error: Error) => void;
+	onDataChange?: (prevData: T, nextData: T, changedFields: (keyof T)[]) => void;
 	/**
 	 * Plugins registered once at machine creation (reference-stable — read once,
 	 * NOT reactive). Define them outside render or memoize them.
@@ -195,6 +196,7 @@ export function useWizard<T extends WizardData>(
 		onCancel,
 		onReset,
 		onError,
+		onDataChange,
 		plugins,
 	} = options;
 
@@ -207,6 +209,7 @@ export function useWizard<T extends WizardData>(
 		onCancel,
 		onReset,
 		onError,
+		onDataChange,
 	});
 
 	// Update callbacks ref synchronously
@@ -218,6 +221,7 @@ export function useWizard<T extends WizardData>(
 		onCancel,
 		onReset,
 		onError,
+		onDataChange,
 	};
 
 	// Store initial data, context, and definition in refs for stable references
@@ -261,6 +265,9 @@ export function useWizard<T extends WizardData>(
 			},
 			onError: (error: Error) => {
 				callbacksRef.current.onError?.(error);
+			},
+			onDataChange: (prev: T, next: T, changedFields: (keyof T)[]) => {
+				callbacksRef.current.onDataChange?.(prev, next, changedFields);
 			},
 		}),
 		[],
@@ -376,12 +383,9 @@ export function useWizard<T extends WizardData>(
 
 	const updateField = useCallback(
 		<K extends keyof T>(field: K, value: T[K]) => {
-			updateData((data: T) => ({
-				...data,
-				[field]: value,
-			}));
+			manager.getMachine().updateField(field, value);
 		},
-		[updateData],
+		[manager],
 	);
 
 	// Validation

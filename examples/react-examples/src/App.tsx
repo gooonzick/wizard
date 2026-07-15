@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { DataChangeExample } from "./data-change-example";
 import { HistoryExample } from "./history-example";
 import { PluginsExample } from "./plugins-example";
 import { ProviderExample } from "./provider-example";
@@ -12,7 +13,8 @@ type View =
 	| "history"
 	| "reset-cancel"
 	| "persistence"
-	| "plugins";
+	| "plugins"
+	| "data-change";
 
 export function App() {
 	const [view, setView] = useState<View>("wizard");
@@ -24,6 +26,7 @@ export function App() {
 		{ id: "reset-cancel", label: "Reset & Cancel" },
 		{ id: "persistence", label: "State Persistence" },
 		{ id: "plugins", label: "Plugins" },
+		{ id: "data-change", label: "Data Change" },
 	];
 
 	return (
@@ -50,6 +53,7 @@ export function App() {
 			{view === "reset-cancel" && <ResetCancelExample />}
 			{view === "persistence" && <StatePersistenceExample />}
 			{view === "plugins" && <PluginsExample />}
+			{view === "data-change" && <DataChangeExample />}
 		</div>
 	);
 }
