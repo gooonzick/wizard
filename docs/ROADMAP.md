@@ -89,12 +89,12 @@ The published version is **1.5.1** (`core`, `react`, `vue`, and `state` are fixe
 
 ---
 
-#### WIZ-001: Navigation History Stack ✅
+#### WIZ-001: Navigation History Stack
 
+**Status:** ✅ Done
 **Priority:** 🔴 Critical
 **Effort:** S (2–4 hours)
 **Package:** `@gooonzick/wizard-core`
-**Status:** ✅ Implemented
 
 ##### Problem
 
@@ -144,12 +144,12 @@ class WizardMachine<TData> {
 
 ---
 
-#### WIZ-002: goTo(stepId) — Arbitrary Navigation ✅
+#### WIZ-002: goTo(stepId) — Arbitrary Navigation
 
+**Status:** ✅ Done
 **Priority:** 🔴 Critical
 **Effort:** S (2–3 hours)
 **Package:** `@gooonzick/wizard-core`
-**Status:** Implemented
 
 ##### Problem
 
@@ -204,8 +204,9 @@ navigation.goTo('personal', { skipValidation: true });
 
 ---
 
-#### WIZ-003: Step Status Tracking ✅
+#### WIZ-003: Step Status Tracking
 
+**Status:** ✅ Done
 **Priority:** 🔴 Critical
 **Effort:** S (3–4 hours)
 **Package:** `@gooonzick/wizard-core`
@@ -276,12 +277,12 @@ When the machine is created, all steps receive the `pristine` status, except `in
 
 ---
 
-#### WIZ-004: Progress API ✅
+#### WIZ-004: Progress API
 
+**Status:** ✅ Done
 **Priority:** 🟡 High
 **Effort:** XS (1–2 hours)
 **Package:** `@gooonzick/wizard-core`
-**Status:** ✅ Implemented
 
 ##### Problem
 
@@ -328,8 +329,9 @@ The order is determined by traversing the transition graph from `initialStepId` 
 
 ---
 
-#### WIZ-005: Reset / Cancel ✅ Implemented
+#### WIZ-005: Reset / Cancel
 
+**Status:** ✅ Done
 **Priority:** 🟡 High
 **Effort:** XS (1–2 hours)
 **Package:** `@gooonzick/wizard-core`, `@gooonzick/wizard-react`, `@gooonzick/wizard-vue`
@@ -407,12 +409,12 @@ actions.cancel();
 
 ---
 
-#### WIZ-006: State Persistence (Serialize / Restore) ✅ Implemented
+#### WIZ-006: State Persistence (Serialize / Restore)
 
+**Status:** ✅ Done (core serialize/restore; persistence adapters & autoSave deferred — see "Not Built")
 **Priority:** 🟡 High
 **Effort:** M (4–6 hours)
 **Package:** `@gooonzick/wizard-core`
-**Status:** ✅ Implemented (core serialize/restore only — see "Not built" below)
 
 ##### Problem
 
@@ -490,7 +492,7 @@ The following from the original proposal were NOT implemented:
 
 #### WIZ-007: Middleware / Plugin System
 
-**Status:** ✅ DONE
+**Status:** ✅ Done
 **Priority:** 🟡 High
 **Package:** `@gooonzick/wizard-core`
 
@@ -621,6 +623,7 @@ All hook dispatch, veto, ordering, error isolation, busy-guard re-entrancy, and 
 
 #### WIZ-008: Validate All Steps
 
+**Status:** ✅ Done
 **Priority:** 🟡 High
 **Effort:** S (2–3 hours)
 **Package:** `@gooonzick/wizard-core`
@@ -693,6 +696,7 @@ If `updateStatuses: true` — set `error` for invalid steps.
 
 #### WIZ-009: Router Integration
 
+**Status:** 📋 Planned
 **Priority:** 🟡 High
 **Effort:** M (4–6 hours)
 **Package:** `@gooonzick/wizard-router-react` (new package)
@@ -786,6 +790,7 @@ import { WizardRoutes } from '@gooonzick/wizard-router-react';
 
 #### WIZ-010: onDataChange Event / Field-level Subscriptions ✅
 
+**Status:** 📋 Planned
 **Priority:** 🟠 Medium
 **Effort:** S (2–3 hours)
 **Package:** `@gooonzick/wizard-core`
@@ -857,6 +862,7 @@ WIZ-010 should also add `onDataChange` to the `WizardPlugin` interface so plugin
 
 #### WIZ-011: Sub-wizards (Nested Wizards)
 
+**Status:** 📋 Planned
 **Priority:** 🟠 Medium
 **Effort:** L (8–12 hours)
 **Package:** `@gooonzick/wizard-core`
@@ -946,6 +952,7 @@ Sub-wizard steps contribute to the overall parent progress. One `documents` step
 
 #### WIZ-012: DevTools / Mermaid Export
 
+**Status:** 📋 Planned
 **Priority:** 🟠 Medium
 **Effort:** M (4–6 hours)
 **Package:** `@gooonzick/wizard-devtools` (new package)
@@ -1014,6 +1021,7 @@ const dot = toDot(signupWizard);
 
 #### WIZ-013: Async Step Loading (Lazy Steps)
 
+**Status:** 📋 Planned
 **Priority:** 🟢 Low
 **Effort:** M (4–5 hours)
 **Package:** `@gooonzick/wizard-core`
@@ -1070,6 +1078,7 @@ interface WizardState<TData> {
 
 #### WIZ-014: Svelte Integration
 
+**Status:** 📋 Planned
 **Priority:** 🟢 Low
 **Effort:** M (4–6 hours)
 **Package:** `@gooonzick/wizard-svelte` (new package)
@@ -1132,6 +1141,7 @@ A Svelte store wrapper around `WizardMachine`.
 
 #### WIZ-015: Solid.js Integration
 
+**Status:** 📋 Planned
 **Priority:** 🟢 Low
 **Effort:** M (4–6 hours)
 **Package:** `@gooonzick/wizard-solid` (new package)
@@ -1190,6 +1200,7 @@ function App() {
 
 #### WIZ-016: Analytics Helpers
 
+**Status:** 📋 Planned
 **Priority:** 🟢 Low
 **Effort:** S (2–3 hours)
 **Package:** `@gooonzick/wizard-core` (as a built-in plugin)
