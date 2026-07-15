@@ -175,6 +175,23 @@ describe("Step Status Tracking", () => {
 			expect(stepStatuses.step1).toBe("error");
 		});
 
+		it("emits the errored step status to subscribers on validation failure", async () => {
+			// F1: driven via a subscriber (NOT machine.snapshot) — the last emitted
+			// snapshot must carry the "error" status, not the pre-error "active".
+			const onStateChange = vi.fn();
+			const machine = createMachine(
+				validatedDefinition(),
+				{ name: "" },
+				{ onStateChange },
+			);
+
+			await expect(machine.goNext()).rejects.toThrow(WizardValidationError);
+
+			const lastSnapshot = onStateChange.mock.calls.at(-1)?.[0];
+			expect(lastSnapshot.stepStatuses.step1).toBe("error");
+			expect(lastSnapshot.isValid).toBe(false);
+		});
+
 		it("transitions through multiple steps correctly", async () => {
 			const machine = createMachine(linearDefinition());
 

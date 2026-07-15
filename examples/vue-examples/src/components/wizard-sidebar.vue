@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { CheckCircle2, Circle } from "lucide-vue-next";
+import { CheckCircle2, Circle } from "@lucide/vue";
 import { computed } from "vue";
 import Card from "./ui/card.vue";
 

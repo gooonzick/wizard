@@ -95,6 +95,88 @@ describe("React plugins option", () => {
 		expect(captured.api?.state.currentStepId).toBe("step2"); // navigation worked
 	});
 
+	it("StrictMode mount does not leak an orphaned machine (onInit balanced by destroy) — useWizard", async () => {
+		let created = 0;
+		let destroyed = 0;
+		const plugins: WizardPlugin<D>[] = [
+			{
+				name: "p",
+				onInit: () => {
+					created++;
+				},
+				destroy: () => {
+					destroyed++;
+				},
+			},
+		];
+		const Comp = () => {
+			useWizard<D>({ definition: def, initialData: { name: "" }, plugins });
+			return <div>ok</div>;
+		};
+		const { unmount } = render(
+			<StrictMode>
+				<Comp />
+			</StrictMode>,
+		);
+		await act(async () => {
+			await new Promise((r) => setTimeout(r, 0));
+		});
+
+		// Exactly one live manager after the mount settles; every extra creation
+		// (StrictMode probe) was torn down.
+		expect(created - destroyed).toBe(1);
+
+		unmount();
+		await act(async () => {
+			await new Promise((r) => setTimeout(r, 0));
+		});
+
+		// No leak: every onInit is matched by a destroy.
+		expect(created).toBe(destroyed);
+	});
+
+	it("StrictMode mount does not leak an orphaned machine (onInit balanced by destroy) — WizardProvider", async () => {
+		let created = 0;
+		let destroyed = 0;
+		const plugins: WizardPlugin<D>[] = [
+			{
+				name: "p",
+				onInit: () => {
+					created++;
+				},
+				destroy: () => {
+					destroyed++;
+				},
+			},
+		];
+		const { unmount } = render(
+			<StrictMode>
+				<WizardProvider
+					definition={def}
+					initialData={{ name: "" }}
+					plugins={plugins}
+				>
+					<div>child</div>
+				</WizardProvider>
+			</StrictMode>,
+		);
+		await act(async () => {
+			await new Promise((r) => setTimeout(r, 0));
+		});
+
+		// Exactly one live manager after the mount settles; every extra creation
+		// (StrictMode probe) was torn down.
+		expect(created - destroyed).toBe(1);
+
+		unmount();
+		await act(async () => {
+			await new Promise((r) => setTimeout(r, 0));
+		});
+
+		// No leak: every onInit is matched by a destroy.
+		expect(created).toBe(destroyed);
+	});
+
 	it("survives StrictMode double-invoke: manager stays alive and plugins still fire (WizardProvider)", async () => {
 		const beforeTransition = vi.fn(() => true);
 		const plugins: WizardPlugin<D>[] = [{ name: "p", beforeTransition }];

@@ -1,12 +1,12 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - "v*.*.*"
-      - "@gooonzick/wizard-core@*"
-      - "@gooonzick/wizard-react@*"
-      - "@gooonzick/wizard-vue@*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing git tag to create a GitHub Release from (e.g. @gooonzick/wizard-core@1.6.0 or v1.6.0)"
+        required: true
+        type: string
 
 jobs:
   create-release:
@@ -23,7 +23,7 @@ jobs:
       - name: Extract version from tag
         id: version
         run: |
-          TAG=${GITHUB_REF#refs/tags/}
+          TAG="${{ github.event.inputs.tag }}"
           echo "tag=$TAG" >> $GITHUB_OUTPUT
 
           if [[ $TAG =~ ^@gooonzick/wizard-([a-z-]+)@(.+)$ ]]; then

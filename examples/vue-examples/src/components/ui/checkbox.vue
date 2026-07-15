@@ -1,6 +1,6 @@
 <!-- eslint-disable vue/multi-word-component-names -->
 <script setup lang="ts">
-import { CheckCircle, Circle } from "lucide-vue-next";
+import { CheckCircle, Circle } from "@lucide/vue";
 import { ref, watch } from "vue";
 
 interface Props {

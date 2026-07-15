@@ -31,3 +31,4 @@ dist-ssr
 **/coverage
 .pnpm-store
 .agent
+.devcontainer/

@@ -27,8 +27,27 @@ export type { LoadingState, NavigationState, StateSnapshot, ValidationState };
  * Vue composable options
  */
 export interface UseWizardOptions<T extends WizardData> {
+	/**
+	 * Read ONCE at setup and captured — NOT reactive. Changing this after the
+	 * composable runs has no effect (the machine is created once). To reconfigure,
+	 * remount the component with a new `key`.
+	 */
 	definition: WizardDefinition<T>;
+	/**
+	 * Read ONCE at setup and captured — NOT reactive. Changing this after the
+	 * composable runs has no effect (the machine is created once). To reconfigure,
+	 * remount the component with a new `key`.
+	 *
+	 * Must be structured-cloneable and nested Vue reactivity is stripped: the
+	 * machine deep-clones via `structuredClone`, so pass plain serializable form
+	 * data (no functions, symbols, or class instances).
+	 */
 	initialData: T;
+	/**
+	 * Read ONCE at setup and captured — NOT reactive. Changing this after the
+	 * composable runs has no effect (the machine is created once). To reconfigure,
+	 * remount the component with a new `key`.
+	 */
 	context?: WizardContext;
 	onStateChange?: (state: WizardState<T>) => void;
 	onStepEnter?: (stepId: StepId, data: T) => void;

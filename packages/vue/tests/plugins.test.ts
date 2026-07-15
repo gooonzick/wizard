@@ -4,6 +4,7 @@ import { mount } from "@vue/test-utils";
 import { describe, expect, it, vi } from "vitest";
 import { defineComponent } from "vue";
 import { useWizard } from "../src/use-wizard";
+import { WizardProvider } from "../src/wizard-provider";
 
 interface D extends Record<string, unknown> {
 	name: string;
@@ -44,6 +45,22 @@ describe("Vue plugins option", () => {
 			},
 		});
 		const wrapper = mount(Comp);
+		wrapper.unmount();
+		await flush();
+		expect(destroy).toHaveBeenCalledTimes(1);
+	});
+
+	it("calls plugin destroy on unmount (WizardProvider)", async () => {
+		const destroy = vi.fn();
+		const plugins: WizardPlugin<D>[] = [{ name: "p", destroy }];
+		const Parent = defineComponent({
+			components: { WizardProvider },
+			data() {
+				return { def, initialData: { name: "" }, plugins };
+			},
+			template: `<WizardProvider :definition="def" :initialData="initialData" :plugins="plugins"><div /></WizardProvider>`,
+		});
+		const wrapper = mount(Parent);
 		wrapper.unmount();
 		await flush();
 		expect(destroy).toHaveBeenCalledTimes(1);

@@ -14,9 +14,8 @@ export default defineConfig({
 	build: {
 		lib: {
 			entry: "./src/index.ts",
-			name: "WizardReact",
-			formats: ["es", "umd"],
-			fileName: (format) => `index.${format === "es" ? "js" : "umd.cjs"}`,
+			formats: ["es"],
+			fileName: "index",
 		},
 		outDir: "./dist",
 		rollupOptions: {
@@ -26,16 +25,8 @@ export default defineConfig({
 				"react/jsx-runtime",
 				// "react/jsx-dev-runtime",
 				"@gooonzick/wizard-core",
+				"@gooonzick/wizard-state",
 			],
-			output: {
-				globals: {
-					react: "React",
-					"react-dom": "ReactDOM",
-					"react/jsx-runtime": "ReactJSXRuntime",
-					// "react/jsx-dev-runtime": "ReactJSXDevRuntime",
-					"@gooonzick/wizard-core": "WizardCore",
-				},
-			},
 		},
 	},
 });

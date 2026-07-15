@@ -1,6 +1,6 @@
 <!-- eslint-disable vue/multi-word-component-names -->
 <script setup lang="ts">
-import { AlertCircle } from "lucide-vue-next";
+import { AlertCircle } from "@lucide/vue";
 import { computed, type HTMLAttributes } from "vue";
 import { cn } from "@/lib/utils";
 

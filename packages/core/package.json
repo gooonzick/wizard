@@ -3,6 +3,7 @@
 	"version": "1.5.0",
 	"description": "Core package for WizardForm framework",
 	"type": "module",
+	"sideEffects": false,
 	"files": [
 		"dist",
 		"README.md"
@@ -29,12 +30,12 @@
 		"lint:fix": "biome check . --write"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.4.9",
-		"@vitest/coverage-v8": "^4.1.2",
-		"typescript": "^6.0.2",
-		"vite": "^7.3.1",
-		"vite-plugin-dts": "^4.5.4",
-		"vitest": "^4.1.2"
+		"@biomejs/biome": "^2.5.3",
+		"@vitest/coverage-v8": "^4.1.10",
+		"typescript": "^6.0.3",
+		"vite": "^8.1.4",
+		"vite-plugin-dts": "^5.0.3",
+		"vitest": "^4.1.10"
 	},
 	"dependencies": {
 		"@standard-schema/spec": "^1.1.0"

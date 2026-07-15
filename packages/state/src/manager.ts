@@ -38,6 +38,12 @@ export class WizardStateManager<T extends WizardData> {
 
 	// Promise for async navigation computation
 	private navigationPromise: Promise<void> | null = null;
+	// Set when a recompute is requested while one is already in flight (M2):
+	// triggers a single trailing recompute so nav state reflects the last edit.
+	private navigationDirty = false;
+	// Set by destroy(): short-circuits notify/compute so no async callback can
+	// touch a torn-down manager.
+	private destroyed = false;
 
 	// Initial step ID for isFirstStep calculation
 	private initialStepId: StepId;
@@ -124,6 +130,7 @@ export class WizardStateManager<T extends WizardData> {
 	 * @param channels Array of channels that have changed
 	 */
 	notifySubscribers(channels: SubscriptionChannel[]): void {
+		if (this.destroyed) return;
 		// FIX 12: capture the machine snapshot ONCE per notify and refresh the
 		// cached reference so getSnapshot() and the per-channel caches all read
 		// the same object.
@@ -247,11 +254,18 @@ export class WizardStateManager<T extends WizardData> {
 	/**
 	 * Compute navigation state asynchronously and notify subscribers when ready
 	 */
-	private async computeNavigationStateAsync(): Promise<void> {
-		// If computation is already in progress, don't start another
+	private computeNavigationStateAsync(): void {
+		// If a compute is in flight, record that another recompute is needed
+		// (M2): the trailing pass will run against live data once it finishes.
 		if (this.navigationPromise) {
+			this.navigationDirty = true;
 			return;
 		}
+		// Never start work after teardown.
+		if (this.destroyed) {
+			return;
+		}
+		this.navigationDirty = false;
 
 		this.navigationPromise = (async () => {
 			try {
@@ -260,6 +274,10 @@ export class WizardStateManager<T extends WizardData> {
 					this.machine.getPreviousStepId(),
 					this.machine.getAvailableSteps(),
 				]);
+
+				if (this.destroyed) {
+					return; // resolved after destroy(): drop, no commit / no notify
+				}
 
 				const machineSnapshot = this.machine.snapshot;
 
@@ -274,31 +292,69 @@ export class WizardStateManager<T extends WizardData> {
 					stepHistory: [...this.machine.history],
 				};
 
-				// Only update and notify if values actually changed
+				// Only update and notify if values actually changed. Compare ALL
+				// semantic fields (M1): availableSteps/canGoBack are written only
+				// here, so a boolean-only gate silently dropped their changes.
 				if (
-					this.navigationCache.canGoNext !== newNavigationState.canGoNext ||
-					this.navigationCache.canGoPrevious !==
-						newNavigationState.canGoPrevious ||
-					this.navigationCache.isLastStep !== newNavigationState.isLastStep
+					!this.navigationStateEqual(this.navigationCache, newNavigationState)
 				) {
 					this.navigationCache = newNavigationState;
-					this.navigationPromise = null;
 
 					// Notify navigation subscribers that data is ready
 					this.notifySubscribersForChannel("navigation");
-				} else {
-					this.navigationPromise = null;
 				}
 			} catch {
+				// Swallow: a throwing user guard/resolver must not break the manager.
+			} finally {
 				this.navigationPromise = null;
+				// Trailing recompute (M2): a request arrived while we were computing.
+				if (this.navigationDirty && !this.destroyed) {
+					this.navigationDirty = false;
+					this.computeNavigationStateAsync();
+				}
 			}
 		})();
+	}
+
+	/**
+	 * Content equality for two navigation states. Arrays are compared by
+	 * length + element (StepId is a string) — NOT by reference — because
+	 * visitedSteps/stepHistory are freshly spread every compute, so a reference
+	 * compare would always report "changed" and break useSyncExternalStore
+	 * referential stability.
+	 */
+	private navigationStateEqual(
+		a: NavigationState,
+		b: NavigationState,
+	): boolean {
+		return (
+			a.canGoNext === b.canGoNext &&
+			a.canGoPrevious === b.canGoPrevious &&
+			a.canGoBack === b.canGoBack &&
+			a.isFirstStep === b.isFirstStep &&
+			a.isLastStep === b.isLastStep &&
+			this.stepIdsEqual(a.availableSteps, b.availableSteps) &&
+			this.stepIdsEqual(a.visitedSteps, b.visitedSteps) &&
+			this.stepIdsEqual(a.stepHistory, b.stepHistory)
+		);
+	}
+
+	/**
+	 * Order-significant content equality for two StepId arrays.
+	 */
+	private stepIdsEqual(a: StepId[], b: StepId[]): boolean {
+		if (a.length !== b.length) return false;
+		for (let i = 0; i < a.length; i++) {
+			if (a[i] !== b[i]) return false;
+		}
+		return true;
 	}
 
 	/**
 	 * Notify only subscribers of a specific channel (without updating caches)
 	 */
 	private notifySubscribersForChannel(channel: SubscriptionChannel): void {
+		if (this.destroyed) return;
 		const channelSubs = this.subscribers.get(channel);
 		if (channelSubs) {
 			for (const listener of channelSubs) {
@@ -335,6 +391,7 @@ export class WizardStateManager<T extends WizardData> {
 	 * Update loading state and notify loading channel
 	 */
 	setLoadingState(update: Partial<LoadingState>): void {
+		if (this.destroyed) return;
 		this.loadingCache = { ...this.loadingCache, ...update };
 		this.notifySubscribersForChannel("loading");
 	}
@@ -353,6 +410,15 @@ export class WizardStateManager<T extends WizardData> {
 	 * console.error), so callers may fire-and-forget the returned promise.
 	 */
 	async destroy(): Promise<void> {
+		this.destroyed = true;
+		// Ignore any in-flight nav compute result (guarded inside the IIFE) and
+		// stop further recompute scheduling.
+		this.navigationPromise = null;
+		this.navigationDirty = false;
+		// Drop subscribers so no post-destroy notify can reach a listener.
+		for (const set of this.subscribers.values()) {
+			set.clear();
+		}
 		await this.machine.destroy();
 	}
 
@@ -362,7 +428,7 @@ export class WizardStateManager<T extends WizardData> {
 	 * StrictMode mount->unmount->remount probe so it can be recreated.
 	 */
 	get isDestroyed(): boolean {
-		return this.machine.isDestroyed;
+		return this.destroyed || this.machine.isDestroyed;
 	}
 
 	/**
@@ -463,6 +529,7 @@ export class WizardStateManager<T extends WizardData> {
 	 * @param oldState Previous wizard state
 	 */
 	handleStateChange(newState: WizardState<T>, oldState: WizardState<T>): void {
+		if (this.destroyed) return;
 		const affected: SubscriptionChannel[] = [];
 
 		// Data changes affect state, navigation, and validation

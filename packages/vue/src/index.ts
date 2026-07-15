@@ -9,6 +9,8 @@ export {
 	type LoadingState,
 	type NavigationState,
 	type StateSnapshot,
+	type SubscriptionChannel,
+	type ValidationState,
 	WizardStateManager,
 } from "@gooonzick/wizard-state";
 

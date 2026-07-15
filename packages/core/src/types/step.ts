@@ -23,8 +23,20 @@ export type StepStatus =
  * - `enabledStepIds` follows the insertion order of `definition.steps`,
  *   filtered by `stepStatuses[id] !== "skipped"`. Steps with a function-based
  *   `enabled` guard are reflected as soon as their status is recomputed.
+ *   **Recomputation for function (and async) `enabled` guards happens only at
+ *   navigation time**, not on `updateData`/`setData` — a data change that
+ *   would flip such a guard's result does not update `stepStatuses`/`skipped`
+ *   (and therefore `enabledStepIds`/`percentage`) until the next navigation.
+ *   Only static `boolean` `enabled` guards are recalculated synchronously on
+ *   data changes.
  * - `currentStepIndex` is `-1` when the current step is currently skipped.
  * - `percentage` is rounded to the nearest integer in `[0, 100]`.
+ * - `isLastStep` is `true` only when the current step's forward path is
+ *   *definitively* terminal via synchronous resolution. When the next step is
+ *   resolved asynchronously (async transition/guard), a resolver throws, or a
+ *   cycle is detected, it is reported conservatively as `false`. For the
+ *   authoritative last-step answer on async graphs, `await getNextStepId()` and
+ *   check for `null`.
  */
 export interface WizardProgress {
 	totalSteps: number;

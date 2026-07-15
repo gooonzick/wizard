@@ -14,10 +14,17 @@
 
 Keep these behaviors machine-owned:
 
-- Navigation (`goNext`, `goPrevious`, `goBack`, `goToStep`)
-- Validation (`validate`, `canSubmit`)
+- Navigation (`goNext`, `goPrevious`, `goBack`, `goTo`/`goToStep`)
+- Validation (`validate`, `validateAll`, `canSubmit`)
+- Submission (`submit`) — rejects when busy (see contract below)
 - Completion and lifecycle events
 - Busy and abort checks
+
+`submit()` acquires the SAME busy lock as navigation: if a `submit()` or navigation
+is already in flight, a concurrent `submit()` rejects with a `WizardNavigationError`
+(`reason: "busy"`) instead of running concurrently. This guarantees `onSubmit` runs
+exactly once per successful submit (prevents double-click / `submit()`+`goNext()`
+double-fire). Do not remove or bypass this lock when editing submit/navigation flow.
 
 Do not re-implement machine behavior in React/Vue adapters.
 
@@ -72,3 +79,11 @@ Then run project quality gates:
 - Forgetting async behavior in resolver/guard paths.
 - Asserting private state in tests instead of event-based outcomes.
 - Editing generated distribution artifacts manually instead of source files.
+- Treating `progress.isLastStep` as authoritative for async transitions. It is
+  computed synchronously: it is `true` ONLY when the current step's next resolves
+  synchronously to null (genuinely terminal). If the `next` transition or the target
+  step's `enabled` guard is ASYNC (returns a Promise), the sync resolver returns
+  "unknown" and `isLastStep` is `false` (conservative — never spuriously shows
+  "Finish"). For an authoritative async answer, `await machine.getNextStepId()` and
+  treat `null` as last. Do not change `isLastStep` to optimistically return `true` for
+  async paths.

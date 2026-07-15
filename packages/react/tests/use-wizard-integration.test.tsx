@@ -58,10 +58,8 @@ describe("useWizard hook integration", () => {
 			await waitFor(() => {
 				expect(result.current.validation).toBeDefined();
 				expect(typeof result.current.validation.isValid).toBe("boolean");
-				expect(
-					result.current.validation.validationErrors !== undefined ||
-						result.current.validation.validationErrors === undefined,
-				).toBe(true);
+				// At rest with an unvalidated step1, no validators have run yet.
+				expect(result.current.validation.validationErrors).toBeUndefined();
 			});
 		});
 

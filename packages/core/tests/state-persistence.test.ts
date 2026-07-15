@@ -244,4 +244,50 @@ describe("WizardMachine state persistence", () => {
 
 		expect(target.snapshot.data.profile.theme).toBe("light");
 	});
+
+	it("setData clones its input so later payload mutation cannot change state (M-d)", () => {
+		const machine = createMachine();
+		const input = createData({ profile: { theme: "dark" } });
+
+		machine.setData(input);
+		input.profile.theme = "changed-after-setData";
+
+		expect(machine.snapshot.data.profile.theme).toBe("dark");
+	});
+
+	it("does not raise an unhandled rejection when restore's fire-and-forget re-validate hits an aborted signal (M-b)", async () => {
+		const controller = new AbortController();
+		const context = { signal: controller.signal };
+		const machine = new WizardMachine(
+			createDefinition(),
+			context,
+			createData(),
+		);
+		const serialized = machine.serialize();
+
+		// `process` (Node global) is used without @types/node in this package's
+		// tsconfig, so go through globalThis with a narrow local type.
+		const nodeProcess = (
+			globalThis as unknown as {
+				process: {
+					on: (event: string, listener: (reason: unknown) => void) => void;
+					off: (event: string, listener: (reason: unknown) => void) => void;
+				};
+			}
+		).process;
+
+		const onUnhandledRejection = vi.fn();
+		nodeProcess.on("unhandledRejection", onUnhandledRejection);
+		try {
+			controller.abort();
+			// restore() triggers `void this.validate().catch(() => {})`; validate()
+			// throws synchronously (checkAborted) which, unhandled, would surface as
+			// an unhandled promise rejection.
+			expect(() => machine.restore(serialized)).not.toThrow();
+			await flushAsync();
+			expect(onUnhandledRejection).not.toHaveBeenCalled();
+		} finally {
+			nodeProcess.off("unhandledRejection", onUnhandledRejection);
+		}
+	});
 });

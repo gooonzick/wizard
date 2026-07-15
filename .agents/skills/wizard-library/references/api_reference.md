@@ -20,6 +20,12 @@ Use public exports from `@gooonzick/wizard-core`:
 
 Prefer building on exported APIs over importing deep internal modules.
 
+The React and Vue adapters additionally re-export state-layer types from
+`@gooonzick/wizard-state` for typing consumers: both expose `StateSnapshot`,
+`LoadingState`, `NavigationState`, `ValidationState`, and `SubscriptionChannel`
+(alongside `WizardStateManager`). Prefer these public re-exports over importing the
+state package directly.
+
 ## Transition and Guard Patterns
 
 `StepTransition<T>` supports exactly three transition kinds:
@@ -78,7 +84,8 @@ Use `createStandardSchemaValidator()` for Standard Schema compatible validators.
 
 ## Framework Adapter Surface
 
-React (`@gooonzick/wizard-react`) and Vue (`@gooonzick/wizard-vue`) expose aligned slices:
+React (`@gooonzick/wizard-react`) and Vue (`@gooonzick/wizard-vue`) expose aligned slices
+via the main composable/hook `useWizard`:
 
 - `state`
 - `validation`
@@ -86,7 +93,17 @@ React (`@gooonzick/wizard-react`) and Vue (`@gooonzick/wizard-vue`) expose align
 - `loading`
 - `actions`
 
-When changing wizard behavior, verify these slices still return expected semantics.
+Both adapters also expose granular hooks/composables for fine-grained subscriptions:
+`useWizardData`, `useWizardNavigation`, `useWizardValidation`, `useWizardLoading`,
+`useWizardActions`, and `useWizardField`.
+
+`useWizardField` is a controlled single-field binding with two overloads — provider
+mode `useWizardField(field)` (inside `<WizardProvider>`) and direct mode
+`useWizardField(wizard, field)`. In React it returns a `[value, setValue]` tuple; in
+Vue it returns a `WritableComputedRef` for `v-model`. Hooks-rules caveat: a single
+call site must not switch between provider and direct mode across renders.
+
+When changing wizard behavior, verify these slices/hooks still return expected semantics.
 
 ## Typical Implementation Snippets
 
@@ -124,6 +141,16 @@ const machine = new WizardMachine(
 ```
 
 Use context for external dependencies instead of hard-coding globals in guards/resolvers.
+
+### Data update semantics
+
+- `setData(data)` deep-CLONES its argument (matching constructor / `reset` /
+  `serialize`), so mutating the object you passed afterward does NOT retroactively
+  mutate wizard state.
+- `updateData(updater)` takes an `(data) => data` updater and uses its return value
+  directly (documented in/out contract) — it does NOT clone.
+- `snapshot`, its `stepStatuses`, and `snapshot.progress` (with its `enabledStepIds`
+  array) are frozen; `snapshot.data` is intentionally NOT frozen.
 
 ## Installation Quick Reference
 

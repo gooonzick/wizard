@@ -187,3 +187,47 @@ describe("WizardMachine - cancel()", () => {
 		expect(events.onReset).toHaveBeenCalled();
 	});
 });
+
+describe("WizardMachine - validate() generation guard (F6)", () => {
+	interface GuardData extends Record<string, unknown> {
+		name: string;
+	}
+
+	it("does not clobber freshly-reset state with a stale in-flight validate()", async () => {
+		let release!: () => void;
+		const gate = new Promise<void>((r) => {
+			release = r;
+		});
+		const def: WizardDefinition<GuardData> = {
+			id: "x",
+			initialStepId: "a",
+			steps: {
+				a: {
+					id: "a",
+					validate: async () => {
+						await gate;
+						return { valid: false, errors: { a: "bad" } };
+					},
+				},
+			},
+		};
+		const onStateChange = vi.fn();
+		const machine = new WizardMachine<GuardData>(
+			def,
+			{},
+			{ name: "Ada" },
+			{ onStateChange },
+		);
+
+		const p = machine.validate(); // in-flight, awaiting the gate
+		machine.reset(); // bumps generation, state now fresh (isValid: true)
+		release(); // validator resolves late
+		await p;
+
+		// The stale validate() must NOT overwrite the reset state.
+		expect(machine.snapshot.isValid).toBe(true);
+		expect(machine.snapshot.validationErrors).toBeUndefined();
+		const last = onStateChange.mock.calls.at(-1)?.[0];
+		expect(last.isValid).toBe(true);
+	});
+});

@@ -57,6 +57,27 @@ describe("WizardStateManager", () => {
 			expect(nav).toHaveProperty("stepHistory");
 		});
 
+		it("recomputes real navigation values asynchronously", async () => {
+			await new Promise((resolve) => setTimeout(resolve, 10));
+			const nav = manager.getNavigationSnapshot();
+			expect(nav.canGoNext).toBe(true);
+			expect(nav.canGoPrevious).toBe(false);
+			expect(nav.availableSteps).toEqual(["step1", "step2"]);
+			expect(nav.isFirstStep).toBe(true);
+			expect(nav.isLastStep).toBe(false);
+		});
+
+		it("recomputes navigation values after navigating", async () => {
+			await new Promise((resolve) => setTimeout(resolve, 10));
+			await machine.goNext();
+			manager.notifySubscribers(["navigation"]);
+			await new Promise((resolve) => setTimeout(resolve, 10));
+			const nav = manager.getNavigationSnapshot();
+			expect(nav.canGoNext).toBe(false);
+			expect(nav.canGoPrevious).toBe(true);
+			expect(nav.availableSteps).toEqual(["step1", "step2"]);
+		});
+
 		it("should return validation snapshot", () => {
 			const validation = manager.getValidationSnapshot();
 			expect(validation).toHaveProperty("isValid");
