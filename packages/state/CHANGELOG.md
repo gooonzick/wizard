@@ -1,5 +1,18 @@
 # @gooonzick/wizard-state
 
+## 1.5.1
+
+### Patch Changes
+
+- 4badcb0: Fix asynchronous navigation-state recompute in WizardStateManager:
+
+  - availableSteps changes are now included in change detection (content equality), so availableSteps-only updates are no longer dropped.
+  - A trailing recompute is scheduled when requests arrive mid-flight, so navigation state reflects the last edit after rapid updates.
+  - destroy() now clears caches/subscribers and ignores an in-flight recompute so notifications can't fire post-destroy.
+
+- Updated dependencies [4badcb0]
+  - @gooonzick/wizard-core@1.5.1
+
 ## 1.5.0
 
 ### Minor Changes
