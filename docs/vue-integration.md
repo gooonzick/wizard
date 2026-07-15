@@ -162,6 +162,7 @@ interface UseWizardOptions<T> {
   onCancel?: (data: T) => void | Promise<void>;
   onReset?: () => void;
   onError?: (error: Error) => void;
+  onDataChange?: (prevData: T, nextData: T, changedFields: (keyof T)[]) => void;
   /** Reference-stable — read once at machine creation. */
   plugins?: WizardPlugin<T>[];
 }
@@ -228,7 +229,25 @@ loading.isNavigating.value; // Navigation in progress? (ComputedRef)
 actions.updateData((data) => ({ ...data, name: "John" }));
 actions.setData(completeData);
 actions.updateField("name", "John");
+```
 
+React to data changes by passing `onDataChange` to `useWizard`. It fires after any `updateField` / `updateData` / `setData` that changes a top-level field (after `onStateChange`; not on reset/restore/navigation):
+
+```vue
+<script setup lang="ts">
+const { actions } = useWizard({
+  definition,
+  initialData,
+  onDataChange: (prev, next, changedFields) => {
+    if (changedFields.includes("plan")) {
+      actions.updateField("price", PRICES[next.plan]);
+    }
+  },
+});
+</script>
+```
+
+```typescript
 // Validation
 await actions.validate(); // Manually validate (result goes to validation slice)
 await actions.validateAll(); // Dry-run all enabled steps → ValidationSummary

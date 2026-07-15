@@ -27,6 +27,7 @@ interface UseWizardOptions<T> {
   onCancel?: (data: T) => void | Promise<void>;
   onReset?: () => void;
   onError?: (error: Error) => void;
+  onDataChange?: (prevData: T, nextData: T, changedFields: (keyof T)[]) => void;
   /**
    * Plugins registered once at machine creation (reference-stable — read once,
    * NOT reactive). Define them outside render or memoize them.
@@ -168,6 +169,7 @@ interface WizardProviderProps<T> {
   onCancel?: (data: T) => void | Promise<void>;
   onReset?: () => void;
   onError?: (error: Error) => void;
+  onDataChange?: (prevData: T, nextData: T, changedFields: (keyof T)[]) => void;
   /** Reference-stable — read once at machine creation. */
   plugins?: WizardPlugin<T>[];
   children: React.ReactNode;

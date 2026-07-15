@@ -28,7 +28,7 @@ export interface TransitionEvent<TData> {
 /** Context passed to a plugin's onError hook. */
 export interface ErrorContext<TData> {
 	stepId: StepId;
-	phase: "validation" | "transition" | "lifecycle" | "submit";
+	phase: "validation" | "transition" | "lifecycle" | "submit" | "data";
 	data: DeepReadonly<TData>;
 }
 
@@ -41,8 +41,7 @@ export interface WizardMachineReadonly<TData> {
 
 /**
  * A runtime plugin registered on a WizardMachine. All hooks are optional
- * except `name` (unique; used by removePlugin). `onDataChange` is intentionally
- * omitted (deferred to WIZ-010).
+ * except `name` (unique; used by removePlugin).
  */
 export interface WizardPlugin<TData = unknown> {
 	name: string;
@@ -58,5 +57,16 @@ export interface WizardPlugin<TData = unknown> {
 	): void | Promise<void>;
 	onComplete?(data: DeepReadonly<TData>): void | Promise<void>;
 	onReset?(): void | Promise<void>;
+	/**
+	 * Fired after a data mutation that changed at least one top-level field.
+	 * Fire-and-forget: may be async (void | Promise<void>); the data update is
+	 * synchronous and does NOT await this hook. A throw/rejection is isolated
+	 * and routed to onError (phase "data"). Data params are DeepReadonly. WIZ-010.
+	 */
+	onDataChange?(
+		prevData: DeepReadonly<TData>,
+		nextData: DeepReadonly<TData>,
+		changedFields: readonly (keyof TData)[],
+	): void | Promise<void>;
 	destroy?(): void | Promise<void>;
 }

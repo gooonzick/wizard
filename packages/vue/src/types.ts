@@ -56,6 +56,7 @@ export interface UseWizardOptions<T extends WizardData> {
 	onCancel?: (data: T) => void | Promise<void>;
 	onReset?: () => void;
 	onError?: (error: Error) => void;
+	onDataChange?: (prevData: T, nextData: T, changedFields: (keyof T)[]) => void;
 	/**
 	 * Plugins registered once at machine creation (reference-stable — read once,
 	 * NOT reactive). Define them outside setup or hoist them.

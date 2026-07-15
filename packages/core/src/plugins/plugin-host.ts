@@ -15,7 +15,7 @@ import type {
  */
 export type PluginErrorReporter = (
 	error: unknown,
-	phase?: "validation" | "transition" | "lifecycle" | "submit",
+	phase?: "validation" | "transition" | "lifecycle" | "submit" | "data",
 ) => void;
 
 /**
@@ -139,6 +139,20 @@ export class PluginHost<TData> {
 		}
 	}
 
+	/** Isolated onDataChange dispatch (fire-and-forget from the machine). */
+	async dispatchDataChange(
+		prev: DeepReadonly<TData>,
+		next: DeepReadonly<TData>,
+		changedFields: readonly (keyof TData)[],
+	): Promise<void> {
+		for (const plugin of this.plugins) {
+			await this.runIsolated(
+				() => plugin.onDataChange?.(prev, next, changedFields),
+				"data",
+			);
+		}
+	}
+
 	/**
 	 * Isolated onError dispatch. A throw INSIDE a plugin's onError is swallowed
 	 * (at most console.error) — never re-routed, to prevent infinite recursion.
@@ -179,7 +193,7 @@ export class PluginHost<TData> {
 	/** Awaits a hook, catching + reporting any throw/rejection. */
 	private async runIsolated(
 		fn: () => void | Promise<void>,
-		phase?: "validation" | "transition" | "lifecycle" | "submit",
+		phase?: "validation" | "transition" | "lifecycle" | "submit" | "data",
 	): Promise<void> {
 		try {
 			await fn();

@@ -59,6 +59,7 @@ export interface WizardProviderProps<T extends WizardData> {
 	onCancel?: (data: T) => void | Promise<void>;
 	onReset?: () => void;
 	onError?: (error: Error) => void;
+	onDataChange?: (prevData: T, nextData: T, changedFields: (keyof T)[]) => void;
 	/**
 	 * Plugins registered once at machine creation (reference-stable — read once,
 	 * NOT reactive). Define them outside render or memoize them.
@@ -86,6 +87,7 @@ export function WizardProvider<T extends WizardData>({
 	onCancel,
 	onReset,
 	onError,
+	onDataChange,
 	plugins,
 	children,
 }: WizardProviderProps<T>) {
@@ -98,6 +100,7 @@ export function WizardProvider<T extends WizardData>({
 		onCancel,
 		onReset,
 		onError,
+		onDataChange,
 	});
 
 	// Update callbacks ref synchronously
@@ -109,6 +112,7 @@ export function WizardProvider<T extends WizardData>({
 		onCancel,
 		onReset,
 		onError,
+		onDataChange,
 	};
 
 	// Store initial values in refs
@@ -156,6 +160,9 @@ export function WizardProvider<T extends WizardData>({
 			},
 			onError: (error: Error) => {
 				callbacksRef.current.onError?.(error);
+			},
+			onDataChange: (prev: T, next: T, changedFields: (keyof T)[]) => {
+				callbacksRef.current.onDataChange?.(prev, next, changedFields);
 			},
 		};
 

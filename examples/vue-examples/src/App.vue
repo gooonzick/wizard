@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from "vue";
 import ApproachToggle from "./components/approach-toggle.vue";
+import DataChangeExample from "./wizard-example/data-change-example.vue";
 import FieldBindingExample from "./wizard-example/field-binding-example.vue";
 import HistoryExample from "./wizard-example/history-example.vue";
 import PluginsExample from "./wizard-example/plugins-example.vue";
@@ -16,7 +17,8 @@ type Approach =
 	| "history"
 	| "reset-cancel"
 	| "persistence"
-	| "plugins";
+	| "plugins"
+	| "data-change";
 
 const approaches: Approach[] = [
 	"use-wizard",
@@ -26,6 +28,7 @@ const approaches: Approach[] = [
 	"reset-cancel",
 	"persistence",
 	"plugins",
+	"data-change",
 ];
 
 const approach = ref<Approach>("use-wizard");
@@ -61,6 +64,7 @@ watch(approach, (newVal) => {
 			<ResetCancelExample v-else-if="approach === 'reset-cancel'" />
 			<StatePersistenceExample v-else-if="approach === 'persistence'" />
 			<PluginsExample v-else-if="approach === 'plugins'" />
+			<DataChangeExample v-else-if="approach === 'data-change'" />
 		</div>
 	</div>
 </template>

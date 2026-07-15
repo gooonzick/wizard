@@ -74,6 +74,13 @@ export interface WizardEvents<T> {
 	/** Fired after `reset()` (and after `cancel()`'s implicit reset). */
 	onReset?: () => void;
 	onError?: (error: Error) => void;
+	/**
+	 * Fired AFTER a data mutation (updateField / updateData / setData) that
+	 * actually changes at least one top-level field. NOT fired on reset(),
+	 * restore(), or navigation. `changedFields` are the top-level keys whose
+	 * value changed (Object.is comparison). See WIZ-010.
+	 */
+	onDataChange?: (prevData: T, nextData: T, changedFields: (keyof T)[]) => void;
 }
 
 /**
@@ -149,6 +156,11 @@ export class WizardMachine<T extends WizardData> {
 	// WIZ-007: plugin host and the read-only facade passed to plugin hooks.
 	private pluginHost!: PluginHost<T>;
 	private readonlyFacade!: WizardMachineReadonly<T>;
+	/** WIZ-010: field-level subscribers keyed by field name. */
+	private fieldWatchers = new Map<
+		keyof T,
+		Set<(newValue: T[keyof T], oldValue: T[keyof T]) => void>
+	>();
 
 	/**
 	 * @param plugins Optional plugins to register at construction time.
@@ -432,6 +444,10 @@ export class WizardMachine<T extends WizardData> {
 	 * Updates wizard data
 	 */
 	updateData(updater: (data: T) => T): void {
+		// WIZ-010: shallow-copy the current top-level keys BEFORE running the
+		// updater. This survives an in-place-mutating updater (which would leave
+		// prevRef === newData) so the shallow diff is still correct.
+		const prevSnapshot = { ...this.state.data };
 		const newData = updater(this.state.data);
 		const newStatuses = this.recalculateSkippedStatuses();
 		this.state = {
@@ -440,24 +456,135 @@ export class WizardMachine<T extends WizardData> {
 			stepStatuses: newStatuses,
 		};
 		this.notifyStateChange();
+		const changedFields = this.diffChangedFields(prevSnapshot, newData);
+		this.emitDataChange(prevSnapshot, newData, changedFields);
+	}
+
+	/**
+	 * Updates a single top-level field. If the new value is Object.is-equal to the
+	 * current value this is a NO-OP: no state write, no onStateChange, no
+	 * onDataChange/watchers/plugin hook. Otherwise commits the change and fires
+	 * onDataChange (and watchers / plugin onDataChange) with changedFields = [field].
+	 * WIZ-010.
+	 */
+	updateField<K extends keyof T>(field: K, value: T[K]): void {
+		const prev = this.state.data;
+		if (Object.is(prev[field], value)) {
+			return; // no-op: identical value
+		}
+		const prevSnapshot = { ...prev };
+		const nextData = { ...prev, [field]: value };
+		const newStatuses = this.recalculateSkippedStatuses();
+		this.state = {
+			...this.state,
+			data: nextData,
+			stepStatuses: newStatuses,
+		};
+		this.notifyStateChange();
+		this.emitDataChange(prevSnapshot, nextData, [field]);
 	}
 
 	/**
 	 * Sets wizard data directly
 	 */
 	setData(data: T): void {
+		const prevSnapshot = { ...this.state.data };
 		const newStatuses = this.recalculateSkippedStatuses();
 		// FIX M-d: clone the caller's input (matching the constructor/reset/
 		// serialize contract) so a later external mutation of `data` cannot
 		// silently mutate `state.data` while bypassing notifyStateChange.
 		// `updateData`'s updater-return is a separate, documented in/out
 		// contract and is intentionally left as-is.
+		const cloned = this.cloneData(data);
 		this.state = {
 			...this.state,
-			data: this.cloneData(data),
+			data: cloned,
 			stepStatuses: newStatuses,
 		};
 		this.notifyStateChange();
+		const changedFields = this.diffChangedFields(prevSnapshot, cloned);
+		this.emitDataChange(prevSnapshot, cloned, changedFields);
+	}
+
+	/**
+	 * Subscribes to changes of a single top-level field. The callback fires only
+	 * when that field's value changes (Object.is) via updateField / updateData /
+	 * setData — NOT on reset(), restore(), or navigation. Returns an unsubscribe
+	 * function. A throwing callback is isolated: it is routed to onError (phase
+	 * "data") and does not prevent other watchers/plugins or corrupt the update.
+	 */
+	watchField<K extends keyof T>(
+		field: K,
+		callback: (newValue: T[K], oldValue: T[K]) => void,
+	): () => void {
+		let set = this.fieldWatchers.get(field);
+		if (!set) {
+			set = new Set();
+			this.fieldWatchers.set(field, set);
+		}
+		const cb = callback as (n: T[keyof T], o: T[keyof T]) => void;
+		set.add(cb);
+		return () => {
+			const s = this.fieldWatchers.get(field);
+			if (!s) return;
+			s.delete(cb);
+			if (s.size === 0) this.fieldWatchers.delete(field);
+		};
+	}
+
+	/** Shallow diff of top-level keys (Object.is). Returns changed keys. */
+	private diffChangedFields(prev: T, next: T): (keyof T)[] {
+		const keys = new Set<keyof T>([
+			...(Object.keys(prev) as (keyof T)[]),
+			...(Object.keys(next) as (keyof T)[]),
+		]);
+		const changed: (keyof T)[] = [];
+		for (const key of keys) {
+			if (!Object.is(prev[key], next[key])) changed.push(key);
+		}
+		return changed;
+	}
+
+	/**
+	 * WIZ-010: notifies data-change subscribers AFTER the state has been committed
+	 * and onStateChange has fired. No-op when nothing changed. All three subscriber
+	 * kinds are ISOLATED: a throw is routed to onError (phase "data") and never
+	 * prevents the others or corrupts the update.
+	 * Order: (1) events.onDataChange, (2) field watchers, (3) plugin onDataChange.
+	 */
+	private emitDataChange(prev: T, next: T, changedFields: (keyof T)[]): void {
+		if (changedFields.length === 0) return;
+
+		// (1) machine-level config callback — isolated for the new event.
+		if (this.events.onDataChange) {
+			try {
+				this.events.onDataChange(prev, next, changedFields);
+			} catch (err) {
+				this.handleError(err, "data");
+			}
+		}
+
+		// (2) field watchers — isolated per callback; snapshot the set so a
+		// callback that unsubscribes mid-iteration does not disturb the loop.
+		for (const field of changedFields) {
+			const set = this.fieldWatchers.get(field);
+			if (!set) continue;
+			for (const cb of [...set]) {
+				try {
+					cb(next[field], prev[field]);
+				} catch (err) {
+					this.handleError(err, "data");
+				}
+			}
+		}
+
+		// (3) plugin hook — isolated inside the host, fire-and-forget (like
+		// dispatchComplete/dispatchReset).
+		void this.pluginHost.dispatchDataChange(
+			prev as never,
+			next as never,
+			changedFields as never,
+		);
 	}
 
 	/**

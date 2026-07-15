@@ -65,6 +65,7 @@ export interface WizardProviderProps<T extends WizardData> {
 	onCancel?: (data: T) => void | Promise<void>;
 	onReset?: () => void;
 	onError?: (error: Error) => void;
+	onDataChange?: (prevData: T, nextData: T, changedFields: (keyof T)[]) => void;
 	plugins?: WizardPlugin<T>[];
 }
 
@@ -103,6 +104,11 @@ export const WizardProvider = defineComponent({
 		) => void | Promise<void>,
 		onReset: Function as unknown as () => () => void,
 		onError: Function as unknown as () => (error: Error) => void,
+		onDataChange: Function as unknown as () => (
+			prevData: WizardData,
+			nextData: WizardData,
+			changedFields: (keyof WizardData)[],
+		) => void,
 		plugins: Array as unknown as () => WizardPlugin<WizardData>[],
 	},
 	setup(props, { slots }) {
@@ -119,6 +125,7 @@ export const WizardProvider = defineComponent({
 			onCancel: props.onCancel,
 			onReset: props.onReset,
 			onError: props.onError,
+			onDataChange: props.onDataChange,
 			plugins: props.plugins,
 		});
 
