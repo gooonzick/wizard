@@ -37,6 +37,10 @@
 | Validate All Steps (WIZ-008)                          | ✅     | `core`  |
 | onDataChange / Field Subscriptions (WIZ-010)          | ✅     | `core`  |
 
+### Current Release
+
+The published version is **1.5.1** (`core`, `react`, `vue`, and `state` are fixed-versioned together). The WIZ-001..008 runtime foundation above has shipped and was subsequently hardened by a pre-release audit covering concurrency/veto-safety, resolver-safety, StrictMode-safe React/Vue bindings, and real-machine state tests.
+
 ### Architectural Decisions
 
 - **Core** (`WizardMachine`) — a finite state machine operating on `WizardDefinition<TData>`
@@ -60,20 +64,20 @@
 | Builder pattern           | ✅                 | ❌               | ❌                | ❌          | ❌          | ✅ setup()   | ✅ createSpell | ❌ JSON     | ❌       | ❌                 |
 | Schema validation         | ✅ Standard Schema | ❌               | ❌                | ❌          | ❌          | ❌ (DIY)     | ❌             | ✅ built-in | ✅       | ❌                 | ❌           |
 | **Navigation history**    | ✅                 | ❌               | ❌                | ✅ 2 stacks | ✅ history  | ✅           | ✅             | ✅          | ❌       | ❌                 | ❌           |
-| **goTo(stepId)**          | ❌                 | ❌               | ✅                | ❌          | ✅ push(id) | ✅           | ✅             | ✅          | ❌       | ❌                 | ❌           |
+| **goTo(stepId)**          | ✅                 | ❌               | ✅                | ❌          | ✅ push(id) | ✅           | ✅             | ✅          | ❌       | ❌                 | ❌           |
 | **Step status tracking**  | ✅                 | ❌               | ❌                | ❌          | ❌          | ✅ (DIY)     | ✅             | ✅          | ❌       | ❌                 | ❌           |
 | **Progress API**          | ✅                 | ❌               | ❌                | ❌          | ❌          | ❌           | ❌             | ✅          | ❌       | ✅                 | ❌           |
-| **Reset / Cancel**        | ❌                 | ❌               | ❌                | ❌          | ❌          | ✅           | ✅             | ✅          | ✅       | ❌                 | ❌           |
+| **Reset / Cancel**        | ✅                 | ❌               | ❌                | ❌          | ❌          | ✅           | ✅             | ✅          | ✅       | ❌                 | ❌           |
 | **State persistence**     | ✅                 | ❌               | ❌                | ❌          | ❌          | ✅ persist   | ✅ sessions    | ✅          | ❌       | ✅ server          | ❌           |
 | **Middleware / plugins**  | ✅ WIZ-007         | ❌               | ❌                | ❌          | ❌          | ✅ actions   | ✅             | ❌          | ❌       | ❌                 | ❌           |
 | **Router integration**    | ❌                 | ❌               | ❌                | ❌          | ✅          | ❌           | ❌             | ❌          | ❌       | ❌                 | ✅           |
 | **Sub-wizards**           | ❌                 | ❌               | ❌                | ✅ nested   | ❌          | ✅ spawn     | ✅             | ✅ pages    | ❌       | ❌                 | ❌           |
-| **Validate all steps**    | ❌                 | ❌               | ❌                | ❌          | ❌          | ❌           | ❌             | ✅          | ❌       | ❌                 | ❌           |
+| **Validate all steps**    | ✅                 | ❌               | ❌                | ❌          | ❌          | ❌           | ❌             | ✅          | ❌       | ❌                 | ❌           |
 | **DevTools / visualizer** | ❌                 | ❌               | ❌                | ❌          | ❌          | ✅ Stately   | ✅ outline     | ✅          | ❌       | ❌                 | ❌           |
 
 ### Key Takeaway
 
-`gooonzick/wizard` already outperforms most competitors in its foundation: typing, declarative approach, framework-agnostic architecture, conditional branching, guard combinators, and Standard Schema. However, it lags behind in **runtime capabilities** — navigation, step states, persistence, and extensibility. Closing these gaps will make the library an undisputed leader in its niche.
+`gooonzick/wizard` already outperforms most competitors in its foundation: typing, declarative approach, framework-agnostic architecture, conditional branching, guard combinators, and Standard Schema. Its **runtime capabilities** are now complete too — navigation (including `goTo` and history), step status tracking, progress, reset/cancel, persistence, plugins, and all-steps validation (WIZ-001 through WIZ-008) have all shipped. The remaining differentiators on the horizon are router integration, sub-wizards, and DevTools/visualization — closing those will make the library an undisputed leader in its niche.
 
 ---
 
@@ -298,7 +302,7 @@ interface WizardProgress {
   enabledStepIds: StepId[]; // ordered list of enabled steps
   percentage: number; // 0–100, completedSteps / enabledSteps * 100
   isFirstStep: boolean; // currentStepId === definition.initialStepId
-  isLastStep: boolean; // no resolvable next step (navigation-graph based)
+  isLastStep: boolean; // true only when there is no synchronously-resolvable next step; async-resolved next ⇒ false (use getNextStepId())
 }
 
 interface WizardState<TData> {
