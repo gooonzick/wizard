@@ -1,5 +1,12 @@
 # @gooonzick/wizard-state
 
+## 1.6.0
+
+### Patch Changes
+
+- Updated dependencies [a4bec60]
+  - @gooonzick/wizard-core@1.6.0
+
 ## 1.5.1
 
 ### Patch Changes
