@@ -1,5 +1,17 @@
 # @gooonzick/wizard-react
 
+## 1.6.0
+
+### Minor Changes
+
+- a4bec60: Add `onDataChange` event, `watchField(field, cb)` method, and the `onDataChange` plugin hook (WIZ-010). Fired on data mutations (updateField/updateData/setData) with shallow-diffed `changedFields`; not fired on reset/restore. Plugin hook payloads are DeepReadonly; subscriber errors are isolated and routed to onError (phase "data").
+
+### Patch Changes
+
+- Updated dependencies [a4bec60]
+  - @gooonzick/wizard-core@1.6.0
+  - @gooonzick/wizard-state@1.6.0
+
 ## 1.5.1
 
 ### Patch Changes
