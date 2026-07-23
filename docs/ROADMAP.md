@@ -608,7 +608,7 @@ function createLoggingPlugin<TData>(config?: {
 }): WizardPlugin<TData>;
 ```
 
-Built-in analytics and auto-save plugins remain future work (WIZ-016).
+The built-in analytics plugin has since shipped (WIZ-016, see below); a built-in auto-save plugin remains future work.
 
 ##### React / Vue
 
@@ -1105,7 +1105,7 @@ function App() {
 
 #### WIZ-016: Analytics Helpers
 
-**Status:** 📋 Planned
+**Status:** ✅ Done (see "Shipped vs. specced deltas")
 **Priority:** 🟢 Low
 **Effort:** S (2–3 hours)
 **Package:** `@gooonzick/wizard-core` (as a built-in plugin)
@@ -1180,6 +1180,18 @@ The plugin automatically:
 - onDropOff is called on destroy of an incomplete wizard
 - getReport returns full statistics
 - onWizardComplete is called on completion
+
+##### Shipped vs. specced deltas
+
+- Timer is stopped in `afterTransition` (the committed-success hook), NOT `beforeTransition` as the ticket suggested, so vetoed/stale transitions never falsely close a step or emit `onStepComplete`.
+- Backtrack detection uses `TransitionEvent.type === "previous"` OR `goTo` to an already-viewed step (the plugin has no reliable step-index view), instead of the ticket's "lower index" wording.
+- Timing uses an injectable `now()` (default `Date.now`), NOT `TransitionEvent.timestamp` (which is fixed/non-injectable and `0` in direct-hook tests).
+- `onStepView` data comes from `machine.snapshot.data` (initial) / `e.data` (transitions), both `DeepReadonly<TData>`.
+- `onComplete` also emits `onStepComplete` for the terminal step (its `afterTransition` never fires), in addition to `onWizardComplete`.
+- `onReset` restarts the analytics session in place (clears timings/backtracks/completed, restores the initial step timer) but does NOT re-emit `onStepView` (reset supplies no data).
+- `getReport().stepTimings` folds in the current step's live open-visit time; `totalDuration` is live while running.
+- `destroy` records drop-off only when the wizard was never completed.
+- The plugin's return type is `AnalyticsPlugin<TData> = WizardPlugin<TData> & { getReport(): AnalyticsReport }`.
 
 ---
 

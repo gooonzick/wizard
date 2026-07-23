@@ -25,6 +25,9 @@ Use this skill to execute Wizard tasks with high correctness and minimal regress
 - Data-change notifications (WIZ-010): `updateField` (Object.is no-op),
   `onDataChange` event, `watchField` (core-only), and the plugin `onDataChange`
   hook. See `references/api_reference.md`.
+- Built-in plugins (WIZ-007 / WIZ-016): `createLoggingPlugin` and
+  `createAnalyticsPlugin` (auto step-timing / backtrack / drop-off with
+  `getReport()`). See `references/api_reference.md`.
 
 ### React (`@gooonzick/wizard-react`)
 
