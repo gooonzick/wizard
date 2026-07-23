@@ -1026,3 +1026,57 @@ function createLoggingPlugin<TData>(config?: {
   logger?: Pick<Console, "log" | "warn" | "debug">; // default: console
 }): WizardPlugin<TData>;
 ```
+
+### `createAnalyticsPlugin`
+
+Built-in analytics collector. Auto-times each step, counts backtracks, records drop-off
+on teardown, and fires optional callbacks. The returned instance adds a synchronous
+`getReport()` method. Never vetoes. Timing uses `config.now` (default `Date.now`), not
+`TransitionEvent.timestamp`, so durations are injectable in tests.
+
+```ts
+import { createAnalyticsPlugin } from "@gooonzick/wizard-core";
+// or: import { createAnalyticsPlugin } from "@gooonzick/wizard-core/plugins";
+
+function createAnalyticsPlugin<TData>(
+  config?: AnalyticsPluginConfig<TData>,
+): AnalyticsPlugin<TData>;
+
+interface AnalyticsPluginConfig<TData> {
+  onStepView?(stepId: StepId, data: DeepReadonly<TData>): void;
+  onStepComplete?(stepId: StepId, durationMs: number): void;
+  onWizardComplete?(data: DeepReadonly<TData>, totalDurationMs: number): void;
+  /** Fired on destroy() only if the wizard was not completed. */
+  onDropOff?(stepId: StepId, durationMs: number): void;
+  onBacktrack?(fromStepId: StepId, toStepId: StepId): void;
+  /** Injectable clock for testability. Defaults to Date.now. */
+  now?: () => number;
+}
+
+type AnalyticsPlugin<TData> = WizardPlugin<TData> & {
+  getReport(): AnalyticsReport;
+};
+
+interface AnalyticsReport {
+  startedAt: number;
+  stepTimings: Record<StepId, number>; // includes the current step's live open visit
+  backtrackCount: number;
+  backtrackHistory: BacktrackEntry[];
+  currentStep: StepId | null;
+  completed: boolean;
+  totalDuration: number;
+}
+
+interface BacktrackEntry {
+  from: StepId;
+  to: StepId;
+  at: number;
+}
+```
+
+A step's timer closes on `afterTransition` (or in `onComplete` for the terminal step);
+`getReport()` folds the current step's still-open visit into `stepTimings` and
+`totalDuration`. A backtrack is any `previous` transition, or a `goTo` to a
+previously-visited step. `onDropOff` fires from `destroy()` only when the wizard never
+completed. Resetting the wizard restarts the analytics session in place and does not
+re-emit `onStepView`.

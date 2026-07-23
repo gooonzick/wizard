@@ -214,21 +214,25 @@ While any navigation (`goNext`, `goPrevious`, `goTo`) is in progress, the machin
 
 ## Import Paths
 
-All plugin types and `createLoggingPlugin` are available from both the main barrel and a dedicated subpath:
+All plugin types, `createLoggingPlugin`, and `createAnalyticsPlugin` are available from both the main barrel and a dedicated subpath:
 
 ```ts
 // Main barrel — works for most cases:
-import { createLoggingPlugin } from "@gooonzick/wizard-core";
+import { createLoggingPlugin, createAnalyticsPlugin } from "@gooonzick/wizard-core";
 import type { WizardPlugin, TransitionEvent, ErrorContext } from "@gooonzick/wizard-core";
 
 // Dedicated subpath — useful for tree-shaking or plugin-only bundles:
-import { createLoggingPlugin } from "@gooonzick/wizard-core/plugins";
+import { createLoggingPlugin, createAnalyticsPlugin } from "@gooonzick/wizard-core/plugins";
 import type {
   WizardPlugin,
   TransitionEvent,
   ErrorContext,
   WizardMachineReadonly,
   DeepReadonly,
+  AnalyticsReport,
+  BacktrackEntry,
+  AnalyticsPluginConfig,
+  AnalyticsPlugin,
 } from "@gooonzick/wizard-core/plugins";
 ```
 
@@ -267,22 +271,130 @@ function MyWizard() {
 
 ---
 
+## Built-in Plugin: `createAnalyticsPlugin`
+
+The analytics plugin is a second built-in. It automatically times each step, counts
+backward navigations ("backtracks"), records drop-off on teardown, and fires optional
+callbacks. Unlike `createLoggingPlugin`, the returned instance exposes a synchronous
+`getReport()` method for reading aggregated metrics at any time. It never vetoes.
+
+```ts
+import { createAnalyticsPlugin } from "@gooonzick/wizard-core";
+// or: import { createAnalyticsPlugin } from "@gooonzick/wizard-core/plugins";
+
+const analytics = createAnalyticsPlugin<SignupData>({
+  onStepView: (stepId, data) => track("step_view", { stepId }),
+  onStepComplete: (stepId, durationMs) => track("step_complete", { stepId, durationMs }),
+  onBacktrack: (from, to) => track("backtrack", { from, to }),
+  onWizardComplete: (data, totalDurationMs) => track("wizard_complete", { totalDurationMs }),
+  onDropOff: (stepId, durationMs) => track("drop_off", { stepId, durationMs }),
+  // now: () => Date.now(), // injectable clock; defaults to Date.now
+});
+
+machine.use(analytics);
+
+// Read aggregates at any time — includes the current step's live open-visit time:
+const report = analytics.getReport();
+```
+
+### Config
+
+All callbacks are optional; pass only what you need.
+
+| Option | Signature | When it fires |
+|---|---|---|
+| `onStepView` | `(stepId, data) => void` | On init and on every step entered (including backtracks). |
+| `onStepComplete` | `(stepId, durationMs) => void` | When a step is **left** — on each transition for the departing step, and on completion for the terminal step. |
+| `onBacktrack` | `(fromStepId, toStepId) => void` | On a `previous` transition, or a `goTo` targeting an already-viewed step. |
+| `onWizardComplete` | `(data, totalDurationMs) => void` | When the wizard completes. |
+| `onDropOff` | `(stepId, durationMs) => void` | On teardown (`destroy`) **only if the wizard never completed**. |
+| `now` | `() => number` | Injectable clock used for all timing. Defaults to `Date.now`. |
+
+### `getReport()`
+
+`analytics.getReport()` returns a snapshot of type `AnalyticsReport`:
+
+```ts
+interface AnalyticsReport {
+  startedAt: number;                       // now() at session start (onInit / first hook / last reset)
+  stepTimings: Record<StepId, number>;     // accumulated ms per step, INCLUDING the current live visit
+  backtrackCount: number;                  // number of backward navigations this session
+  backtrackHistory: BacktrackEntry[];      // ordered list of { from, to, at }
+  currentStep: StepId | null;              // most recently entered step, or null before any step
+  completed: boolean;                      // true once onWizardComplete fired (reset clears it)
+  totalDuration: number;                   // completed ? completedAt - startedAt : now() - startedAt
+}
+
+interface BacktrackEntry {
+  from: StepId;
+  to: StepId;
+  at: number;
+}
+```
+
+### Semantics
+
+- **Step timers.** Each step's open visit accumulates elapsed time. A step's timer
+  closes on `afterTransition` (when you leave it); the final step's timer closes in
+  `onComplete`. `getReport()` folds the current step's still-open visit into
+  `stepTimings` and into `totalDuration`, so metrics are always live.
+- **Backtracks.** A backtrack is any `previous` transition, or a `goTo` to a step you
+  have already visited this session.
+- **Drop-off.** `onDropOff` fires from `destroy()` **only if** the wizard was never
+  completed — completed wizards never drop off. In React/Vue this happens automatically
+  on unmount.
+- **Injectable clock.** All durations use `config.now` (default `Date.now`), not the
+  transition `timestamp`, so tests can inject a deterministic clock.
+- **Throw-safe.** The plugin updates its internal bookkeeping *before* invoking your
+  callbacks, so a throwing callback can never corrupt the report.
+- **Reset.** Resetting the wizard restarts the analytics session in place (timings,
+  backtracks, and `completed` are cleared and the initial step's timer restarts). Reset
+  does **not** re-emit `onStepView`.
+
+**React example:**
+
+```tsx
+import { useMemo } from "react";
+import { createAnalyticsPlugin } from "@gooonzick/wizard-core";
+
+function MyWizard() {
+  const analytics = useMemo(
+    () => createAnalyticsPlugin<MyData>({
+      onStepComplete: (stepId, ms) => console.log(stepId, "took", ms, "ms"),
+    }),
+    [],
+  );
+  const plugins = useMemo(() => [analytics], [analytics]);
+
+  const { state } = useWizard({ definition, initialData, plugins });
+
+  // Read live aggregates whenever you need them:
+  const onShowReport = () => console.log(analytics.getReport());
+  // ...
+}
+```
+
+---
+
 ## Writing Your Own Plugin
 
-A plugin is a plain object with a `name` and any subset of the optional hooks. Here is a minimal analytics plugin:
+A plugin is a plain object with a `name` and any subset of the optional hooks. (For
+built-in analytics use `createAnalyticsPlugin` above; the example below shows how you
+would build a custom tracking plugin from scratch.) Here is a minimal tracking
+plugin:
 
 ```ts
 import type { WizardPlugin, TransitionEvent, DeepReadonly } from "@gooonzick/wizard-core";
 
-interface AnalyticsConfig {
+interface TrackingConfig {
   track: (event: string, props?: Record<string, unknown>) => void;
 }
 
-function createAnalyticsPlugin<TData>(
-  config: AnalyticsConfig,
+function createTrackingPlugin<TData>(
+  config: TrackingConfig,
 ): WizardPlugin<TData> {
   return {
-    name: "analytics",
+    name: "tracking",
 
     onInit(machine) {
       config.track("wizard_init", {
@@ -321,7 +433,7 @@ function createAnalyticsPlugin<TData>(
 
 ```ts
 const machine = new WizardMachine(definition, context, initialData, events, [
-  createAnalyticsPlugin({ track: myAnalyticsLib.track }),
+  createTrackingPlugin({ track: myAnalyticsLib.track }),
   createLoggingPlugin({ level: "warn" }),
 ]);
 ```
@@ -330,7 +442,7 @@ Or with React:
 
 ```tsx
 const plugins = useMemo(
-  () => [createAnalyticsPlugin({ track: myAnalyticsLib.track })],
+  () => [createTrackingPlugin({ track: myAnalyticsLib.track })],
   [],
 );
 

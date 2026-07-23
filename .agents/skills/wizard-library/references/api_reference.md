@@ -19,6 +19,10 @@ Use public exports from `@gooonzick/wizard-core`:
   and the `WizardEvents.onDataChange(prev, next, changedFields)` event.
 - Transitions: `resolveTransition`, `andGuards`, `orGuards`, `notGuard`, `evaluateGuard`
 - Validators: `requiredFields`, `combineValidators`, `createValidator`, `createStandardSchemaValidator`
+- Built-in plugins: `createLoggingPlugin` (reference logger) and
+  `createAnalyticsPlugin` (auto step-timing / backtrack / drop-off collector with a
+  synchronous `getReport(): AnalyticsReport`). Both are re-exported from the main
+  barrel and from the `@gooonzick/wizard-core/plugins` subpath.
 - Types: `WizardData`, `WizardDefinition`, `WizardStepDefinition`, `StepTransition`, `WizardContext`
 
 Prefer building on exported APIs over importing deep internal modules.
@@ -173,6 +177,23 @@ Use context for external dependencies instead of hard-coding globals in guards/r
   `WizardPlugin` (WIZ-010). `ErrorContext.phase` now includes `"data"`.
 - `snapshot`, its `stepStatuses`, and `snapshot.progress` (with its `enabledStepIds`
   array) are frozen; `snapshot.data` is intentionally NOT frozen.
+
+### Built-in analytics plugin (WIZ-016)
+
+- `createAnalyticsPlugin<TData>(config?)` returns
+  `AnalyticsPlugin<TData> = WizardPlugin<TData> & { getReport(): AnalyticsReport }`.
+- Optional callbacks: `onStepView(stepId, data)`, `onStepComplete(stepId, ms)`,
+  `onBacktrack(from, to)`, `onWizardComplete(data, totalMs)`,
+  `onDropOff(stepId, ms)`. Injectable clock via `now` (default `Date.now`).
+- Timing: a step's timer closes on `afterTransition` (terminal step in `onComplete`);
+  `getReport()` folds the current step's still-open visit into `stepTimings` and
+  `totalDuration`.
+- Backtrack = a `previous` transition OR a `goTo` to an already-viewed step.
+- `onDropOff` fires from `destroy()` ONLY when the wizard never completed.
+- Bookkeeping runs before user callbacks, so a throwing callback cannot corrupt the
+  report. `onReset` restarts the session in place and does NOT re-emit `onStepView`.
+- Register like any plugin: `machine.use(analytics)` or the `plugins` option in
+  `useWizard` / `WizardProvider`.
 
 ## Installation Quick Reference
 
