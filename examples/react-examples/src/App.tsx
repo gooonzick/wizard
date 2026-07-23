@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { AnalyticsExample } from "./analytics-example";
 import { DataChangeExample } from "./data-change-example";
 import { HistoryExample } from "./history-example";
 import { PluginsExample } from "./plugins-example";
@@ -14,6 +15,7 @@ type View =
 	| "reset-cancel"
 	| "persistence"
 	| "plugins"
+	| "analytics"
 	| "data-change";
 
 export function App() {
@@ -26,6 +28,7 @@ export function App() {
 		{ id: "reset-cancel", label: "Reset & Cancel" },
 		{ id: "persistence", label: "State Persistence" },
 		{ id: "plugins", label: "Plugins" },
+		{ id: "analytics", label: "Analytics" },
 		{ id: "data-change", label: "Data Change" },
 	];
 
@@ -53,6 +56,7 @@ export function App() {
 			{view === "reset-cancel" && <ResetCancelExample />}
 			{view === "persistence" && <StatePersistenceExample />}
 			{view === "plugins" && <PluginsExample />}
+			{view === "analytics" && <AnalyticsExample />}
 			{view === "data-change" && <DataChangeExample />}
 		</div>
 	);
