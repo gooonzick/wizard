@@ -43,7 +43,14 @@ export {
 	type WizardSerializedState,
 	type WizardState,
 } from "./machine/wizard-machine";
+export type {
+	AnalyticsPlugin,
+	AnalyticsPluginConfig,
+	AnalyticsReport,
+	BacktrackEntry,
+} from "./plugins/analytics";
 // Plugins (WIZ-007)
+export { createAnalyticsPlugin } from "./plugins/analytics";
 export { createLoggingPlugin } from "./plugins/logging";
 export type {
 	DeepReadonly,
