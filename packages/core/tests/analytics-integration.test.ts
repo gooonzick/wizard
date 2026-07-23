@@ -93,4 +93,44 @@ describe("createAnalyticsPlugin — integration with a real WizardMachine", () =
 		expect(dropOff).toEqual({ stepId: "step2", duration: 90 });
 		expect(analytics.getReport().completed).toBe(false);
 	});
+
+	it("recovers currentStep and timings after a step's onEnter throws once (FIX F4 desync)", async () => {
+		const clock = makeClock();
+		const onStepComplete: Array<[string, number]> = [];
+		const analytics = createAnalyticsPlugin<SimpleData>({
+			now: clock.now,
+			onStepComplete: (stepId, ms) => onStepComplete.push([stepId, ms]),
+		});
+
+		const def = createSimpleLinearDefinition();
+		let entered = 0;
+		// step2.onEnter throws the FIRST time it is entered, succeeds afterwards.
+		(def.steps.step2 as { onEnter?: unknown }).onEnter = () => {
+			entered += 1;
+			if (entered === 1) throw new Error("boom");
+		};
+
+		const m = new WizardMachine<SimpleData>(def, {}, initial, {}, [analytics]);
+		await flush(); // onInit at step1
+
+		clock.advance(100);
+		// step1 -> step2 : machine commits to step2, onEnter throws; afterTransition skipped.
+		await expect(m.goNext()).rejects.toThrow("boom");
+		await flush(); // let the fire-and-forget onError resync run
+
+		// onError resynced the plugin to the committed step2.
+		expect(analytics.getReport().currentStep).toBe("step2");
+
+		clock.advance(200);
+		await m.goNext(); // step2 -> step3 (onEnter of step3 fine)
+		await flush();
+
+		// currentStep is correct, and step2's timer was attributed to step2 (not step1).
+		const report = analytics.getReport();
+		expect(report.currentStep).toBe("step3");
+		// step2 completed with its real dwell (~200ms) — NOT folded into step1.
+		expect(onStepComplete).toContainEqual(["step2", 200]);
+		expect(report.stepTimings.step1).toBe(100);
+		expect(report.stepTimings.step2).toBe(200);
+	});
 });

@@ -237,4 +237,84 @@ describe("createAnalyticsPlugin", () => {
 		const report = plugin.getReport();
 		expect(report.totalDuration).toBeGreaterThanOrEqual(0);
 	});
+
+	it("onInit is idempotent: a second onInit fully clears timings/backtracks/viewedSteps", () => {
+		const clock = makeClock();
+		const onBacktrack = vi.fn();
+		const plugin = createAnalyticsPlugin<D>({ now: clock.now, onBacktrack });
+
+		// ── first (discarded probe) session: init at "a", walk a->b->a ──
+		plugin.onInit?.(machineView("a"));
+		clock.advance(100);
+		plugin.afterTransition?.(
+			ev({ type: "next", fromStepId: "a", toStepId: "b" }),
+		);
+		clock.advance(50);
+		plugin.afterTransition?.(
+			ev({ type: "previous", fromStepId: "b", toStepId: "a" }),
+		);
+		expect(plugin.getReport().backtrackCount).toBe(1);
+		plugin.destroy?.(); // StrictMode discards the probe
+
+		// ── second (real) session on the SAME instance: re-init at "a" ──
+		onBacktrack.mockClear();
+		plugin.onInit?.(machineView("a"));
+		const report = plugin.getReport();
+		// fully re-seeded: no residue from the probe session
+		expect(report.backtrackCount).toBe(0);
+		expect(report.backtrackHistory).toEqual([]);
+		expect(report.stepTimings).toEqual({ a: 0 }); // only the freshly reopened live visit
+		expect(report.currentStep).toBe("a");
+		expect(report.completed).toBe(false);
+
+		// a forward goTo to a step that was viewed ONLY in the probe session must NOT
+		// be misclassified as a backtrack (proves viewedSteps was cleared):
+		plugin.afterTransition?.(
+			ev({ type: "goTo", fromStepId: "a", toStepId: "b" }),
+		);
+		expect(onBacktrack).not.toHaveBeenCalled();
+		expect(plugin.getReport().backtrackCount).toBe(0);
+	});
+
+	it("absorbs an in-flight afterTransition when added mid-transition (no double view / phantom complete)", () => {
+		const clock = makeClock();
+		const onStepView = vi.fn();
+		const onStepComplete = vi.fn();
+		const onBacktrack = vi.fn();
+		const plugin = createAnalyticsPlugin<D>({
+			now: clock.now,
+			onStepView,
+			onStepComplete,
+			onBacktrack,
+		});
+
+		// use() ran mid-transition: state already committed to "b", so onInit seeds "b".
+		plugin.onInit?.(machineView("b"));
+		expect(onStepView).toHaveBeenCalledTimes(1);
+		expect(onStepView).toHaveBeenCalledWith("b", { value: 1 });
+
+		clock.advance(30);
+		// the in-flight transition's afterTransition finally arrives: a -> b.
+		plugin.afterTransition?.(
+			ev({ type: "next", fromStepId: "a", toStepId: "b" }),
+		);
+
+		// absorbed: NO second onStepView("b"), NO phantom onStepComplete, NO backtrack.
+		expect(onStepView).toHaveBeenCalledTimes(1);
+		expect(onStepComplete).not.toHaveBeenCalled();
+		expect(onBacktrack).not.toHaveBeenCalled();
+
+		// "a" is now recorded as previously visited, so a later goTo back to "a" is a backtrack,
+		// and "b"'s live timer keeps running from onInit (not reset by the absorbed event).
+		const report = plugin.getReport();
+		expect(report.currentStep).toBe("b");
+		expect(report.stepTimings.b).toBe(30); // continuous since onInit, no bogus close
+
+		clock.advance(10);
+		plugin.afterTransition?.(
+			ev({ type: "goTo", fromStepId: "b", toStepId: "a" }),
+		);
+		expect(onBacktrack).toHaveBeenCalledWith("b", "a"); // "a" was marked viewed by the absorb
+		expect(plugin.getReport().backtrackCount).toBe(1);
+	});
 });
