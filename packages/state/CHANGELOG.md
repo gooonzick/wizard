@@ -1,5 +1,21 @@
 # @gooonzick/wizard-state
 
+## 1.7.0
+
+### Minor Changes
+
+- f2d0d21: Add built-in `createAnalyticsPlugin` (WIZ-016): auto-times steps, counts backtracks, records
+  drop-off on destroy, fires `onStepView`/`onStepComplete`/`onWizardComplete`/`onDropOff`/
+  `onBacktrack` callbacks, and exposes `getReport()`. Exported from the main barrel and the
+  `/plugins` subpath alongside `createLoggingPlugin`.
+
+  All packages are released together at the same fixed version.
+
+### Patch Changes
+
+- Updated dependencies [f2d0d21]
+  - @gooonzick/wizard-core@1.7.0
+
 ## 1.6.0
 
 ### Patch Changes
