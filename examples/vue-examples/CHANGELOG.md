@@ -1,5 +1,13 @@
 # @gooonzick/wizard-vue-examples
 
+## 0.0.12
+
+### Patch Changes
+
+- Updated dependencies [818d723]
+  - @gooonzick/wizard-core@1.8.0
+  - @gooonzick/wizard-vue@1.8.0
+
 ## 0.0.11
 
 ### Patch Changes

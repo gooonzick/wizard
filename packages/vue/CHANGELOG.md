@@ -1,5 +1,24 @@
 # @gooonzick/wizard-vue
 
+## 1.8.0
+
+### Minor Changes
+
+- 818d723: Add built-in `createPersistencePlugin` plus `localStorageAdapter` / `sessionStorageAdapter`
+  (WIZ-006): auto-restores a stored snapshot on init, debounced auto-save on data changes and
+  committed transitions, clear-on-complete/reset, flush-on-destroy, and an async-first
+  `WizardPersistenceAdapter` contract. `WizardMachineReadonly` gains optional `serialize`,
+  `restore` and `isBusy` members so plugins can drive persistence. Exported from the main
+  barrel and the `/plugins` subpath alongside `createLoggingPlugin` and `createAnalyticsPlugin`.
+
+  All packages are released together at the same fixed version.
+
+### Patch Changes
+
+- Updated dependencies [818d723]
+  - @gooonzick/wizard-core@1.8.0
+  - @gooonzick/wizard-state@1.8.0
+
 ## 1.7.0
 
 ### Minor Changes
