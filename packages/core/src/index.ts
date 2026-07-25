@@ -53,6 +53,24 @@ export type {
 export { createAnalyticsPlugin } from "./plugins/analytics";
 export { createLoggingPlugin } from "./plugins/logging";
 export type {
+	PersistedWizardSnapshot,
+	PersistencePlugin,
+	PersistencePluginConfig,
+	PersistenceRestoreOutcome,
+	PersistenceSkipReason,
+	WizardPersistenceAdapter,
+} from "./plugins/persistence";
+// Persistence plugin (WIZ-006)
+export { createPersistencePlugin } from "./plugins/persistence";
+export type {
+	StorageLike,
+	WebStorageAdapterOptions,
+} from "./plugins/storage-adapters";
+export {
+	localStorageAdapter,
+	sessionStorageAdapter,
+} from "./plugins/storage-adapters";
+export type {
 	DeepReadonly,
 	ErrorContext,
 	TransitionEvent,

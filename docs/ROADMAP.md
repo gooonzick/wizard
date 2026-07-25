@@ -410,7 +410,7 @@ actions.cancel();
 
 #### WIZ-006: State Persistence (Serialize / Restore)
 
-**Status:** ✅ Done (core serialize/restore; persistence adapters & autoSave deferred — see "Not Built")
+**Status:** ✅ Done (see "Shipped vs. specced deltas")
 **Priority:** 🟡 High
 **Effort:** M (4–6 hours)
 **Package:** `@gooonzick/wizard-core`
@@ -473,19 +473,52 @@ aligns `canGoBack` with the first-step definition, and re-validates `isValid`.
 - rejects empty history / history not ending at current step
 - rejects invalid status values
 - deep-clones restored data so later mutation of the payload cannot change state
+- `createPersistencePlugin` unit tests (restore paths, debounce, clear-on-complete/reset,
+  destroy flush, async-adapter races, error reporting): `packages/core/tests/persistence-plugin.test.ts`
+- `createPersistencePlugin` integration with a real machine (round-trip into a second
+  machine, synchronous constructor/`use()` restore, cancel/complete clearing, no
+  restore→save echo, coexistence with the logging/analytics plugins):
+  `packages/core/tests/persistence-integration.test.ts`
+- built-in web-storage adapters (round-trip, invalid JSON, quota, SSR safety, lazy global
+  resolution, no import-time side effects): `packages/core/tests/storage-adapters.test.ts`
 
-##### Not Built (future work)
+##### Shipped vs. specced deltas
 
-The following from the original proposal were NOT implemented:
-
-- Persistence adapters (`WizardPersistenceAdapter`, `localStorageAdapter`,
-  `sessionStorageAdapter`) — persistence is currently manual (the developer
-  serializes and stores the result themselves).
-- `autoSave` / `persistence` config on the wizard (and `debounceMs`).
-- `static restore(...)` factory — restore is an instance method that mutates an
-  existing machine, not a constructor.
-- `WizardSnapshot` shape with `definitionId` / `timestamp` — the implemented
-  shape is `WizardSerializedState` (no definitionId, no timestamp).
+- **Persistence adapters shipped** as `WizardPersistenceAdapter<TData>` plus the built-in
+  `localStorageAdapter(key, options?)` / `sessionStorageAdapter(key, options?)`. The contract
+  is async-first (every method returns `T | Promise<T>`) so IndexedDB / server adapters fit
+  without a breaking change. Storage globals are resolved lazily inside each method, so the
+  module is SSR-safe and has no import-time side effects.
+- **`autoSave` shipped as a plugin, not a machine config key.** There is no `persistence`
+  option on the wizard/machine and no new public `WizardMachine` method; you register
+  `machine.use(createPersistencePlugin({ adapter, debounceMs }))` exactly like
+  `createLoggingPlugin` / `createAnalyticsPlugin` (main barrel + `/plugins` subpath).
+  Data-change writes are trailing-edge debounced (`debounceMs`, default `300`); committed
+  transitions (`afterTransition`) write immediately and absorb a pending debounced write.
+- The plugin **auto-restores in `onInit`** and swallows corrupt / stale / unknown-step
+  snapshots: `onInit` never throws and never returns a promise, so a persistence failure is
+  never routed into the machine's `onError` or other plugins' `onError`. Failures surface
+  only via `onRestoreError` / `onSaveError` (or one `console.warn` per category when neither
+  is supplied), the poison record is cleared, and the wizard starts clean. The outcome is
+  observable through `plugin.ready`, which settles once and never rejects.
+- With a **synchronous** adapter the snapshot is applied inside `onInit`, i.e. before the
+  constructor / `use()` returns. With an **asynchronous** adapter there is no ordering
+  guarantee, so a late load is discarded (never force-applied) when the wizard has moved on,
+  `isBusy` is true, or the plugin was destroyed/superseded.
+- **`WizardMachineReadonly` gained optional `serialize` / `restore` / `isBusy` members** so a
+  plugin can drive persistence. They are optional so hand-rolled facades written against the
+  original three-member shape keep compiling; `WizardSerializedState<T extends WizardData>`
+  was relaxed to `WizardSerializedState<T>` for the same reason.
+- The persisted envelope is `PersistedWizardSnapshot<TData>` — `envelope: 1` (library format),
+  an app-controlled `version` (default `1`, bump it to invalidate records after a `TData`/step
+  graph change), `savedAt` (with optional `maxAgeMs` TTL) and `state`. There is still **no
+  `definitionId`**: storage-key collisions are the caller's responsibility, so namespace the
+  key (`localStorageAdapter(\`wizard:${definition.id}\`)`).
+- `static restore(...)` factory — still **NOT built**. `restore` remains an instance method
+  that mutates an existing machine.
+- Still out of scope: any React/Vue-specific persistence surface (use the existing `plugins`
+  option on `useWizard` / `<WizardProvider>` — there is no `persist` prop), and any built-in
+  IndexedDB or server/HTTP adapter (implement `WizardPersistenceAdapter` yourself).
 
 ---
 
@@ -608,7 +641,7 @@ function createLoggingPlugin<TData>(config?: {
 }): WizardPlugin<TData>;
 ```
 
-The built-in analytics plugin has since shipped (WIZ-016, see below); a built-in auto-save plugin remains future work.
+The built-in analytics plugin has since shipped (WIZ-016, see below), and the built-in auto-save plugin shipped as `createPersistencePlugin` (WIZ-006, see above).
 
 ##### React / Vue
 

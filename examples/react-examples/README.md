@@ -14,18 +14,21 @@ Switch tabs in the app UI:
 | **Reset & Cancel** | `src/reset-cancel-example.tsx` | `actions.reset()`, `actions.cancel()`, `onReset` / `onCancel` / definition `.onCancel()` |
 | **State Persistence** | `src/state-persistence-example.tsx` | `actions.serialize()` / `actions.restore()` with `localStorage` |
 | **Plugins** | `src/plugins-example.tsx` | `createLoggingPlugin` + custom `afterTransition` / `onError` plugin |
+| **Analytics** | `src/analytics-example.tsx` | `createAnalyticsPlugin` — step timings, backtracks, live `getReport()` |
+| **Persistence Plugin** | `src/persistence-plugin-example.tsx` | `createPersistencePlugin` + `localStorageAdapter` — auto-restore on reload, debounced save, clear on reset/cancel |
+| **Data Change** | `src/data-change-example.tsx` | `onDataChange` cascade + `updateField` no-op guard |
 
 Shared definition: `src/registration-wizard.ts`.
 
 ## Run
 
 ```sh
-pnpm --filter @gooonzick/wizard-react-examples dev
+pnpm --filter @gooonzick/wizard-react-example dev
 ```
 
 ## Build And Typecheck
 
 ```sh
-pnpm --filter @gooonzick/wizard-react-examples typecheck
-pnpm --filter @gooonzick/wizard-react-examples build
+pnpm --filter @gooonzick/wizard-react-example typecheck
+pnpm --filter @gooonzick/wizard-react-example build
 ```

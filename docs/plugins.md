@@ -210,15 +210,27 @@ While any navigation (`goNext`, `goPrevious`, `goTo`) is in progress, the machin
 
 ## Import Paths
 
-All plugin types, `createLoggingPlugin`, and `createAnalyticsPlugin` are available from both the main barrel and a dedicated subpath:
+All plugin types, `createLoggingPlugin`, `createAnalyticsPlugin`, `createPersistencePlugin` and the built-in storage adapters are available from both the main barrel and a dedicated subpath:
 
 ```ts
 // Main barrel — works for most cases:
-import { createLoggingPlugin, createAnalyticsPlugin } from "@gooonzick/wizard-core";
+import {
+  createLoggingPlugin,
+  createAnalyticsPlugin,
+  createPersistencePlugin,
+  localStorageAdapter,
+  sessionStorageAdapter,
+} from "@gooonzick/wizard-core";
 import type { WizardPlugin, TransitionEvent, ErrorContext } from "@gooonzick/wizard-core";
 
 // Dedicated subpath — useful for tree-shaking or plugin-only bundles:
-import { createLoggingPlugin, createAnalyticsPlugin } from "@gooonzick/wizard-core/plugins";
+import {
+  createLoggingPlugin,
+  createAnalyticsPlugin,
+  createPersistencePlugin,
+  localStorageAdapter,
+  sessionStorageAdapter,
+} from "@gooonzick/wizard-core/plugins";
 import type {
   WizardPlugin,
   TransitionEvent,
@@ -229,6 +241,14 @@ import type {
   BacktrackEntry,
   AnalyticsPluginConfig,
   AnalyticsPlugin,
+  PersistedWizardSnapshot,
+  PersistencePlugin,
+  PersistencePluginConfig,
+  PersistenceRestoreOutcome,
+  PersistenceSkipReason,
+  WizardPersistenceAdapter,
+  StorageLike,
+  WebStorageAdapterOptions,
 } from "@gooonzick/wizard-core/plugins";
 ```
 
@@ -366,6 +386,181 @@ function MyWizard() {
 
   // Read live aggregates whenever you need them:
   const onShowReport = () => console.log(analytics.getReport());
+  // ...
+}
+```
+
+---
+
+## Built-in Plugin: `createPersistencePlugin`
+
+The persistence plugin keeps the wizard's serialized state in a storage backend so a page
+reload does not lose progress. It restores in `onInit`, saves debounced on data changes and
+immediately after every committed transition, and clears the record when the wizard
+completes or is reset.
+
+```ts
+import {
+  createPersistencePlugin,
+  localStorageAdapter,
+} from "@gooonzick/wizard-core";
+
+machine.use(
+  createPersistencePlugin<MyData>({
+    adapter: localStorageAdapter("wizard:signup"),
+    debounceMs: 300,
+    restoreOnInit: true,
+  }),
+);
+```
+
+### Config
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `adapter` | `WizardPersistenceAdapter<TData>` | **required** | Storage backend. |
+| `name` | `string` | `"persistence"` | Plugin name; must be unique per machine. |
+| `restoreOnInit` | `boolean` | `true` | Read and apply a stored snapshot in `onInit`. |
+| `debounceMs` | `number` | `300` | Trailing-edge debounce for data-change writes. `0` (or negative) writes on the next microtask. |
+| `version` | `number` | `1` | App-controlled schema version written into / checked against the envelope. |
+| `maxAgeMs` | `number` | `undefined` | Discard snapshots older than this many ms. Unset means never expire. |
+| `saveOnTransition` | `boolean` | `true` | Save after every committed transition. |
+| `saveOnDataChange` | `boolean` | `true` | Save (debounced) after every data change. |
+| `clearOnComplete` | `boolean` | `true` | Clear on completion, and refuse to restore a completed snapshot. |
+| `clearOnReset` | `boolean` | `true` | Clear on `reset()` / `cancel()`. |
+| `flushOnUnload` | `boolean` | `false` | Register a `pagehide` listener that flushes pending writes. |
+| `beforeSave` | `(state) => state \| null` | — | Last chance to redact/transform before writing. Return `null` to skip the write. |
+| `onRestored` | `(state) => void` | — | A snapshot was successfully applied. |
+| `onRestoreSkipped` | `(reason) => void` | — | A snapshot was intentionally not applied. |
+| `onRestoreError` | `(error, raw) => void` | — | Load / parse / validate / restore failed. `raw` is the untrusted adapter value. |
+| `onSaveError` | `(error) => void` | — | A `save()` or `clear()` failed. |
+
+The returned plugin is a `WizardPlugin` plus three members:
+
+```ts
+plugin.ready;    // Promise<PersistenceRestoreOutcome<TData>> — settles once, never rejects
+await plugin.flush(); // cancel the debounce and drain any pending write
+await plugin.clear(); // drop any pending save and clear the stored record
+```
+
+`ready` resolves to `{ status: "restored", state }`, `{ status: "skipped", reason }` or
+`{ status: "failed", error }`. Skip reasons are `"disabled"`, `"unsupported"`, `"empty"`,
+`"version-mismatch"`, `"expired"`, `"completed"`, `"stale"` and `"destroyed"`.
+
+### Adapters
+
+An adapter is any object implementing the async-first `WizardPersistenceAdapter<TData>`
+contract — every method may return a value **or** a promise, so `localStorage`, IndexedDB and
+server backends share one interface:
+
+```ts
+interface WizardPersistenceAdapter<TData> {
+  load(): PersistedWizardSnapshot<TData> | null | Promise<PersistedWizardSnapshot<TData> | null>;
+  save(snapshot: PersistedWizardSnapshot<TData>): void | Promise<void>;
+  clear(): void | Promise<void>;
+}
+```
+
+The value handed to the adapter is an envelope, not the raw machine state:
+
+```ts
+interface PersistedWizardSnapshot<TData> {
+  envelope: 1;                          // library-owned envelope format
+  version: number;                      // your `config.version`
+  savedAt: number;                      // Date.now() at write time
+  state: WizardSerializedState<TData>;  // machine.serialize() output
+}
+```
+
+Two adapters ship with the core package:
+
+```ts
+localStorageAdapter<TData>(key: string, options?: { storage?: StorageLike }): WizardPersistenceAdapter<TData>;
+sessionStorageAdapter<TData>(key: string, options?: { storage?: StorageLike }): WizardPersistenceAdapter<TData>;
+```
+
+Both resolve the storage global **lazily inside each call** and never touch it at import
+time, so they are safe to import on the server. When storage is unavailable (SSR, private
+mode, a hardened browser) `load()` returns `null` and `save()` / `clear()` are silent no-ops
+— `save()` runs on every keystroke, so throwing there would be pure noise. Pass
+`options.storage` to inject a fake in tests.
+
+Writing your own is just the three methods above. `load()` returns `null` when nothing is
+stored; throwing/rejecting from any method is reported through `onRestoreError` /
+`onSaveError` and never reaches the machine's error channel.
+
+### Semantics
+
+- **Restore ordering.** With a **synchronous** adapter (the built-ins) the snapshot is
+  applied inside `onInit`, i.e. before `machine.use(...)` — or the `WizardMachine`
+  constructor — returns, so the first snapshot the UI renders already contains the restored
+  state. With an **asynchronous** adapter there is no ordering guarantee: `await plugin.ready`
+  before enabling interaction.
+- **A late async load is discarded, never force-applied**, when the plugin was destroyed or
+  superseded, when the wizard already moved on (any transition, data change, complete or
+  reset), when `machine.isBusy` is true, or when the snapshot is a completed one. Overwriting
+  live user input is worse than losing the snapshot; call `machine.restore(...)` yourself if
+  you want different behaviour. While the load is in flight, writes are suppressed and drained
+  as soon as it settles, so a save can never clobber a record before it has been read.
+- **Which hooks write.** `afterTransition` saves immediately (and absorbs a pending debounced
+  write); `onDataChange` saves debounced; `onComplete` clears (or saves when
+  `clearOnComplete: false`) and then goes inert until the next reset; `onReset` — which also
+  covers `cancel()` — drops the pending payload first, so a write scheduled just before a
+  cancel can never land with pre-cancel data. `onInit` never saves. The plugin never vetoes a
+  transition and never adds latency to navigation: no hook awaits the storage write.
+- **Debounce.** Trailing edge only: N rapid `updateField` calls inside the window produce one
+  write. The payload is built at flush time, not at schedule time, so the stored value is
+  always the newest state. Writes are coalesced into a single-slot queue with a serialized
+  tail — adapter calls never overlap and the last scheduled operation wins.
+- **Flush on destroy.** `destroy()` flushes **only if a write is pending** (never
+  speculatively) and returns the queue promise, so `await machine.destroy()` completes the
+  final write. React/Vue do not await unmount cleanup, so an asynchronous adapter is
+  best-effort there; a synchronous one always completes. `flushOnUnload: true` additionally
+  registers a `pagehide` listener — again, only synchronous adapters can realistically finish
+  during unload. For `visibilitychange` / `beforeunload`, wire them yourself to `flush()`.
+- **Versioning and TTL.** Bump `config.version` on a deploy that changes `TData`'s shape or
+  the step graph: old records are discarded (`"version-mismatch"`) and cleared. `maxAgeMs`
+  expires stale records (`"expired"`). The inner `WizardSerializedState.version` is the
+  library format version and is enforced by `machine.restore()`.
+- **Failures are swallowed.** A corrupt, stale or unknown-step record is reported via
+  `onRestoreError`, the record is cleared so it cannot re-fail on every mount, and the wizard
+  starts clean. `onInit` never throws and never returns a promise, so persistence failures
+  never reach the machine's `onError` or other plugins' `onError`. Supply `onRestoreError` /
+  `onSaveError`; without them the plugin logs at most one `console.warn` per category.
+- **Key collisions are yours to avoid.** The plugin cannot auto-namespace (the read-only
+  facade does not expose the definition id). Two wizards sharing a key destroy each other's
+  progress, so use a per-wizard key: ``localStorageAdapter(`wizard:${definition.id}`)``.
+- **Persisted data must be JSON-safe.** `machine.serialize()` uses `structuredClone`, but the
+  web-storage adapters use `JSON.stringify`: a `Date` round-trips as a string, `undefined`
+  values disappear and a cycle throws. Normalise in `beforeSave` (which is also the right
+  place to strip passwords and other PII before they reach `localStorage`).
+
+**React example:**
+
+```tsx
+import { useMemo } from "react";
+import {
+  createPersistencePlugin,
+  localStorageAdapter,
+} from "@gooonzick/wizard-core";
+
+function MyWizard() {
+  const plugins = useMemo(
+    () => [
+      createPersistencePlugin<MyData>({
+        adapter: localStorageAdapter<MyData>("wizard:signup"),
+        debounceMs: 300,
+        beforeSave: (state) => ({
+          ...state,
+          data: { ...state.data, password: "" }, // never persist secrets
+        }),
+        onRestoreError: (err) => console.warn("could not restore", err),
+      }),
+    ],
+    [],
+  );
+
+  const { state } = useWizard({ definition, initialData, plugins });
   // ...
 }
 ```

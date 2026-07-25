@@ -15,6 +15,9 @@ Switch approaches in the app UI:
 | **Reset & Cancel** | `src/wizard-example/reset-cancel-example.vue` | `reset` / `cancel` and lifecycle events |
 | **Persistence** | `src/wizard-example/state-persistence-example.vue` | `serialize` / `restore` with `localStorage` |
 | **Plugins** | `src/wizard-example/plugins-example.vue` | `createLoggingPlugin` + custom `afterTransition` / `onError` plugin |
+| **Analytics** | `src/wizard-example/analytics-example.vue` | `createAnalyticsPlugin` — step timings, backtracks, live `getReport()` |
+| **Persistence Plugin** | `src/wizard-example/persistence-plugin-example.vue` | `createPersistencePlugin` + `localStorageAdapter` — auto-restore on reload, debounced save, clear on reset/cancel |
+| **Data Change** | `src/wizard-example/data-change-example.vue` | `onDataChange` cascade + `updateField` no-op guard |
 
 Shared definition/helpers live under `src/wizard-example/` (`wizard-definition.ts`, validators, guards).
 

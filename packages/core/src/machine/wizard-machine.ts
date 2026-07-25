@@ -47,7 +47,7 @@ export interface WizardState<T> {
 /**
  * JSON-safe serialized wizard runtime state
  */
-export interface WizardSerializedState<T extends WizardData> {
+export interface WizardSerializedState<T> {
 	version: 1;
 	currentStepId: StepId;
 	data: T;
@@ -220,7 +220,13 @@ export class WizardMachine<T extends WizardData> {
 					WizardStepDefinition<T>
 				>;
 			},
+			get isBusy() {
+				return machineRef.isBusy;
+			},
 			getStepStatus: (stepId) => this.getStepStatus(stepId),
+			// WIZ-006: expose the EXISTING persistence methods to plugins. No new machine API.
+			serialize: () => this.serialize(),
+			restore: (state) => this.restore(state),
 		};
 		// Register constructor plugins in array order.
 		if (plugins) {
