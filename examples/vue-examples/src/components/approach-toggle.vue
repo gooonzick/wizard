@@ -9,6 +9,7 @@ type Approach =
 	| "history"
 	| "reset-cancel"
 	| "persistence"
+	| "persistence-plugin"
 	| "plugins"
 	| "analytics"
 	| "data-change";
@@ -64,6 +65,12 @@ defineEmits<
 			@click="$emit('update:modelValue', 'persistence')"
 		>
 			Persistence
+		</Button>
+		<Button
+			:variant="modelValue === 'persistence-plugin' ? 'default' : 'outline'"
+			@click="$emit('update:modelValue', 'persistence-plugin')"
+		>
+			Persistence Plugin
 		</Button>
 		<Button
 			:variant="modelValue === 'plugins' ? 'default' : 'outline'"

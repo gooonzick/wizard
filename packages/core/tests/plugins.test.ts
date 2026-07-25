@@ -1,7 +1,10 @@
 import { describe, expect, expectTypeOf, it, test, vi } from "vitest";
 import type { WizardError } from "../src/errors";
 import { WizardConfigurationError, WizardValidationError } from "../src/errors";
-import type { WizardEvents } from "../src/machine/wizard-machine";
+import type {
+	WizardEvents,
+	WizardSerializedState,
+} from "../src/machine/wizard-machine";
 import { WizardMachine } from "../src/machine/wizard-machine";
 import type {
 	DeepReadonly,
@@ -61,6 +64,28 @@ describe("plugin types", () => {
 		>();
 	});
 
+	test("WizardMachineReadonly gained OPTIONAL persistence members (WIZ-006)", () => {
+		expectTypeOf<WizardMachineReadonly<Data>>().toHaveProperty("isBusy");
+		expectTypeOf<WizardMachineReadonly<Data>>().toHaveProperty("serialize");
+		expectTypeOf<WizardMachineReadonly<Data>>().toHaveProperty("restore");
+		expectTypeOf<WizardMachineReadonly<Data>["isBusy"]>().toEqualTypeOf<
+			boolean | undefined
+		>();
+		expectTypeOf<WizardMachineReadonly<Data>["serialize"]>().toEqualTypeOf<
+			(() => WizardSerializedState<Data>) | undefined
+		>();
+		expectTypeOf<WizardMachineReadonly<Data>["restore"]>().toEqualTypeOf<
+			((state: WizardSerializedState<Data>) => void) | undefined
+		>();
+		// the pre-WIZ-006 three-member literal still satisfies the interface
+		const legacy: WizardMachineReadonly<Data> = {
+			snapshot: {} as never,
+			currentStep: {} as never,
+			getStepStatus: () => "active",
+		};
+		expect(legacy.serialize).toBeUndefined();
+	});
+
 	test("WizardPlugin has a required name and optional hooks", () => {
 		expectTypeOf<WizardPlugin<Data>["name"]>().toEqualTypeOf<string>();
 		const p: WizardPlugin<Data> = { name: "x" };
@@ -105,6 +130,36 @@ describe("WizardMachine plugin registration", () => {
 		expect(view.snapshot.currentStepId).toBe("step1");
 		expect(view.currentStep.id).toBe("step1");
 		expect(view.getStepStatus("step1")).toBe("active");
+	});
+
+	it("the real facade exposes serialize/restore/isBusy to plugins (WIZ-006)", async () => {
+		const probe: Record<string, string> = {};
+		const m = new WizardMachine<SimpleData>(
+			createSimpleLinearDefinition(),
+			{},
+			initial,
+			{},
+			[
+				{
+					name: "probe",
+					onInit: (view) => {
+						probe.serialize = typeof view.serialize;
+						probe.restore = typeof view.restore;
+						probe.isBusy = typeof view.isBusy;
+						probe.currentStepId =
+							view.serialize?.().currentStepId ?? "unavailable";
+					},
+				},
+			],
+		);
+		await flush();
+		expect(probe).toEqual({
+			serialize: "function",
+			restore: "function",
+			isBusy: "boolean",
+			currentStepId: "step1",
+		});
+		expect(m.isBusy).toBe(false);
 	});
 
 	it("use() is chainable and fires onInit immediately (fire-and-forget)", async () => {

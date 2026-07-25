@@ -220,6 +220,7 @@ actions.cancel(); // Awaits definition.onCancel + onCancel event, then resets
 // Persistence
 actions.serialize(); // JSON-safe runtime snapshot
 actions.restore(savedState); // Re-apply snapshot (throws WizardRestoreError if incompatible)
+// (Prefer `createPersistencePlugin` for automatic save/restore — see "Persisting Progress".)
 ```
 
 ## Reset & Cancel
@@ -360,7 +361,47 @@ export function SignupWizard() {
 
 ### Persisting Progress
 
-Use `actions.serialize()` to save the full runtime snapshot (current step, history, step statuses, validity) and `actions.restore()` to re-apply it on mount.
+The recommended path is the built-in persistence plugin — it restores on init, debounces
+auto-save, and clears the record on completion / reset. See the
+[Plugins guide](/guide/plugins#built-in-plugin-createpersistenceplugin) for the full contract.
+
+```tsx
+import { useMemo } from "react";
+import {
+  createPersistencePlugin,
+  localStorageAdapter,
+} from "@gooonzick/wizard-core";
+
+export function PersistentWizard() {
+  // Create the plugin ONCE: `plugins` is read a single time, at machine creation.
+  const plugins = useMemo(
+    () => [
+      createPersistencePlugin<SignupData>({
+        adapter: localStorageAdapter<SignupData>("wizard:signup"),
+        debounceMs: 300,
+        beforeSave: (state) => ({
+          ...state,
+          data: { ...state.data, password: "" }, // never persist secrets
+        }),
+      }),
+    ],
+    [],
+  );
+
+  // With the synchronous localStorage adapter the snapshot is applied inside
+  // `onInit`, i.e. before the first render — no restore flash, no extra effect.
+  const { state, actions, navigation } = useWizard({
+    definition,
+    initialData,
+    plugins,
+  });
+
+  return <WizardForm state={state} actions={actions} navigation={navigation} />;
+}
+```
+
+Keep `actions.serialize()` / `actions.restore()` for the manual case (a custom backend you
+drive yourself, or restoring on demand rather than on mount):
 
 ```tsx
 export function PersistentWizard() {
@@ -396,8 +437,11 @@ See `examples/react-examples` for working demos:
 
 - `src/wizard-example.tsx` — basic flow + `validateAll`
 - `src/provider-example.tsx` — `WizardProvider` + granular hooks
-- `src/state-persistence-example.tsx` — serialize / restore
+- `src/state-persistence-example.tsx` — manual serialize / restore
+- `src/persistence-plugin-example.tsx` — `createPersistencePlugin` + `localStorageAdapter`
 - `src/plugins-example.tsx` — logging + custom plugins
+- `src/analytics-example.tsx` — `createAnalyticsPlugin` + live `getReport()`
+- `src/data-change-example.tsx` — `onDataChange` cascades
 - `src/reset-cancel-example.tsx`, `src/history-example.tsx`
 
 ### Handling Errors

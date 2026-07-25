@@ -263,6 +263,7 @@ await actions.cancel(); // Awaits definition.onCancel + onCancel event, then res
 // Persistence
 actions.serialize(); // JSON-safe runtime snapshot
 actions.restore(savedState); // Re-apply snapshot (throws WizardRestoreError if incompatible)
+// (Prefer `createPersistencePlugin` for automatic save/restore — see "Persisting Progress".)
 ```
 
 ## Reset & Cancel
@@ -414,7 +415,36 @@ const { state, navigation, actions } = useWizard({
 
 ### Persisting Progress
 
-Use `actions.serialize()` to save the full runtime snapshot (current step, history, step statuses, validity) and `actions.restore()` to re-apply it on mount.
+The recommended path is the built-in persistence plugin. See the
+[Plugins guide](./plugins.md#built-in-plugin-createpersistenceplugin).
+
+```vue
+<script setup lang="ts">
+import {
+  createPersistencePlugin,
+  localStorageAdapter,
+} from "@gooonzick/wizard-core";
+import { useWizard } from "@gooonzick/wizard-vue";
+
+// Reference-stable: `plugins` is read once, at setup.
+const plugins = [
+  createPersistencePlugin<SignupData>({
+    adapter: localStorageAdapter<SignupData>("wizard:signup"),
+    debounceMs: 300,
+  }),
+];
+
+// With the synchronous localStorage adapter the snapshot is applied during
+// `setup()`, so the first render already shows the restored step.
+const { state, actions, navigation } = useWizard({
+  definition,
+  initialData,
+  plugins,
+});
+</script>
+```
+
+Keep `actions.serialize()` / `actions.restore()` for the manual case:
 
 ```vue
 <script setup lang="ts">
@@ -448,7 +478,8 @@ onMounted(() => {
 </template>
 ```
 
-See `examples/vue-examples/src/wizard-example/state-persistence-example.vue` for a working example.
+See `examples/vue-examples/src/wizard-example/persistence-plugin-example.vue` for the plugin
+demo and `.../state-persistence-example.vue` for the manual one.
 
 ### Handling Errors
 

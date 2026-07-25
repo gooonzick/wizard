@@ -5,6 +5,7 @@ import AnalyticsExample from "./wizard-example/analytics-example.vue";
 import DataChangeExample from "./wizard-example/data-change-example.vue";
 import FieldBindingExample from "./wizard-example/field-binding-example.vue";
 import HistoryExample from "./wizard-example/history-example.vue";
+import PersistencePluginExample from "./wizard-example/persistence-plugin-example.vue";
 import PluginsExample from "./wizard-example/plugins-example.vue";
 import ProviderExample from "./wizard-example/provider-example.vue";
 import ResetCancelExample from "./wizard-example/reset-cancel-example.vue";
@@ -18,6 +19,7 @@ type Approach =
 	| "history"
 	| "reset-cancel"
 	| "persistence"
+	| "persistence-plugin"
 	| "plugins"
 	| "analytics"
 	| "data-change";
@@ -29,6 +31,7 @@ const approaches: Approach[] = [
 	"history",
 	"reset-cancel",
 	"persistence",
+	"persistence-plugin",
 	"plugins",
 	"analytics",
 	"data-change",
@@ -66,6 +69,7 @@ watch(approach, (newVal) => {
 			<HistoryExample v-else-if="approach === 'history'" />
 			<ResetCancelExample v-else-if="approach === 'reset-cancel'" />
 			<StatePersistenceExample v-else-if="approach === 'persistence'" />
+			<PersistencePluginExample v-else-if="approach === 'persistence-plugin'" />
 			<PluginsExample v-else-if="approach === 'plugins'" />
 			<AnalyticsExample v-else-if="approach === 'analytics'" />
 			<DataChangeExample v-else-if="approach === 'data-change'" />

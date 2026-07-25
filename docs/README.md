@@ -15,7 +15,7 @@ Welcome to the WizardForm framework documentation. This directory mirrors the pu
 | [Getting Started](./getting-started.md) | Installation and quick start | First-time users |
 | [Core Concepts](./core-concepts.md) | How WizardForm works | Learning fundamentals |
 | [Defining Wizards](./defining-wizards.md) | Ways to build wizards | Building your first wizard |
-| [Plugins](./plugins.md) | Global lifecycle interception | Analytics, logging, veto |
+| [Plugins](./plugins.md) | Global lifecycle interception | Logging, analytics, persistence, veto |
 | [React Integration](./react-integration.md) | `useWizard()` in React | React developers |
 | [Vue Integration](./vue-integration.md) | Composables in Vue 3 | Vue developers |
 | [API Reference](./api-reference.md) | Type signatures by package | Detailed lookups |
@@ -51,8 +51,8 @@ Welcome to the WizardForm framework documentation. This directory mirrors the pu
 
 ## Examples
 
-- [examples/react-examples](../examples/react-examples) — registration, history, reset/cancel, persistence, **provider**
-- [examples/vue-examples](../examples/vue-examples) — useWizard, provider, field binding, history, reset/cancel, persistence
+- [examples/react-examples](../examples/react-examples) — registration, **provider**, history, reset/cancel, manual persistence, plugins, analytics, **persistence plugin**, data change
+- [examples/vue-examples](../examples/vue-examples) — useWizard, provider, field binding, history, reset/cancel, manual persistence, plugins, analytics, **persistence plugin**, data change
 
 ## Published docs site
 

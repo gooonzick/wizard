@@ -1,5 +1,8 @@
 import type { WizardError } from "../errors";
-import type { WizardState } from "../machine/wizard-machine";
+import type {
+	WizardSerializedState,
+	WizardState,
+} from "../machine/wizard-machine";
 import type { StepId } from "../types/base";
 import type { StepStatus, WizardStepDefinition } from "../types/step";
 
@@ -32,11 +35,24 @@ export interface ErrorContext<TData> {
 	data: DeepReadonly<TData>;
 }
 
-/** Read-only machine view passed to onInit so plugins can inspect, not mutate. */
+/**
+ * Read-only machine view passed to onInit so plugins can inspect, not mutate.
+ *
+ * WIZ-006: `serialize`, `restore` and `isBusy` are OPTIONAL so hand-rolled facades
+ * (tests, third-party plugin harnesses) written against the original 3-member shape keep
+ * compiling. The real WizardMachine facade always provides all three; a plugin that needs
+ * them MUST feature-detect and degrade gracefully.
+ */
 export interface WizardMachineReadonly<TData> {
 	readonly snapshot: DeepReadonly<WizardState<TData>>;
 	readonly currentStep: DeepReadonly<WizardStepDefinition<TData>>;
 	getStepStatus(stepId: StepId): StepStatus;
+	/** True while a navigation/submit is in flight (WizardMachine.isBusy). */
+	readonly isBusy?: boolean;
+	/** JSON-safe snapshot of the runtime state (WizardMachine.serialize). */
+	serialize?(): WizardSerializedState<TData>;
+	/** Re-applies a serialized snapshot in place; throws WizardRestoreError when invalid. */
+	restore?(state: WizardSerializedState<TData>): void;
 }
 
 /**

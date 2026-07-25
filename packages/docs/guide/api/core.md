@@ -558,6 +558,10 @@ if (savedState) {
 definition. It emits one `onStateChange` event and does not replay step
 lifecycle hooks.
 
+The manual round-trip above stays supported, but the **recommended path is
+`createPersistencePlugin`** (see below): it restores on init, debounces auto-save, clears on
+complete/reset and swallows corrupt snapshots instead of throwing at your call site.
+
 ---
 
 ## Builders
@@ -995,8 +999,19 @@ interface WizardMachineReadonly<TData> {
   readonly snapshot: DeepReadonly<WizardState<TData>>;
   readonly currentStep: DeepReadonly<WizardStepDefinition<TData>>;
   getStepStatus(stepId: StepId): StepStatus;
+  /** True while a navigation/submit is in flight (WizardMachine.isBusy). */
+  readonly isBusy?: boolean;
+  /** JSON-safe snapshot of the runtime state (WizardMachine.serialize). */
+  serialize?(): WizardSerializedState<TData>;
+  /** Re-applies a serialized snapshot in place; throws WizardRestoreError when invalid. */
+  restore?(state: WizardSerializedState<TData>): void;
 }
 ```
+
+`isBusy`, `serialize` and `restore` were added in WIZ-006 for `createPersistencePlugin`. They
+are **optional** so facades written against the original three-member shape keep compiling —
+the real `WizardMachine` facade always provides all three, but a plugin that needs them must
+feature-detect and degrade gracefully.
 
 ### `DeepReadonly<T>`
 
@@ -1080,3 +1095,139 @@ A step's timer closes on `afterTransition` (or in `onComplete` for the terminal 
 previously-visited step. `onDropOff` fires from `destroy()` only when the wizard never
 completed. Resetting the wizard restarts the analytics session in place and does not
 re-emit `onStepView`.
+
+### `createPersistencePlugin`
+
+Built-in state persistence (WIZ-006). Restores a stored snapshot in `onInit`, auto-saves
+(debounced on data changes, immediately after committed transitions) and clears the record on
+completion / reset. Never vetoes. `onInit` never throws and never returns a promise, so
+persistence failures never reach the machine's error channel.
+
+```ts
+import { createPersistencePlugin } from "@gooonzick/wizard-core";
+// or: import { createPersistencePlugin } from "@gooonzick/wizard-core/plugins";
+
+function createPersistencePlugin<TData>(
+  config: PersistencePluginConfig<TData>,
+): PersistencePlugin<TData>;
+
+interface PersistencePluginConfig<TData> {
+  /** REQUIRED storage backend. */
+  adapter: WizardPersistenceAdapter<TData>;
+  name?: string; // default: "persistence"
+  restoreOnInit?: boolean; // default: true
+  debounceMs?: number; // default: 300; 0 = next microtask
+  version?: number; // app-controlled schema version; default: 1
+  maxAgeMs?: number; // default: undefined (never expire)
+  saveOnTransition?: boolean; // default: true
+  saveOnDataChange?: boolean; // default: true
+  clearOnComplete?: boolean; // default: true
+  clearOnReset?: boolean; // default: true
+  flushOnUnload?: boolean; // default: false ("pagehide" listener)
+  /** Redact/transform before writing. Return null to skip this write. */
+  beforeSave?(state: WizardSerializedState<TData>): WizardSerializedState<TData> | null;
+  onRestored?(state: WizardSerializedState<TData>): void;
+  onRestoreSkipped?(reason: PersistenceSkipReason): void;
+  onRestoreError?(error: Error, raw: unknown): void;
+  onSaveError?(error: Error): void;
+}
+
+type PersistencePlugin<TData> = WizardPlugin<TData> & {
+  /** Settles once, on the first completed restore attempt. NEVER rejects. */
+  readonly ready: Promise<PersistenceRestoreOutcome<TData>>;
+  /** Cancels the debounce and drains any pending write. */
+  flush(): Promise<void>;
+  /** Cancels the debounce, drops any pending save and clears the stored record. */
+  clear(): Promise<void>;
+};
+
+type PersistenceRestoreOutcome<TData> =
+  | { status: "restored"; state: WizardSerializedState<TData> }
+  | { status: "skipped"; reason: PersistenceSkipReason }
+  | { status: "failed"; error: Error };
+
+type PersistenceSkipReason =
+  | "disabled"
+  | "unsupported"
+  | "empty"
+  | "version-mismatch"
+  | "expired"
+  | "completed"
+  | "stale"
+  | "destroyed";
+```
+
+With a synchronous adapter the snapshot is applied **inside** `onInit`, i.e. before
+`use()` / the constructor returns. With an asynchronous adapter there is no ordering
+guarantee: a late load is discarded (`"stale"` / `"destroyed"`) when the wizard has moved on,
+is busy, or the plugin was destroyed or superseded — `await plugin.ready` to observe the
+outcome. Corrupt, expired, version-mismatched and completed records are cleared rather than
+applied.
+
+### `WizardPersistenceAdapter`
+
+Async-first storage contract: every method may return a value **or** a promise.
+
+```ts
+interface WizardPersistenceAdapter<TData> {
+  load():
+    | PersistedWizardSnapshot<TData>
+    | null
+    | Promise<PersistedWizardSnapshot<TData> | null>;
+  save(snapshot: PersistedWizardSnapshot<TData>): void | Promise<void>;
+  clear(): void | Promise<void>;
+}
+
+/** JSON-safe envelope actually handed to / returned by an adapter. */
+interface PersistedWizardSnapshot<TData> {
+  envelope: 1; // library-owned envelope format
+  version: number; // PersistencePluginConfig.version
+  savedAt: number; // Date.now() at write time
+  state: WizardSerializedState<TData>;
+}
+```
+
+`load()` returns `null` when nothing is stored. A throw/rejection from any method is caught
+by the plugin and reported through `onRestoreError` / `onSaveError`; writes are never retried.
+The loaded value is treated as untrusted — the plugin validates the envelope and delegates
+deep validation to `machine.restore()`.
+
+### `localStorageAdapter` / `sessionStorageAdapter`
+
+Built-in web-storage adapters. Storage is resolved lazily inside every call (and guarded with
+try/catch), so the module is SSR-safe and has no import-time side effects. When storage is
+unavailable `load()` returns `null` and `save()` / `clear()` are silent no-ops.
+
+```ts
+import {
+  localStorageAdapter,
+  sessionStorageAdapter,
+} from "@gooonzick/wizard-core";
+
+function localStorageAdapter<TData>(
+  key: string,
+  options?: WebStorageAdapterOptions,
+): WizardPersistenceAdapter<TData>;
+
+function sessionStorageAdapter<TData>(
+  key: string,
+  options?: WebStorageAdapterOptions,
+): WizardPersistenceAdapter<TData>;
+
+interface WebStorageAdapterOptions {
+  /** Explicit storage; when omitted the matching global is resolved lazily. */
+  storage?: StorageLike;
+}
+
+/** Minimal structural subset of the Web Storage API (injectable for tests/SSR). */
+interface StorageLike {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+}
+```
+
+`load()` throws `WizardRestoreError` when the stored string is not valid JSON; `save()`
+propagates a `setItem` failure (e.g. quota) so the plugin can report it via `onSaveError`.
+Namespace the key per wizard — ``localStorageAdapter(`wizard:${definition.id}`)`` — because
+two wizards sharing a key destroy each other's progress. Persisted data must be JSON-safe.

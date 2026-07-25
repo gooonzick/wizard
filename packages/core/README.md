@@ -112,6 +112,10 @@ const snapshot = machine.serialize(); // JSON-safe runtime state
 machine.restore(snapshot);
 ```
 
+For automatic persistence (restore on init + debounced auto-save) use
+`createPersistencePlugin` instead of wiring `serialize` / `restore` by hand — see Plugins
+below.
+
 ### Plugins
 
 ```typescript
@@ -124,6 +128,22 @@ const plugins: WizardPlugin<MyData>[] = [
 
 const machine = new WizardMachine(definition, {}, initialData, events, plugins);
 // or: machine.use(createLoggingPlugin());
+```
+
+Built-in persistence (restore on init, debounced auto-save, clear on complete/reset):
+
+```typescript
+import {
+  createPersistencePlugin,
+  localStorageAdapter,
+} from "@gooonzick/wizard-core";
+
+machine.use(
+  createPersistencePlugin<MyData>({
+    adapter: localStorageAdapter(`wizard:${definition.id}`),
+    debounceMs: 300, // trailing-edge debounce for data changes
+  }),
+);
 ```
 
 See the [Plugins guide](../../docs/plugins.md) for veto semantics and lifecycle hooks.

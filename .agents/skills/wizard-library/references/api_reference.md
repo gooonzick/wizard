@@ -19,10 +19,12 @@ Use public exports from `@gooonzick/wizard-core`:
   and the `WizardEvents.onDataChange(prev, next, changedFields)` event.
 - Transitions: `resolveTransition`, `andGuards`, `orGuards`, `notGuard`, `evaluateGuard`
 - Validators: `requiredFields`, `combineValidators`, `createValidator`, `createStandardSchemaValidator`
-- Built-in plugins: `createLoggingPlugin` (reference logger) and
+- Built-in plugins: `createLoggingPlugin` (reference logger),
   `createAnalyticsPlugin` (auto step-timing / backtrack / drop-off collector with a
-  synchronous `getReport(): AnalyticsReport`). Both are re-exported from the main
-  barrel and from the `@gooonzick/wizard-core/plugins` subpath.
+  synchronous `getReport(): AnalyticsReport`) and `createPersistencePlugin`
+  (restore-on-init + debounced auto-save, with the built-in `localStorageAdapter` /
+  `sessionStorageAdapter`). All are re-exported from the main barrel and from the
+  `@gooonzick/wizard-core/plugins` subpath.
 - Types: `WizardData`, `WizardDefinition`, `WizardStepDefinition`, `StepTransition`, `WizardContext`
 
 Prefer building on exported APIs over importing deep internal modules.
@@ -194,6 +196,44 @@ Use context for external dependencies instead of hard-coding globals in guards/r
   report. `onReset` restarts the session in place and does NOT re-emit `onStepView`.
 - Register like any plugin: `machine.use(analytics)` or the `plugins` option in
   `useWizard` / `WizardProvider`.
+
+### Built-in persistence plugin (WIZ-006)
+
+- `createPersistencePlugin<TData>(config)` returns
+  `PersistencePlugin<TData> = WizardPlugin<TData> & { ready: Promise<PersistenceRestoreOutcome<TData>>; flush(): Promise<void>; clear(): Promise<void> }`.
+  Persistence ships as a PLUGIN: there is no `persistence` machine-config key and no
+  new `WizardMachine` method.
+- Adapter contract (async-first — every method may return a value OR a promise):
+  `WizardPersistenceAdapter<TData> { load(); save(snapshot); clear(); }`, exchanging a
+  `PersistedWizardSnapshot<TData>` envelope
+  (`{ envelope: 1, version, savedAt, state: WizardSerializedState<TData> }`).
+  Built-ins: `localStorageAdapter(key, { storage? })` and
+  `sessionStorageAdapter(key, { storage? })` — storage globals are resolved lazily
+  inside each call, so the module is SSR-safe and import-time side-effect free;
+  unavailable storage ⇒ `load()` null, `save()`/`clear()` no-ops.
+- Config defaults: `name: "persistence"`, `restoreOnInit: true`, `debounceMs: 300`
+  (0 = next microtask), `version: 1`, `maxAgeMs: undefined`, `saveOnTransition: true`,
+  `saveOnDataChange: true`, `clearOnComplete: true`, `clearOnReset: true`,
+  `flushOnUnload: false`. Hooks: `beforeSave` (return `null` to skip a write),
+  `onRestored`, `onRestoreSkipped`, `onRestoreError`, `onSaveError`.
+- Restore window: a SYNC adapter applies the snapshot inside `onInit` (before `use()` /
+  the constructor returns). An ASYNC load is DISCARDED — never force-applied — when the
+  plugin is destroyed/superseded, when the wizard moved on (transition, data change,
+  complete, reset), when `machine.isBusy`, or when the snapshot `isCompleted` and
+  `clearOnComplete` is on. Writes are suppressed while a load is in flight and drained
+  once it settles. Corrupt/expired/version-mismatched records are cleared.
+  `onInit` NEVER throws and never returns a promise, so persistence failures never reach
+  the machine's `onError`; they surface via `onRestoreError` / `onSaveError` (or one
+  `console.warn` per category). `plugin.ready` settles once and never rejects.
+- Writes: `afterTransition` saves immediately (absorbing a pending debounced write),
+  `onDataChange` saves debounced, `onComplete` clears then goes inert until the next
+  reset, `onReset`/`cancel()` DROPS the pending payload before clearing. `destroy()`
+  flushes only when a write is pending. Payloads are built at flush time, in a
+  single-slot coalescing queue with a serialized tail (last op wins, chain never rejects).
+- `WizardMachineReadonly<TData>` gained OPTIONAL `isBusy`, `serialize()` and
+  `restore(state)` members (WIZ-006) so plugins can drive persistence; hand-rolled
+  three-member facades still compile, and `WizardSerializedState<T>` lost its
+  `T extends WizardData` constraint.
 
 ## Installation Quick Reference
 

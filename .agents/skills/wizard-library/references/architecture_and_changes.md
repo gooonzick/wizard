@@ -60,6 +60,28 @@ When touching data-mutation events specifically (WIZ-010 `onDataChange` /
 2. Validation-focused tests in the active project
 3. Definitions/examples that rely on validator shape
 
+### Add/modify plugin-driven persistence (WIZ-006)
+
+1. `packages/core/src/plugins/persistence.ts` (plugin) and
+   `packages/core/src/plugins/storage-adapters.ts` (built-in web-storage adapters)
+2. Both barrels: `src/index.ts` and `src/plugins/index.ts`
+3. `WizardMachineReadonly` in `src/plugins/types.ts` — `isBusy` / `serialize` / `restore`
+   are OPTIONAL on purpose; a plugin must feature-detect and degrade, never assume
+4. `tests/persistence-plugin.test.ts`, `tests/persistence-integration.test.ts`,
+   `tests/storage-adapters.test.ts`, `tests/plugins-barrel.test.ts`
+5. Docs mirror pair `docs/plugins.md` + `packages/docs/guide/plugins.md`, and
+   `docs/api/core.md` + `packages/docs/guide/api/core.md`
+
+Invariants:
+- `onInit` must never throw and never return a promise — persistence failures must never
+  reach the machine's `onError` or another plugin's `onError`.
+- A late ASYNC restore is DISCARDED (`"stale"` / `"destroyed"`), never force-applied over
+  live user input.
+- Writes are suppressed while a load is in flight and drained once it settles, so a save
+  can never clobber a record before it has been read.
+- The write queue is single-slot + serialized-tail: adapter calls never overlap, the last
+  scheduled op wins, and the chain never rejects.
+
 ## Compatibility Checklist
 
 Before finishing a change:
@@ -67,7 +89,11 @@ Before finishing a change:
 - Confirm public API exports remain coherent for consumers.
 - Confirm React and Vue adapters still compile and expose stable slices.
 - Confirm changes do not require consumers to import internal paths.
-- Confirm type constraints remain `T extends WizardData` patterns.
+- Confirm type constraints remain `T extends WizardData` for machine/definition/adapter
+  generics. Deliberate exception (WIZ-006): `WizardSerializedState<T>` is intentionally
+  UNCONSTRAINED so plugin-side generics (`WizardPersistenceAdapter<TData>`,
+  `PersistedWizardSnapshot<TData>`) compose without re-declaring the bound. Do not
+  re-add the constraint.
 
 ## Testing Checklist
 
@@ -100,3 +126,11 @@ Then run project quality gates:
 - Reacting to `onDataChange` by writing a field to a freshly-allocated
   object/array every time — it never satisfies the `Object.is` no-op guard and
   loops. React to `changedFields` and set converging (usually primitive) values.
+- Calling `setState` (React) from a persistence `onRestored` / `onRestoreSkipped` callback
+  or from `adapter.load()`. With a synchronous adapter those run inside the
+  `WizardMachine` constructor, which `useWizard` invokes DURING RENDER. Use
+  `plugin.ready.then(...)` from an effect instead. `save()` / `clear()` always run in a
+  microtask or timer and are safe.
+- Assuming `plugin.ready` re-arms per mount. It settles exactly once; under React
+  StrictMode that is the first (discarded) machine's outcome. Use the `onRestored` /
+  `onRestoreSkipped` callbacks when you need a per-init signal.

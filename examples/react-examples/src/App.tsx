@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AnalyticsExample } from "./analytics-example";
 import { DataChangeExample } from "./data-change-example";
 import { HistoryExample } from "./history-example";
+import { PersistencePluginExample } from "./persistence-plugin-example";
 import { PluginsExample } from "./plugins-example";
 import { ProviderExample } from "./provider-example";
 import { ResetCancelExample } from "./reset-cancel-example";
@@ -14,23 +15,49 @@ type View =
 	| "history"
 	| "reset-cancel"
 	| "persistence"
+	| "persistence-plugin"
 	| "plugins"
 	| "analytics"
 	| "data-change";
 
-export function App() {
-	const [view, setView] = useState<View>("wizard");
+const tabs: Array<{ id: View; label: string }> = [
+	{ id: "wizard", label: "Registration Wizard" },
+	{ id: "provider", label: "Provider + Hooks" },
+	{ id: "history", label: "Navigation History" },
+	{ id: "reset-cancel", label: "Reset & Cancel" },
+	{ id: "persistence", label: "State Persistence" },
+	{ id: "persistence-plugin", label: "Persistence Plugin" },
+	{ id: "plugins", label: "Plugins" },
+	{ id: "analytics", label: "Analytics" },
+	{ id: "data-change", label: "Data Change" },
+];
 
-	const tabs: Array<{ id: View; label: string }> = [
-		{ id: "wizard", label: "Registration Wizard" },
-		{ id: "provider", label: "Provider + Hooks" },
-		{ id: "history", label: "Navigation History" },
-		{ id: "reset-cancel", label: "Reset & Cancel" },
-		{ id: "persistence", label: "State Persistence" },
-		{ id: "plugins", label: "Plugins" },
-		{ id: "analytics", label: "Analytics" },
-		{ id: "data-change", label: "Data Change" },
-	];
+const VIEWS: View[] = tabs.map((tab) => tab.id);
+
+// The selected tab survives a reload so the persistence demo can show a real
+// `window.location.reload()` — mirrors the Vue app's `wizard-approach` key.
+const TAB_STORAGE_KEY = "wizard-react-tab";
+
+const readSavedView = (): View => {
+	try {
+		const saved = localStorage.getItem(TAB_STORAGE_KEY);
+		return saved && VIEWS.includes(saved as View) ? (saved as View) : "wizard";
+	} catch {
+		return "wizard"; // private mode / storage disabled
+	}
+};
+
+export function App() {
+	// Lazy initializer: pass the function, do not call it.
+	const [view, setView] = useState<View>(readSavedView);
+
+	useEffect(() => {
+		try {
+			localStorage.setItem(TAB_STORAGE_KEY, view);
+		} catch {
+			/* ignore */
+		}
+	}, [view]);
 
 	return (
 		<div className="min-h-screen bg-gray-50">
@@ -55,6 +82,7 @@ export function App() {
 			{view === "history" && <HistoryExample />}
 			{view === "reset-cancel" && <ResetCancelExample />}
 			{view === "persistence" && <StatePersistenceExample />}
+			{view === "persistence-plugin" && <PersistencePluginExample />}
 			{view === "plugins" && <PluginsExample />}
 			{view === "analytics" && <AnalyticsExample />}
 			{view === "data-change" && <DataChangeExample />}
