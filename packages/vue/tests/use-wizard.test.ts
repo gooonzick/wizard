@@ -1,4 +1,5 @@
-import { createLinearWizard } from "@gooonzick/wizard-core";
+import type { WizardSerializedState } from "@gooonzick/wizard-core";
+import { createLinearWizard, WizardRestoreError } from "@gooonzick/wizard-core";
 import { mount } from "@vue/test-utils";
 import { describe, expect, it, vi } from "vitest";
 import { defineComponent, nextTick } from "vue";
@@ -538,5 +539,30 @@ describe("useWizard", () => {
 
 		wizard.actions.reset();
 		expect(onReset).toHaveBeenCalled();
+	});
+
+	it("restore() with a malformed snapshot calls onError instead of throwing", () => {
+		const definition = createLinearWizard<{ name: string }>({
+			id: "restore-error-test",
+			steps: [{ id: "step1", title: "Step 1" }],
+		});
+
+		const onError = vi.fn();
+		const { wizard } = mountWizard({
+			definition,
+			initialData: { name: "" },
+			onError,
+		});
+
+		expect(() =>
+			wizard.actions.restore({
+				version: -1,
+			} as unknown as WizardSerializedState<{ name: string }>),
+		).not.toThrow();
+
+		expect(onError).toHaveBeenCalledTimes(1);
+		expect(onError.mock.calls[0][0]).toBeInstanceOf(WizardRestoreError);
+		// The failed restore must leave the wizard untouched.
+		expect(wizard.state.currentStepId.value).toBe("step1");
 	});
 });

@@ -310,12 +310,23 @@ export function useWizard<T extends WizardData>(
 	// routing through `manager.runReset`/`runCancel`/`runRestore`. The shared
 	// `WizardStateManager.getLoadingSnapshot()` therefore reflects React's binding
 	// but NOT Vue's. In Vue, read loading via the composable's `loading` slice, not
-	// the manager.
+	// the manager. reset()/restore() additionally catch a synchronous machine throw
+	// (e.g. WizardRestoreError from a malformed snapshot) and forward it to
+	// `callbacks.onError` instead of letting it escape uncaught — cancel() does not
+	// need this because WizardMachine.cancel() already routes handler errors through
+	// its internal handleError before rejecting.
 	const reset = (data?: T) => {
 		loadingState.isValidating = false;
 		loadingState.isSubmitting = false;
 		loadingState.isNavigating = false;
-		machine.value.reset(data);
+		try {
+			machine.value.reset(data);
+		} catch (error) {
+			callbacks.onError?.(
+				error instanceof Error ? error : new Error(String(error)),
+			);
+			return;
+		}
 		// onStateChange (sync + async follow-up) drives state.value; refresh nav
 		// to mirror the synchronous reset snapshot immediately.
 		state.value = machine.value.snapshot;
@@ -344,7 +355,14 @@ export function useWizard<T extends WizardData>(
 		loadingState.isValidating = false;
 		loadingState.isSubmitting = false;
 		loadingState.isNavigating = false;
-		machine.value.restore(serializedState);
+		try {
+			machine.value.restore(serializedState);
+		} catch (error) {
+			callbacks.onError?.(
+				error instanceof Error ? error : new Error(String(error)),
+			);
+			return;
+		}
 		// onStateChange drives state.value; refresh nav from the restored snapshot.
 		state.value = machine.value.snapshot;
 		updateNavigationState();

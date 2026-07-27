@@ -28,10 +28,27 @@ interface WizardProviderContextValue<T extends WizardData> {
 	initialData: T;
 }
 
+/**
+ * The shape actually stored in the context. `reportError` forwards an error to this
+ * provider's `onError` callback and is used by the granular `useWizardActions` hook's
+ * `reset`/`restore` to report a synchronous machine throw (e.g. `WizardRestoreError`,
+ * raised before `WizardMachine`'s internal `handleError` routing runs) that would
+ * otherwise become an unhandled promise rejection via `manager.runReset`/`runRestore`.
+ *
+ * Deliberately kept OFF `WizardProviderContextValue` — that is the return type of the
+ * exported `useWizardProviderContext()`, so widening it would widen the package's public
+ * type surface. `useWizardInternalContext` is not re-exported from `src/index.ts` and the
+ * package's `exports` map has no deep-import entry, so this stays internal.
+ */
+interface WizardProviderInternalContextValue<T extends WizardData>
+	extends WizardProviderContextValue<T> {
+	reportError: (error: unknown) => void;
+}
+
 // biome-ignore lint/suspicious/noExplicitAny: skip
-const WizardContext = createContext<WizardProviderContextValue<any> | null>(
-	null,
-);
+type AnyWizardProviderContext = WizardProviderInternalContextValue<any>;
+
+const WizardContext = createContext<AnyWizardProviderContext | null>(null);
 
 export interface WizardProviderProps<T extends WizardData> {
 	/**
@@ -123,6 +140,15 @@ export function WizardProvider<T extends WizardData>({
 
 	// Track previous state for change detection
 	const previousStateRef = useRef<WizardState<T> | null>(null);
+
+	// Reads `callbacksRef.current` at call time (never a snapshot), so it cannot go
+	// stale despite the empty dependency array — same contract as the `events.onError`
+	// closure below.
+	const reportError = useCallback((error: unknown) => {
+		callbacksRef.current.onError?.(
+			error instanceof Error ? error : new Error(String(error)),
+		);
+	}, []);
 
 	// Holds the live manager. The events closure (created once per manager) reads
 	// `managerRef.current` so it can always reach the current manager without
@@ -227,8 +253,9 @@ export function WizardProvider<T extends WizardData>({
 		() => ({
 			manager,
 			initialData: initialDataRef.current,
+			reportError,
 		}),
-		[manager],
+		[manager, reportError],
 	);
 
 	return (
@@ -245,6 +272,18 @@ export function WizardProvider<T extends WizardData>({
 export function useWizardProviderContext<
 	T extends WizardData,
 >(): WizardProviderContextValue<T> {
+	return useWizardInternalContext<T>();
+}
+
+/**
+ * Same context, widened with the provider-owned `reportError`. Package-internal: it is
+ * NOT re-exported from `src/index.ts`, so the public surface stays
+ * `useWizardProviderContext()`'s narrower `WizardProviderContextValue`.
+ * @throws {Error} if used outside of WizardProvider
+ */
+export function useWizardInternalContext<
+	T extends WizardData,
+>(): WizardProviderInternalContextValue<T> {
 	const context = useContext(WizardContext);
 	if (!context) {
 		throw new Error(

@@ -7,7 +7,10 @@ import { useWizard } from "../src/use-wizard";
 
 type Data = { name: string; email: string };
 
-function mountWizard(onDataChange: (...args: unknown[]) => void) {
+function mountWizard(
+	onDataChange: (...args: unknown[]) => void,
+	onStateChange?: (...args: unknown[]) => void,
+) {
 	let wizardRef!: UseWizardReturn<Data>;
 	const definition = createLinearWizard<Data>({
 		id: "data-change-wizard",
@@ -19,6 +22,7 @@ function mountWizard(onDataChange: (...args: unknown[]) => void) {
 				definition,
 				initialData: { name: "a", email: "a@x.io" },
 				onDataChange,
+				onStateChange,
 			});
 			wizardRef = wizard;
 			return { wizard };
@@ -51,5 +55,18 @@ describe("useWizard onDataChange option (WIZ-010)", () => {
 
 		expect(onDataChange).toHaveBeenCalledTimes(1);
 		expect(onDataChange.mock.calls[0][2]).toEqual(["email"]);
+	});
+
+	it("updateField with the current value fires nothing (not even onStateChange)", () => {
+		const onDataChange = vi.fn();
+		const onStateChange = vi.fn();
+		const wizard = mountWizard(onDataChange, onStateChange);
+		// Drop the mount-time emit(s) from initializeFirstStep.
+		onStateChange.mockClear();
+
+		wizard.actions.updateField("name", "a");
+
+		expect(onDataChange).not.toHaveBeenCalled();
+		expect(onStateChange).not.toHaveBeenCalled();
 	});
 });
