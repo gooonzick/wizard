@@ -787,7 +787,7 @@ WIZ-010 should also add `onDataChange` to the `WizardPlugin` interface so plugin
 ##### Shipped vs. specced deltas
 
 - The config interface is `WizardEvents<T>` (this spec called it `WizardCallbacks`); its `onDataChange` params are plain `T`, matching the other machine events.
-- `updateField(field, value)` was added to the **core** machine (previously framework-only sugar over `updateData`); the React/Vue `updateField` hooks now delegate to it, so `changedFields = [field]` is authoritative.
+- `updateField(field, value)` was added to the **core** machine (previously framework-only sugar over `updateData`); the React/Vue `updateField` hooks now delegate to it, so `changedFields = [field]` is authoritative. (Correction: React's *granular* `useWizardActions().updateField` was missed here and kept routing through `updateData` until the WIZ-014 follow-up fix — see `.changeset/fix-react-vue-binding-bugs.md`.)
 - `setData` also fires `onDataChange` (shallow diff of top-level keys) — beyond the two methods named in the original spec — so plugins/watchers react to every data mutation.
 - A no-op `updateField` (new value is `Object.is`-equal to the current one) now fires **nothing** — no `onStateChange`, no `onDataChange`, no watchers/plugin hook. Previously the framework `updateData` sugar always created a new object and fired `onStateChange`.
 - The **plugin** `onDataChange` receives `DeepReadonly<TData>` data params (consistent with WIZ-007), and a new `"data"` value was added to `ErrorContext.phase` so isolated subscriber throws are attributed correctly via `onError`.
@@ -1160,13 +1160,17 @@ Svelte 4 users write `on:click={wizard.goNext}` instead of `onclick=`.
   not Vue's local-mirror divergence — so `wizard.loading` is accurate for reset/cancel/restore.
 - **`updateField` calls `machine.updateField` directly** so the `Object.is` no-op guard and
   the authoritative `changedFields = [field]` (WIZ-010) survive. It never routes through
-  `updateData` (which is what `packages/react/src/use-wizard-granular.tsx` does — a
-  pre-existing bug that was deliberately not copied and is out of scope here).
+  `updateData`. React's `use-wizard-granular.tsx` used to route through `updateData` instead
+  (a pre-existing bug, so a same-value `updateField` still fired `onStateChange`); fixed in
+  the WIZ-014 follow-up (`.changeset/fix-react-vue-binding-bugs.md`), so all three bindings
+  now agree.
 - **`reset`/`restore` return `void`** (React parity) but their rejection path is
   **terminated**: `void manager.runReset(...).catch(reportError)` forwards a
-  `WizardRestoreError` from a malformed snapshot to the caller's `onError`. React's
-  equivalent leaves that rejection unhandled; the Svelte binding does not reproduce that
-  latent bug, so a bad snapshot surfaces on `onError` instead of as an unhandled rejection.
+  `WizardRestoreError` from a malformed snapshot to the caller's `onError`. React's and
+  Vue's equivalents used to leave that failure path unreported (an unhandled rejection in
+  React — `void manager.runReset(...)` with no `.catch`; an uncaught synchronous throw out
+  of the composable in Vue); fixed in the same WIZ-014 follow-up, so all three bindings now
+  surface a bad snapshot via `onError`.
 - **Named exports only; no `default` export** (React's convention, not Vue's
   `useWizard as default`).
 - **Peer is `^4.0.0 || ^5.0.0`** for the store entry; the `/runes` subpath needs Svelte 5.

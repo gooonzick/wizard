@@ -1,4 +1,6 @@
-import { createLinearWizard } from "@gooonzick/wizard-core";
+import type { WizardSerializedState } from "@gooonzick/wizard-core";
+import { createLinearWizard, WizardRestoreError } from "@gooonzick/wizard-core";
+import type { WizardStateManager } from "@gooonzick/wizard-state";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type React from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -9,7 +11,10 @@ import {
 	useWizardNavigation,
 	useWizardValidation,
 } from "../src/use-wizard-granular";
-import { WizardProvider } from "../src/wizard-provider";
+import {
+	useWizardProviderContext,
+	WizardProvider,
+} from "../src/wizard-provider";
 
 describe("Granular hooks", () => {
 	const definition = createLinearWizard<{ name: string; email: string }>({
@@ -186,6 +191,153 @@ describe("Granular hooks", () => {
 			);
 
 			expect(typeof result.current.updateField).toBe("function");
+		});
+
+		it("updateField reports changedFields=[field], not a shallow diff", async () => {
+			const onDataChange = vi.fn();
+			const wrapperWithOnDataChange = ({
+				children,
+			}: {
+				children: React.ReactNode;
+			}) => (
+				<WizardProvider
+					definition={definition}
+					initialData={initialData}
+					onDataChange={onDataChange}
+				>
+					{children}
+				</WizardProvider>
+			);
+			const { result } = renderHook(
+				() => useWizardActions<{ name: string; email: string }>(),
+				{ wrapper: wrapperWithOnDataChange },
+			);
+
+			act(() => {
+				result.current.updateField("name", "John");
+			});
+
+			await waitFor(() => {
+				expect(onDataChange).toHaveBeenCalledTimes(1);
+			});
+			expect(onDataChange.mock.calls[0][2]).toEqual(["name"]);
+		});
+
+		it("updateField with the current value emits nothing", async () => {
+			const onDataChange = vi.fn();
+			const onStateChange = vi.fn();
+			const wrapperWithCallbacks = ({
+				children,
+			}: {
+				children: React.ReactNode;
+			}) => (
+				<WizardProvider
+					definition={definition}
+					initialData={initialData}
+					onDataChange={onDataChange}
+					onStateChange={onStateChange}
+				>
+					{children}
+				</WizardProvider>
+			);
+			const { result } = renderHook(
+				() => useWizardActions<{ name: string; email: string }>(),
+				{ wrapper: wrapperWithCallbacks },
+			);
+			// Drop the mount-time emit(s) from initializeFirstStep.
+			await waitFor(() => {
+				expect(onStateChange).toHaveBeenCalled();
+			});
+			onStateChange.mockClear();
+
+			act(() => {
+				result.current.updateField("name", initialData.name);
+			});
+
+			expect(onDataChange).not.toHaveBeenCalled();
+			expect(onStateChange).not.toHaveBeenCalled();
+		});
+
+		it("restore() with a malformed snapshot calls onError instead of rejecting silently", async () => {
+			const onError = vi.fn();
+			const wrapperWithOnError = ({
+				children,
+			}: {
+				children: React.ReactNode;
+			}) => (
+				<WizardProvider
+					definition={definition}
+					initialData={initialData}
+					onError={onError}
+				>
+					{children}
+				</WizardProvider>
+			);
+			const { result } = renderHook(
+				() => useWizardActions<{ name: string; email: string }>(),
+				{ wrapper: wrapperWithOnError },
+			);
+
+			act(() => {
+				result.current.restore({
+					version: -1,
+				} as unknown as WizardSerializedState<{
+					name: string;
+					email: string;
+				}>);
+			});
+
+			await waitFor(() => {
+				expect(onError).toHaveBeenCalledTimes(1);
+			});
+			expect(onError.mock.calls[0][0]).toBeInstanceOf(WizardRestoreError);
+		});
+
+		it("reset() forwards a manager rejection to onError instead of leaving it unhandled", async () => {
+			const onError = vi.fn();
+			let capturedManager: WizardStateManager<{
+				name: string;
+				email: string;
+			}> | null = null;
+			const wrapperWithOnError = ({
+				children,
+			}: {
+				children: React.ReactNode;
+			}) => (
+				<WizardProvider
+					definition={definition}
+					initialData={initialData}
+					onError={onError}
+				>
+					{children}
+				</WizardProvider>
+			);
+			const { result } = renderHook(
+				() => {
+					const ctx = useWizardProviderContext<{
+						name: string;
+						email: string;
+					}>();
+					capturedManager = ctx.manager;
+					return useWizardActions<{ name: string; email: string }>();
+				},
+				{ wrapper: wrapperWithOnError },
+			);
+			const manager = capturedManager as unknown as WizardStateManager<{
+				name: string;
+				email: string;
+			}>;
+			const boom = new Error("reset exploded");
+			vi.spyOn(manager, "runReset").mockRejectedValue(boom);
+
+			act(() => {
+				result.current.reset();
+			});
+
+			await waitFor(() => {
+				expect(onError).toHaveBeenCalledTimes(1);
+			});
+			expect(onError.mock.calls[0][0]).toBe(boom);
 		});
 	});
 

@@ -13,7 +13,10 @@ import type {
 	UseWizardState,
 	UseWizardValidation,
 } from "./use-wizard";
-import { useWizardProviderContext } from "./wizard-provider";
+import {
+	useWizardInternalContext,
+	useWizardProviderContext,
+} from "./wizard-provider";
 
 /**
  * Hook for wizard data state
@@ -234,7 +237,7 @@ export function useWizardLoading(): UseWizardLoading {
  * ```
  */
 export function useWizardActions<T extends WizardData>(): UseWizardActions<T> {
-	const { manager, initialData } = useWizardProviderContext<T>();
+	const { manager, initialData, reportError } = useWizardInternalContext<T>();
 
 	const updateData = useCallback(
 		(updater: (data: T) => T) => {
@@ -250,14 +253,12 @@ export function useWizardActions<T extends WizardData>(): UseWizardActions<T> {
 		[manager],
 	);
 
+	// Direct call — preserves the Object.is no-op guard and changedFields=[field].
 	const updateField = useCallback(
 		<K extends keyof T>(field: K, value: T[K]) => {
-			updateData((data: T) => ({
-				...data,
-				[field]: value,
-			}));
+			manager.getMachine().updateField(field, value);
 		},
-		[updateData],
+		[manager],
 	);
 
 	const validate = useCallback(async () => {
@@ -294,11 +295,16 @@ export function useWizardActions<T extends WizardData>(): UseWizardActions<T> {
 		}
 	}, [manager]);
 
+	// `reset`/`restore` are fire-and-forget (`void`), but the machine's synchronous
+	// reset()/restore() can throw — a malformed snapshot raises WizardRestoreError,
+	// which the machine does NOT route through handleError. Terminating the chain here
+	// keeps a bad snapshot from becoming an unhandled rejection and surfaces it on the
+	// provider's `onError` instead.
 	const reset = useCallback(
 		(data?: T) => {
-			void manager.runReset(data ?? initialData);
+			void manager.runReset(data ?? initialData).catch(reportError);
 		},
-		[manager, initialData],
+		[manager, initialData, reportError],
 	);
 
 	const cancel = useCallback(async () => {
@@ -311,9 +317,9 @@ export function useWizardActions<T extends WizardData>(): UseWizardActions<T> {
 
 	const restore = useCallback(
 		(serializedState: WizardSerializedState<T>) => {
-			void manager.runRestore(serializedState);
+			void manager.runRestore(serializedState).catch(reportError);
 		},
-		[manager],
+		[manager, reportError],
 	);
 
 	return useMemo(

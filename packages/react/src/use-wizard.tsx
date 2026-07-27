@@ -474,11 +474,23 @@ export function useWizard<T extends WizardData>(
 		[goTo],
 	);
 
+	// `reset`/`restore` are fire-and-forget (`void`), but the machine's synchronous
+	// reset()/restore() can throw — a malformed snapshot raises WizardRestoreError,
+	// which the machine does NOT route through handleError. Terminating the chain here
+	// keeps a bad snapshot from becoming an unhandled rejection and surfaces it on
+	// `onError` instead. Reads `callbacksRef.current` at call time, so the empty
+	// dependency array cannot go stale.
+	const reportError = useCallback((error: unknown) => {
+		callbacksRef.current.onError?.(
+			error instanceof Error ? error : new Error(String(error)),
+		);
+	}, []);
+
 	const reset = useCallback(
 		(data?: T) => {
-			void manager.runReset(data ?? initialDataRef.current);
+			void manager.runReset(data ?? initialDataRef.current).catch(reportError);
 		},
-		[manager],
+		[manager, reportError],
 	);
 
 	const cancel = useCallback(async () => {
@@ -491,9 +503,9 @@ export function useWizard<T extends WizardData>(
 
 	const restore = useCallback(
 		(serializedState: WizardSerializedState<T>) => {
-			void manager.runRestore(serializedState);
+			void manager.runRestore(serializedState).catch(reportError);
 		},
-		[manager],
+		[manager, reportError],
 	);
 
 	// Build organized return value

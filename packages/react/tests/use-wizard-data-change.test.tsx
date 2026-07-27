@@ -48,4 +48,27 @@ describe("useWizard onDataChange option (WIZ-010)", () => {
 		expect(onDataChange).toHaveBeenCalledTimes(1);
 		expect(onDataChange.mock.calls[0][2]).toEqual(["email"]);
 	});
+
+	it("updateField with the current value fires nothing (not even onStateChange)", async () => {
+		const onDataChange = vi.fn();
+		const onStateChange = vi.fn();
+		const { result } = renderHook(() =>
+			useWizard({
+				definition: makeDefinition(),
+				initialData: { name: "a", email: "a@x.io" },
+				onDataChange,
+				onStateChange,
+			}),
+		);
+		// Drop the mount-time emit(s) from initializeFirstStep.
+		await act(async () => {});
+		onStateChange.mockClear();
+
+		await act(async () => {
+			result.current.actions.updateField("name", "a");
+		});
+
+		expect(onDataChange).not.toHaveBeenCalled();
+		expect(onStateChange).not.toHaveBeenCalled();
+	});
 });

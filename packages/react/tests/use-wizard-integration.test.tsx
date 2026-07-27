@@ -1,4 +1,5 @@
-import { createLinearWizard } from "@gooonzick/wizard-core";
+import type { WizardSerializedState } from "@gooonzick/wizard-core";
+import { createLinearWizard, WizardRestoreError } from "@gooonzick/wizard-core";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { useWizard } from "../src/use-wizard";
@@ -587,6 +588,71 @@ describe("useWizard hook integration", () => {
 				);
 				expect(result.current.state.currentStepId).toBe("step1");
 				expect(result.current.state.data.name).toBe("");
+			});
+		});
+	});
+
+	describe("restore functionality", () => {
+		it("should call onError with WizardRestoreError for a malformed snapshot", async () => {
+			const definition = createTestDefinition();
+			const onError = vi.fn();
+			const { result } = renderHook(() =>
+				useWizard({
+					definition,
+					initialData: { name: "", email: "" },
+					onError,
+				}),
+			);
+
+			act(() => {
+				result.current.actions.restore({
+					version: -1,
+				} as unknown as WizardSerializedState<{ name: string; email: string }>);
+			});
+
+			await waitFor(() => {
+				expect(onError).toHaveBeenCalledTimes(1);
+			});
+			expect(onError.mock.calls[0][0]).toBeInstanceOf(WizardRestoreError);
+			// The failed restore must not move the wizard.
+			expect(result.current.state.currentStepId).toBe("step1");
+		});
+
+		it("should round-trip serialize/restore", async () => {
+			const definition = createTestDefinition();
+			const { result } = renderHook(() =>
+				useWizard({
+					definition,
+					initialData: { name: "", email: "" },
+				}),
+			);
+
+			await act(async () => {
+				result.current.actions.updateField("name", "John");
+				await result.current.navigation.goNext();
+			});
+
+			await waitFor(() => {
+				expect(result.current.state.currentStepId).toBe("step2");
+			});
+
+			const serialized = result.current.actions.serialize();
+
+			await act(async () => {
+				result.current.actions.reset();
+			});
+
+			await waitFor(() => {
+				expect(result.current.state.currentStepId).toBe("step1");
+			});
+
+			await act(async () => {
+				result.current.actions.restore(serialized);
+			});
+
+			await waitFor(() => {
+				expect(result.current.state.currentStepId).toBe("step2");
+				expect(result.current.state.data.name).toBe("John");
 			});
 		});
 	});
