@@ -1,0 +1,27 @@
+{
+	"name": "@gooonzick/wizard-svelte-example",
+	"private": true,
+	"version": "0.0.1",
+	"type": "module",
+	"scripts": {
+		"dev": "vite",
+		"build": "vite build",
+		"preview": "vite preview",
+		"typecheck": "svelte-check --tsconfig ./tsconfig.json",
+		"lint": "biome check .",
+		"lint:fix": "biome check . --write"
+	},
+	"dependencies": {
+		"@gooonzick/wizard-core": "workspace:*",
+		"@gooonzick/wizard-svelte": "workspace:*"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.5.3",
+		"@sveltejs/vite-plugin-svelte": "^7.2.0",
+		"@types/node": "^26.1.1",
+		"svelte": "^5.56.8",
+		"svelte-check": "^4.7.3",
+		"typescript": "^6.0.3",
+		"vite": "^8.1.4"
+	}
+}

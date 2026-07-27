@@ -1,0 +1,178 @@
+:root {
+	--bg: #0f1115;
+	--panel: #171a21;
+	--border: #272c36;
+	--text: #e6e8ee;
+	--muted: #98a0b3;
+	--accent: #7c6cff;
+	--danger: #ff6b6b;
+
+	color-scheme: dark;
+	font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+	background: var(--bg);
+	color: var(--text);
+}
+
+body {
+	margin: 0;
+	padding: 2rem 1rem;
+}
+
+main {
+	max-width: 46rem;
+	margin: 0 auto;
+}
+
+h1 {
+	font-size: 1.5rem;
+	margin: 0 0 0.25rem;
+}
+
+.lede {
+	color: var(--muted);
+	margin: 0 0 1.5rem;
+}
+
+.tabs {
+	display: flex;
+	gap: 0.5rem;
+	margin-bottom: 1.5rem;
+}
+
+.tabs button {
+	background: transparent;
+	border: 1px solid var(--border);
+	color: var(--muted);
+	border-radius: 999px;
+	padding: 0.4rem 1rem;
+	cursor: pointer;
+}
+
+.tabs button[aria-selected="true"] {
+	background: var(--accent);
+	border-color: var(--accent);
+	color: #fff;
+}
+
+.panel {
+	background: var(--panel);
+	border: 1px solid var(--border);
+	border-radius: 0.75rem;
+	padding: 1.5rem;
+}
+
+.panel h2 {
+	margin: 0 0 0.25rem;
+	font-size: 1.15rem;
+}
+
+.panel .description {
+	color: var(--muted);
+	margin: 0 0 1.25rem;
+}
+
+.progress {
+	height: 0.4rem;
+	background: var(--border);
+	border-radius: 999px;
+	overflow: hidden;
+	margin-bottom: 1.25rem;
+}
+
+label {
+	display: block;
+	margin-bottom: 1rem;
+}
+
+/* Declared before the more specific `.progress > span` so the cascade reads
+   least-specific first (Biome's noDescendingSpecificity). */
+label > span {
+	display: block;
+	font-size: 0.85rem;
+	color: var(--muted);
+	margin-bottom: 0.35rem;
+}
+
+.progress > span {
+	display: block;
+	height: 100%;
+	background: var(--accent);
+	transition: width 150ms ease;
+}
+
+input,
+select {
+	width: 100%;
+	box-sizing: border-box;
+	background: var(--bg);
+	border: 1px solid var(--border);
+	border-radius: 0.5rem;
+	color: inherit;
+	padding: 0.55rem 0.75rem;
+	font: inherit;
+}
+
+.error {
+	color: var(--danger);
+	font-size: 0.85rem;
+	margin: 0.35rem 0 0;
+}
+
+.controls {
+	display: flex;
+	gap: 0.5rem;
+	margin-top: 1.5rem;
+}
+
+.controls button {
+	background: var(--accent);
+	border: 1px solid var(--accent);
+	color: #fff;
+	border-radius: 0.5rem;
+	padding: 0.5rem 1.1rem;
+	font: inherit;
+	cursor: pointer;
+}
+
+.controls button.secondary {
+	background: transparent;
+	border-color: var(--border);
+	color: var(--text);
+}
+
+.controls button:disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
+}
+
+.controls .spacer {
+	flex: 1;
+}
+
+dl.debug {
+	display: grid;
+	grid-template-columns: max-content 1fr;
+	gap: 0.25rem 1rem;
+	margin: 1.5rem 0 0;
+	padding-top: 1rem;
+	border-top: 1px solid var(--border);
+	font-size: 0.85rem;
+	color: var(--muted);
+}
+
+dl.debug dt {
+	font-weight: 600;
+}
+
+dl.debug dd {
+	margin: 0;
+	font-family: ui-monospace, SFMono-Regular, monospace;
+}
+
+.child {
+	margin-top: 1.5rem;
+	padding-top: 1rem;
+	border-top: 1px solid var(--border);
+	font-size: 0.9rem;
+	color: var(--muted);
+}

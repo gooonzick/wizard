@@ -29,6 +29,10 @@
 			"entry": ["src/index.ts!"],
 			"project": ["src/**/*.{ts,tsx,vue}", "tests/**/*.{ts,tsx,vue}"]
 		},
+		"packages/svelte": {
+			"entry": ["src/index.ts!", "src/runes/index.svelte.ts!"],
+			"project": ["src/**/*.ts", "tests/**/*.{ts,svelte}"]
+		},
 		"examples/react-examples": {
 			"entry": ["src/main.tsx"],
 			"project": ["src/**/*.{ts,tsx}"]

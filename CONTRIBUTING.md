@@ -52,7 +52,8 @@ wizard-vite/
 ├── packages/
 │   ├── core/       # @gooonzick/wizard-core - Framework-agnostic core
 │   ├── react/      # @gooonzick/wizard-react - React integration
-│   └── vue/        # @gooonzick/wizard-vue - Vue integration
+│   ├── vue/        # @gooonzick/wizard-vue - Vue integration
+│   └── svelte/     # @gooonzick/wizard-svelte - Svelte integration (stores + runes)
 ├── examples/       # Example applications
 └── docs/          # Documentation
 ```
@@ -72,6 +73,7 @@ pnpm test:watch
 pnpm --filter=@gooonzick/wizard-core test
 pnpm --filter=@gooonzick/wizard-react test
 pnpm --filter=@gooonzick/wizard-vue test
+pnpm --filter=@gooonzick/wizard-svelte test
 ```
 
 ### Building
@@ -160,6 +162,7 @@ Scopes:
 - `core`: Changes to @gooonzick/wizard-core
 - `react`: Changes to @gooonzick/wizard-react
 - `vue`: Changes to @gooonzick/wizard-vue
+- `svelte`: Changes to @gooonzick/wizard-svelte
 - `examples`: Changes to examples
 - `ci`: Changes to CI/CD
 
@@ -227,6 +230,12 @@ This project uses [Biome](https://biomejs.dev/) for linting and formatting:
 - No trailing commas in single-line arrays/objects
 
 The linter will auto-fix most issues with `pnpm lint:fix`.
+
+**`.svelte` files are not linted.** Biome 2.5 only understands the `<script>` block of a
+Svelte component and does not format one, so `packages/svelte/biome.json` and
+`examples/svelte-examples/biome.json` exclude them (`"files": { "includes": ["**",
+"!**/*.svelte"] }`). Keep component markup tidy by hand and put non-trivial logic in a
+`.ts` / `.svelte.ts` module, which Biome does check.
 
 ### Naming Conventions
 

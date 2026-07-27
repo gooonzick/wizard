@@ -1,0 +1,72 @@
+{
+	"name": "@gooonzick/wizard-svelte",
+	"version": "1.8.0",
+	"description": "Svelte integration for the WizardForm framework (stores + Svelte 5 runes)",
+	"type": "module",
+	"sideEffects": false,
+	"main": "./dist/index.js",
+	"module": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		},
+		"./runes": {
+			"types": "./dist/runes/index.svelte.d.ts",
+			"svelte": "./dist/runes/index.svelte.js",
+			"import": "./dist/runes/index.svelte.js",
+			"default": "./dist/runes/index.svelte.js"
+		},
+		"./package.json": "./package.json"
+	},
+	"files": [
+		"dist",
+		"README.md"
+	],
+	"scripts": {
+		"build": "vite build && svelte-package -i src/runes -o dist/runes --tsconfig ./tsconfig.runes.json",
+		"typecheck": "tsc --build --verbose",
+		"test": "vitest --run",
+		"test:watch": "vitest --watch",
+		"lint": "biome check .",
+		"lint:fix": "biome check . --write"
+	},
+	"peerDependencies": {
+		"svelte": "^4.0.0 || ^5.0.0"
+	},
+	"dependencies": {
+		"@gooonzick/wizard-core": "workspace:*",
+		"@gooonzick/wizard-state": "workspace:*"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.5.3",
+		"@sveltejs/package": "^2.5.8",
+		"@sveltejs/vite-plugin-svelte": "^7.2.0",
+		"@testing-library/svelte": "^5.4.2",
+		"@types/node": "^26.1.1",
+		"@vitest/coverage-v8": "^4.1.10",
+		"jsdom": "^29.1.1",
+		"svelte": "^5.56.8",
+		"typescript": "^6.0.3",
+		"vite": "^8.1.4",
+		"vite-plugin-dts": "^5.0.3",
+		"vitest": "^4.1.10"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/gooonzick/wizard",
+		"directory": "packages/svelte"
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"keywords": [
+		"wizard",
+		"svelte",
+		"store",
+		"runes",
+		"form",
+		"multi-step"
+	]
+}

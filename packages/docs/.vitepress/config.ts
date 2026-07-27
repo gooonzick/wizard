@@ -22,6 +22,7 @@ export default defineConfig({
 			{ text: "Guide", link: "/guide/getting-started" },
 			{ text: "React Integration", link: "/guide/react-integration" },
 			{ text: "Vue Integration", link: "/guide/vue-integration" },
+			{ text: "Svelte Integration", link: "/guide/svelte-integration" },
 			{ text: "API", link: "/guide/api/core" },
 			{ text: "CI/CD", link: "/guide/ci-cd" },
 		],
@@ -42,6 +43,10 @@ export default defineConfig({
 					items: [
 						{ text: "React Integration", link: "/guide/react-integration" },
 						{ text: "Vue Integration", link: "/guide/vue-integration" },
+						{
+							text: "Svelte Integration",
+							link: "/guide/svelte-integration",
+						},
 					],
 				},
 				{
@@ -50,6 +55,7 @@ export default defineConfig({
 						{ text: "Core API", link: "/guide/api/core" },
 						{ text: "React API", link: "/guide/api/react" },
 						{ text: "Vue API", link: "/guide/api/vue" },
+						{ text: "Svelte API", link: "/guide/api/svelte" },
 					],
 				},
 				{

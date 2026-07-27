@@ -12,7 +12,8 @@
             "@gooonzick/wizard-core",
             "@gooonzick/wizard-react",
             "@gooonzick/wizard-vue",
-            "@gooonzick/wizard-state"
+            "@gooonzick/wizard-state",
+            "@gooonzick/wizard-svelte"
         ]
     ],
     "linked": [],

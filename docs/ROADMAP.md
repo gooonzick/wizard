@@ -27,6 +27,7 @@
 | createLinearWizard helper                             | ✅     | `core`  |
 | React hook (useWizard) + granular hooks + provider    | ✅     | `react` |
 | Vue 3 composable (useWizard) + granular + provider    | ✅     | `vue`   |
+| Svelte store + runes bindings (WIZ-014)               | ✅     | `svelte`|
 | Framework-agnostic architecture                       | ✅     | `core`  |
 | Navigation History Stack (WIZ-001)                    | ✅     | `core`  |
 | Step Status Tracking (WIZ-003)                        | ✅     | `core`  |
@@ -57,6 +58,7 @@ The published version is **1.5.1** (`core`, `react`, `vue`, and `state` are fixe
 | Feature                   | gooonzick/wizard   | react-use-wizard | react-step-wizard | use-wizard  | react-albus | XState (raw) | xstate-wizards | SurveyJS    | Formiz   | react-multistep v6 | @robo-wizard |
 | ------------------------- | ------------------ | ---------------- | ----------------- | ----------- | ----------- | ------------ | -------------- | ----------- | -------- | ------------------ | ------------ |
 | Framework-agnostic core   | ✅                 | ❌ React         | ❌ React          | ❌ React    | ❌ React    | ✅           | ✅             | ✅          | ❌ React | ❌ React           | ✅           |
+| **Framework bindings**    | ✅ React/Vue/Svelte | ❌ React        | ❌ React          | ❌ React    | ❌ React    | ➖ DIY       | ❌ React       | ✅ multi    | ❌ React | ❌ React           | ➖ DIY       |
 | TypeScript first          | ✅                 | ✅               | ❌                | ❌          | ❌          | ✅           | ✅             | ✅          | ✅       | ✅                 | ✅           |
 | Conditional branching     | ✅                 | ❌               | ❌                | ✅ nested   | ✅ onNext   | ✅           | ✅             | ✅          | ❌       | ❌                 | ❌           |
 | Async transitions         | ✅ resolver        | ✅ handleStep    | ❌                | ❌          | ❌          | ✅ actors    | ✅             | ❌          | ❌       | ❌                 |
@@ -76,7 +78,7 @@ The published version is **1.5.1** (`core`, `react`, `vue`, and `state` are fixe
 
 ### Key Takeaway
 
-`gooonzick/wizard` already outperforms most competitors in its foundation: typing, declarative approach, framework-agnostic architecture, conditional branching, guard combinators, and Standard Schema. Its **runtime capabilities** are now complete too — navigation (including `goTo` and history), step status tracking, progress, reset/cancel, persistence, plugins, and all-steps validation (WIZ-001 through WIZ-008) have all shipped. The remaining differentiators on the horizon are sub-wizards and DevTools/visualization — closing those will make the library an undisputed leader in its niche.
+`gooonzick/wizard` already outperforms most competitors in its foundation: typing, declarative approach, framework-agnostic architecture, conditional branching, guard combinators, and Standard Schema. Its **runtime capabilities** are now complete too — navigation (including `goTo` and history), step status tracking, progress, reset/cancel, persistence, plugins, and all-steps validation (WIZ-001 through WIZ-008) have all shipped. Its **framework reach** is now a differentiator as well: alongside React and Vue, first-class Svelte support ships in `@gooonzick/wizard-svelte` (WIZ-014) with a classic store API for Svelte 4/5 and a native Svelte 5 runes API — almost every lightweight competitor is React-only, and the framework-agnostic ones (XState, `@robo-wizard`) leave the binding to you. The remaining differentiators on the horizon are sub-wizards and DevTools/visualization — closing those will make the library an undisputed leader in its niche.
 
 ---
 
@@ -1016,7 +1018,7 @@ interface WizardState<TData> {
 
 #### WIZ-014: Svelte Integration
 
-**Status:** 📋 Planned
+**Status:** ✅ Done (see "Shipped vs. specced deltas")
 **Priority:** 🟢 Low
 **Effort:** M (4–6 hours)
 **Package:** `@gooonzick/wizard-svelte` (new package)
@@ -1027,53 +1029,170 @@ Svelte is the third most popular framework, growing actively. The lack of integr
 
 ##### Solution
 
-A Svelte store wrapper around `WizardMachine`.
+A Svelte binding around `WizardMachine` + `WizardStateManager`, in two layers: a classic
+store API on the main entry (Svelte 4 + 5) and a native runes API on the
+`@gooonzick/wizard-svelte/runes` subpath (Svelte 5).
 
-##### API
+##### API — store layer
 
 ```svelte
-<script>
+<script lang="ts">
   import { createWizardStore } from '@gooonzick/wizard-svelte';
 
-  const wizard = createWizardStore({
+  const wizard = createWizardStore<SignupData>({
     definition: signupWizard,
-    initialData: { ... },
+    initialData: { name: '', email: '' },
     onComplete: (data) => goto('/done'),
   });
 
-  // $wizard — reactive state
+  // $wizard — the flat reactive aggregate (Readable, never Writable)
   // wizard.goNext(), wizard.goPrevious(), wizard.goTo(), etc.
+  // wizard.state / .validation / .navigation / .loading — per-channel sub-stores
+
+  // Two-way binding goes through field(), NOT through $wizard.data.
+  // Field stores must be declared at the top level of <script> for `$name` to work.
+  const name = wizard.field('name');
 </script>
 
 <h2>{$wizard.currentStep.meta?.title}</h2>
+<p>Step {$wizard.progress.currentStepIndex + 1} / {$wizard.progress.enabledSteps}</p>
 
 {#if $wizard.currentStepId === 'personal'}
-  <input bind:value={$wizard.data.name} />
+  <input bind:value={$name} />
 {/if}
 
-<button on:click={wizard.goNext} disabled={!$wizard.canGoNext}>
+<button onclick={wizard.goPrevious} disabled={!$wizard.canGoPrevious}>Back</button>
+<button onclick={wizard.goNext} disabled={!$wizard.canGoNext || $wizard.isNavigating}>
   Next
 </button>
 ```
 
+Svelte 4 users write `on:click={wizard.goNext}` instead of `onclick=`.
+
+> The ticket's original snippet used `<input bind:value={$wizard.data.name} />`. That is
+> **unsafe** and was rewritten: Svelte compiles it to "mutate the object in place, then call
+> `store.set(theSameObject)`", which would mutate `machine.snapshot.data` (deliberately not
+> frozen) and bypass `updateData`/`updateField` entirely — no `onDataChange`, no plugin
+> hooks, no watchers, no `recalculateSkippedStatuses()`, no `onStateChange`. It would also
+> require the aggregate to expose `set`, which is meaningless (you cannot "set"
+> `canGoNext`). The aggregate is a `Readable`, so the binding is a compile error by design.
+
+##### API — runes layer (Svelte 5)
+
+```svelte
+<script lang="ts">
+  import { createWizard } from '@gooonzick/wizard-svelte/runes';
+
+  const wizard = createWizard<SignupData>({
+    definition: signupWizard,
+    initialData: { name: '', email: '' },
+  });
+  const name = wizard.field('name');
+</script>
+
+<h2>{wizard.currentStep.meta?.title}</h2>
+<input bind:value={name.value} />
+<button onclick={wizard.goNext} disabled={!wizard.canGoNext}>Next</button>
+```
+
 ##### Implementation
 
-- `createWizardStore` returns a Svelte `writable` store
-- Internally creates a `WizardMachine` and subscribes to `onStateChange`
-- Each `onStateChange` → `store.set(newState)`
-- Navigation methods are available directly on the store object
+- `createWizardStore` returns a `Readable` aggregate (`WizardSnapshot<T>` — the four slices
+  flattened) **plus** four per-channel sub-stores (`state`, `validation`, `navigation`,
+  `loading`), the navigation methods, `actions`, `field()`, `getMachine()`/`getManager()`
+  and `destroy()`. It is never a `writable`.
+- Internally it creates a `WizardMachine`, wraps it in a `WizardStateManager`, and drives
+  reactivity from the manager's **channel subscriptions** — not from a raw
+  `store.set(newState)` per `onStateChange`. That is what buys the fine-grained sub-stores
+  for free and keeps the manager's reference-caching intact.
+- The stores are hand-rolled rather than `readable(value, start)`: `start`/`stop` fire on
+  the first/last subscriber, so an `{#if}` toggle would destroy the wizard. The machine's
+  lifetime is bound to `createWizardStore()` … `destroy()` only.
+- `field(key)` is a `Writable<T[K]>` whose `set`/`update` call `machine.updateField`
+  directly, preserving the `Object.is` no-op guard and the authoritative
+  `changedFields = [field]` (WIZ-010).
+- The runes layer mirrors all of it with `$state.raw` snapshots reassigned from the same
+  manager subscriptions, and no `$effect` anywhere.
 
 ##### Dependencies
 
-- Peer dependency: `svelte >= 4`
-- Dependency: `@gooonzick/wizard-core`
+- Peer dependency: `svelte ^4.0.0 || ^5.0.0` (the `/runes` subpath requires Svelte 5)
+- Dependencies: `@gooonzick/wizard-core`, `@gooonzick/wizard-state`
 
 ##### Tests
 
-- Store reactively updates on transitions
-- All navigation methods work
-- Lifecycle hooks are called
-- Svelte `$` syntax works
+62 tests in `packages/svelte/tests` cover:
+
+- Store reactively updates on transitions; the synchronous first emit the store contract
+  requires; aggregate memoisation
+- All navigation methods (including the deprecated `goBack`/`goToStep`) and the
+  manager-owned loading flags
+- Lifecycle hooks, the early-`onStateChange` guard, plugins (init/destroy/veto/duplicate
+  name), teardown and context helpers
+- `field()` semantics: sync emit, write-through, `Object.is` no-op, reference stability,
+  cross-action updates
+- Svelte `$` syntax works (`.svelte` fixtures rendered with `@testing-library/svelte`),
+  including `bind:value={$name}` and an `{#if}` remount that must NOT destroy the wizard
+- Runes layer parity: the runes flat key set equals the store aggregate's key set
+- Compile-time type assertions in `tests/types.test.ts` (validated by `pnpm typecheck`,
+  not by vitest)
+
+##### Shipped vs. specced deltas
+
+- **Two entry points instead of one**: `.` (stores, Svelte 4 + 5) and `./runes` (Svelte 5).
+  The runes module ships **uncompiled** (`$state(...)` verbatim, built with
+  `@sveltejs/package` and advertised via the `"svelte"` export condition) because runes are
+  a compiler feature — pre-bundling them would inline `svelte/internal/client` and hard-pin
+  consumers to one Svelte version.
+- **The aggregate is `Readable`, not `writable`.** Two-way binding goes through
+  `wizard.field(key)`. The ticket's `bind:value={$wizard.data.name}` was unsafe and was
+  rewritten (see the note above).
+- **`store.set(newState)` per `onStateChange` was replaced by `WizardStateManager` channel
+  subscriptions** (state / navigation / validation / loading), which gives fine-grained
+  sub-stores for free and preserves the manager's reference-stable caches.
+- **Machine lifetime is bound to `createWizardStore()` … `destroy()`, not to subscriber
+  count.** `readable(v, start)` was deliberately not used: its `stop` runs when the last
+  subscriber leaves, so an `{#if}` toggle or an HMR swap would destroy the wizard.
+  `autoDestroy` (default `true`) registers `onDestroy`, wrapped in try/catch so creating a
+  wizard outside a component is supported.
+- **Loading flags follow the React model** (`manager.setLoadingState` around
+  validate/submit/navigation, `runReset`/`runCancel`/`runRestore` for reset/cancel/restore),
+  not Vue's local-mirror divergence — so `wizard.loading` is accurate for reset/cancel/restore.
+- **`updateField` calls `machine.updateField` directly** so the `Object.is` no-op guard and
+  the authoritative `changedFields = [field]` (WIZ-010) survive. It never routes through
+  `updateData` (which is what `packages/react/src/use-wizard-granular.tsx` does — a
+  pre-existing bug that was deliberately not copied and is out of scope here).
+- **`reset`/`restore` return `void`** (React parity) but their rejection path is
+  **terminated**: `void manager.runReset(...).catch(reportError)` forwards a
+  `WizardRestoreError` from a malformed snapshot to the caller's `onError`. React's
+  equivalent leaves that rejection unhandled; the Svelte binding does not reproduce that
+  latent bug, so a bad snapshot surfaces on `onError` instead of as an unhandled rejection.
+- **Named exports only; no `default` export** (React's convention, not Vue's
+  `useWizard as default`).
+- **Peer is `^4.0.0 || ^5.0.0`** for the store entry; the `/runes` subpath needs Svelte 5.
+  Export conditions cannot express a per-subpath peer, so the constraint is documented in
+  the README and the guide instead. `.syncpackrc` carries a labelled `isIgnored` version
+  group for that peer so the wider range does not trip `syncpack lint` against the Svelte 5
+  dev dependency.
+- **CI exercises Svelte 5 only** (`@sveltejs/vite-plugin-svelte@7` pins its peer to Svelte
+  5). Svelte 4 support is guaranteed by import-surface discipline — the runtime imports are
+  limited to `onDestroy`, `getContext`, `setContext`, `hasContext` and the structural store
+  contract — not by a test matrix. `fromStore`/`toStore` are documented but never imported.
+- **The package joins the fixed version group** and therefore debuts at the group's version
+  (1.9.0), never a `0.x` — the same way `wizard-state` shipped. Every future changeset must
+  list it explicitly or its CHANGELOG degrades to bare dependency-bump lines.
+- **Biome does not lint `.svelte` files.** `packages/svelte/biome.json` and
+  `examples/svelte-examples/biome.json` carry `"files": { "includes": ["**", "!**/*.svelte"] }`
+  because Biome 2.5 only understands the `<script>` block and does not format components.
+  `.ts` / `.svelte.ts` modules are linted normally.
+- **Deliberate type duplication in `src/runes/`.** `svelte-package` emits declarations with
+  `libRoot=src/runes`, so any import escaping that root would produce dangling `.d.ts`
+  references. `CreateWizardOptions`, the four slice interfaces and `WizardStoreActions` are
+  therefore declared twice, and the wiring is inlined rather than imported from
+  `src/internal/wiring.ts`. A key-set parity test guards the drift.
+- **No granular helpers** (`useWizardData`-style). Svelte users have `derived()` plus the
+  four sub-stores, so extra helpers would be dead weight. They are additive if review
+  disagrees.
 
 ---
 

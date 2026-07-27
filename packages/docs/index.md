@@ -45,12 +45,14 @@ Install the core package:
 npm install @gooonzick/wizard-core
 ```
 
-For React or Vue integration:
+For React, Vue or Svelte integration:
 
 ```bash
 npm install @gooonzick/wizard-react
 # or
 npm install @gooonzick/wizard-vue
+# or
+npm install @gooonzick/wizard-svelte
 ```
 
 ## Define Your First Wizard

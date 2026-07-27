@@ -36,7 +36,7 @@ jobs:
           echo "| Package | Size | Gzipped |" >> $GITHUB_STEP_SUMMARY
           echo "|---------|------|---------|" >> $GITHUB_STEP_SUMMARY
 
-          for pkg in core react vue; do
+          for pkg in core react vue svelte; do
             if [ -f "packages/$pkg/dist/index.js" ]; then
               SIZE=$(wc -c < "packages/$pkg/dist/index.js" | awk '{print $1}')
               GZIP=$(gzip -c "packages/$pkg/dist/index.js" | wc -c | awk '{print $1}')
