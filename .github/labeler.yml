@@ -12,6 +12,10 @@
   - changed-files:
     - any-glob-to-any-file: 'packages/vue/**/*'
 
+'package: svelte':
+  - changed-files:
+    - any-glob-to-any-file: 'packages/svelte/**/*'
+
 'documentation':
   - changed-files:
     - any-glob-to-any-file:

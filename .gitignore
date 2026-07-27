@@ -13,6 +13,9 @@ dist
 dist-ssr
 *.tsbuildinfo
 **/.tsbuild/
+# `svelte-package` stages its output in .svelte-kit/__package__ before copying
+# it to dist/runes; the directory is a build artifact, never source.
+**/.svelte-kit/
 *.local
 .worktrees/
 **/.vitepress/cache

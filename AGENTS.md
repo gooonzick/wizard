@@ -8,6 +8,9 @@ It combines build/test commands, code style guidelines, and architectural rules.
 **Monorepo Structure:**
 - `packages/core`: Framework-agnostic state machine (pure TS)
 - `packages/react`: React hooks and integration
+- `packages/vue`: Vue 3 composables and integration
+- `packages/svelte`: Svelte integration — stores (main entry) + Svelte 5 runes (`/runes` subpath)
+- `packages/state`: Framework-agnostic `WizardStateManager` used by the bindings
 - `packages/docs`: VitePress documentation site
 - `examples/`: Example applications
 
@@ -36,6 +39,9 @@ To run a single test file, use `vitest` directly or filter via pnpm:
 - **Semicolons:** Always
 - **Imports:** Organized automatically by Biome.
 - **Configuration:** See `biome.json` in root.
+- **`.svelte` files are excluded from linting** (`!**/*.svelte` in `packages/svelte/biome.json`
+  and `examples/svelte-examples/biome.json`) — Biome 2.5 neither formats nor fully lints them.
+  `.ts` and `.svelte.ts` modules ARE linted normally.
 
 **TypeScript:**
 - **Strict Mode:** Enabled.

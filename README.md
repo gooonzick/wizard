@@ -18,6 +18,7 @@ A declarative, type-safe, and extensible framework for building multi-step wizar
 - **Framework Agnostic**: Core logic works with any UI framework
 - **React Integration**: Ready-to-use React hook included
 - **Vue Integration**: Vue 3 Composition API support
+- **Svelte Integration**: Svelte stores + Svelte 5 runes
 - **Builder Pattern**: Fluent API for easy wizard creation
 
 ## 📦 Installation
@@ -31,6 +32,9 @@ npm install @gooonzick/wizard-core @gooonzick/wizard-react
 
 # For Vue integration
 npm install @gooonzick/wizard-core @gooonzick/wizard-vue
+
+# For Svelte integration
+npm install @gooonzick/wizard-core @gooonzick/wizard-svelte
 ```
 
 ## 🚀 Quick Start
@@ -448,13 +452,20 @@ wizard-vite/
 │   │       ├── use-wizard.tsx   # Main React hook
 │   │       ├── use-wizard-granular.tsx # Granular hooks
 │   │       └── wizard-provider.tsx # Context provider
-│   └── vue/                     # Vue 3 integration
+│   ├── vue/                     # Vue 3 integration
+│   │   └── src/
+│   │       ├── use-wizard.ts    # Main Vue composable
+│   │       ├── use-wizard-granular.ts # Granular composables
+│   │       └── wizard-provider.ts # Provide/inject provider
+│   └── svelte/                  # Svelte integration
 │       └── src/
-│           ├── use-wizard.ts    # Main Vue composable
-│           ├── use-wizard-granular.ts # Granular composables
-│           └── wizard-provider.ts # Provide/inject provider
+│           ├── create-wizard-store.ts # Store-based API (Svelte 4 + 5)
+│           ├── context.ts             # setWizardContext / getWizardContext
+│           └── runes/                 # Svelte 5 runes API (published uncompiled)
 ├── examples/
-│   └── react-examples/          # React example application
+│   ├── react-examples/          # React example application
+│   ├── vue-examples/            # Vue example application
+│   └── svelte-examples/         # Svelte example application
 └── docs/                        # Documentation
 ```
 

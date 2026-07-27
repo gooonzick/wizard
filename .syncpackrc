@@ -1,6 +1,19 @@
 {
     "versionGroups": [
         {
+            "label": "@gooonzick/wizard-svelte supports Svelte 4 and 5, so its peer range is deliberately wider than the Svelte 5 dev dependency CI builds against.",
+            "packages": [
+                "@gooonzick/wizard-svelte"
+            ],
+            "dependencies": [
+                "svelte"
+            ],
+            "dependencyTypes": [
+                "peer"
+            ],
+            "isIgnored": true
+        },
+        {
             "packages": [
                 "**"
             ],

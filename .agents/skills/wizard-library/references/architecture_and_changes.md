@@ -26,7 +26,7 @@ is already in flight, a concurrent `submit()` rejects with a `WizardNavigationEr
 exactly once per successful submit (prevents double-click / `submit()`+`goNext()`
 double-fire). Do not remove or bypass this lock when editing submit/navigation flow.
 
-Do not re-implement machine behavior in React/Vue adapters.
+Do not re-implement machine behavior in React/Vue/Svelte adapters.
 
 ## Change Areas to Inspect
 
@@ -42,7 +42,12 @@ Do not re-implement machine behavior in React/Vue adapters.
 1. Core event definitions (`WizardEvents<T>` or equivalent)
 2. React adapter (`useWizard` callbacks and state slices)
 3. Vue adapter (`useWizard` callbacks and state slices)
-4. Documentation and examples that expose callbacks
+4. Svelte adapter — BOTH layers: `packages/svelte/src/internal/wiring.ts` (store layer)
+   and the inlined copy of the same wiring in
+   `packages/svelte/src/runes/create-wizard.svelte.ts`. `src/runes/**` must stay
+   self-contained (no imports outside it) because `svelte-package` emits declarations
+   with `libRoot=src/runes`; a key-set parity test guards the duplication.
+5. Documentation and examples that expose callbacks
 
 When touching data-mutation events specifically (WIZ-010 `onDataChange` /
 `watchField` / plugin `onDataChange`):
@@ -87,7 +92,7 @@ Invariants:
 Before finishing a change:
 
 - Confirm public API exports remain coherent for consumers.
-- Confirm React and Vue adapters still compile and expose stable slices.
+- Confirm React, Vue and Svelte adapters still compile and expose stable slices.
 - Confirm changes do not require consumers to import internal paths.
 - Confirm type constraints remain `T extends WizardData` for machine/definition/adapter
   generics. Deliberate exception (WIZ-006): `WizardSerializedState<T>` is intentionally
@@ -101,7 +106,7 @@ Run focused tests first (examples):
 
 - Run transition-focused tests.
 - Run validator-focused tests.
-- Run adapter tests for React/Vue where affected.
+- Run adapter tests for React/Vue/Svelte where affected.
 
 Then run project quality gates:
 

@@ -65,6 +65,7 @@ Creates GitHub releases from git tags.
 - `@gooonzick/wizard-core@*` - Release core package only
 - `@gooonzick/wizard-react@*` - Release React package only
 - `@gooonzick/wizard-vue@*` - Release Vue package only
+- `@gooonzick/wizard-svelte@*` - Release Svelte package only
 
 **Features:**
 

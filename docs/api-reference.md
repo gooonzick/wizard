@@ -11,6 +11,7 @@ Complete type and function reference for the Wizard packages.
 | `@gooonzick/wizard-core` | [Core API](./api/core.md) |
 | `@gooonzick/wizard-react` | [React API](./api/react.md) |
 | `@gooonzick/wizard-vue` | [Vue API](./api/vue.md) |
+| `@gooonzick/wizard-svelte` | [Svelte API](./api/svelte.md) |
 
 ## Related guides
 
@@ -19,3 +20,4 @@ Complete type and function reference for the Wizard packages.
 - [Plugins](./plugins.md) — `WizardPlugin`, veto, logging + analytics + persistence plugins
 - [React Integration](./react-integration.md)
 - [Vue Integration](./vue-integration.md)
+- [Svelte Integration](./svelte-integration.md)

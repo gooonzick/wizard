@@ -18,6 +18,7 @@ Welcome to the WizardForm framework documentation. This directory mirrors the pu
 | [Plugins](./plugins.md) | Global lifecycle interception | Logging, analytics, persistence, veto |
 | [React Integration](./react-integration.md) | `useWizard()` in React | React developers |
 | [Vue Integration](./vue-integration.md) | Composables in Vue 3 | Vue developers |
+| [Svelte Integration](./svelte-integration.md) | Stores & runes in Svelte | Svelte developers |
 | [API Reference](./api-reference.md) | Type signatures by package | Detailed lookups |
 | [CI/CD](./ci-cd.md) | Release and pipeline notes | Maintainers |
 
@@ -28,6 +29,7 @@ Welcome to the WizardForm framework documentation. This directory mirrors the pu
 | Core | [api/core.md](./api/core.md) |
 | React | [api/react.md](./api/react.md) |
 | Vue | [api/vue.md](./api/vue.md) |
+| Svelte | [api/svelte.md](./api/svelte.md) |
 
 ### Quick Navigation
 
@@ -39,6 +41,7 @@ Welcome to the WizardForm framework documentation. This directory mirrors the pu
 - **Build a wizard** → [Defining Wizards](./defining-wizards.md)
 - **Use WizardForm in React** → [React Integration](./react-integration.md)
 - **Use WizardForm in Vue** → [Vue Integration](./vue-integration.md)
+- **Use WizardForm in Svelte** → [Svelte Integration](./svelte-integration.md)
 - **Add plugins** → [Plugins](./plugins.md)
 - **Look up a type or function** → [API Reference](./api-reference.md)
 
@@ -47,12 +50,14 @@ Welcome to the WizardForm framework documentation. This directory mirrors the pu
 - **@gooonzick/wizard-core**: [packages/core/README.md](../packages/core/README.md)
 - **@gooonzick/wizard-react**: [packages/react/README.md](../packages/react/README.md)
 - **@gooonzick/wizard-vue**: [packages/vue/README.md](../packages/vue/README.md)
-- **@gooonzick/wizard-state**: [packages/state/README.md](../packages/state/README.md) — **internal** adapter (`WizardStateManager`); prefer `@gooonzick/wizard-react` / `@gooonzick/wizard-vue`
+- **@gooonzick/wizard-svelte**: [packages/svelte/README.md](../packages/svelte/README.md)
+- **@gooonzick/wizard-state**: [packages/state/README.md](../packages/state/README.md) — **internal** adapter (`WizardStateManager`); prefer `@gooonzick/wizard-react` / `@gooonzick/wizard-vue` / `@gooonzick/wizard-svelte`
 
 ## Examples
 
 - [examples/react-examples](../examples/react-examples) — registration, **provider**, history, reset/cancel, manual persistence, plugins, analytics, **persistence plugin**, data change
 - [examples/vue-examples](../examples/vue-examples) — useWizard, provider, field binding, history, reset/cancel, manual persistence, plugins, analytics, **persistence plugin**, data change
+- [examples/svelte-examples](../examples/svelte-examples) — store API, runes API, field binding, context
 
 ## Published docs site
 

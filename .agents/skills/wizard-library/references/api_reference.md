@@ -29,8 +29,8 @@ Use public exports from `@gooonzick/wizard-core`:
 
 Prefer building on exported APIs over importing deep internal modules.
 
-The React and Vue adapters additionally re-export state-layer types from
-`@gooonzick/wizard-state` for typing consumers: both expose `StateSnapshot`,
+The React, Vue and Svelte adapters additionally re-export state-layer types from
+`@gooonzick/wizard-state` for typing consumers: all expose `StateSnapshot`,
 `LoadingState`, `NavigationState`, `ValidationState`, and `SubscriptionChannel`
 (alongside `WizardStateManager`). Prefer these public re-exports over importing the
 state package directly.
@@ -114,7 +114,26 @@ call site must not switch between provider and direct mode across renders.
 
 When changing wizard behavior, verify these slices/hooks still return expected semantics.
 
-Both adapters' `useWizard` (and `<WizardProvider>`) accept an `onDataChange`
+Svelte (`@gooonzick/wizard-svelte`) exposes the same four slices plus `actions`, but
+through Svelte primitives rather than a hook/composable:
+
+- Main entry (Svelte 4 + 5): `createWizardStore(options)` returns a `Readable`
+  aggregate (`$wizard` — the four slices flattened) plus `state` / `validation` /
+  `navigation` / `loading` sub-stores, `actions`, `goNext`/`goPrevious`/`goTo`
+  (+ deprecated `goBack`/`goToStep`), `field(key): Writable<T[K]>`,
+  `getMachine()` / `getManager()`, `destroy()` and `isDestroyed`.
+- `@gooonzick/wizard-svelte/runes` (Svelte 5 only): `createWizard(options)` returns the
+  same surface with flat rune getters and `field(key): { get value, set value }`.
+- Context helpers on both entries: `setWizardContext` / `getWizardContext` /
+  `hasWizardContext` (distinct context key per layer).
+- The aggregate is never `Writable`: `bind:value={$wizard.data.x}` is a compile error by
+  design. Two-way binding goes through `field(key)`, which calls `machine.updateField`.
+- Machine lifetime is bound to `createWizardStore()`…`destroy()`, never to subscriber
+  count. `autoDestroy` (default `true`) registers `onDestroy` inside a try/catch.
+- There are deliberately no granular helpers — `derived()` plus the four sub-stores cover
+  that ground.
+
+Both React/Vue adapters' `useWizard` (and `<WizardProvider>`) accept an `onDataChange`
 option — `(prevData, nextData, changedFields) => void` (plain `T` params) — that
 fires on data mutations. `actions.updateField` delegates to the core
 `updateField` (Object.is no-op). `watchField` is core-only and is NOT part of the
@@ -240,7 +259,7 @@ Use context for external dependencies instead of hard-coding globals in guards/r
 Use package-manager equivalents as needed:
 
 ```bash
-npm install @gooonzick/wizard-core @gooonzick/wizard-react @gooonzick/wizard-vue
+npm install @gooonzick/wizard-core @gooonzick/wizard-react @gooonzick/wizard-vue @gooonzick/wizard-svelte
 ```
 
 Install only the adapters your project uses.
