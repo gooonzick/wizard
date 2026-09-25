@@ -3,7 +3,7 @@ title: Solid API
 description: API reference for the @gooonzick/wizard-solid package
 ---
 
-# Solid API
+# Solid Package (`@gooonzick/wizard-solid`)
 
 API reference for `@gooonzick/wizard-solid`.
 
@@ -133,6 +133,8 @@ Returns `true` when a `WizardProvider` is above the caller, otherwise `false`. N
 
 For convenience the package re-exports `WizardProgress`, `WizardSerializedState` and `WizardRestoreError` from `@gooonzick/wizard-core`, and `WizardStateManager`, `LoadingState`, `NavigationState`, `StateSnapshot`, `SubscriptionChannel`, `ValidationState` from `@gooonzick/wizard-state`.
 
-## See also
+## Related Documentation
 
 - See the [Solid Integration guide](/guide/solid-integration) for usage patterns
+- See the [Core API](/guide/api/core) for the framework-agnostic wizard engine
+- See the [React API](/guide/api/react), [Vue API](/guide/api/vue) and [Svelte API](/guide/api/svelte) for the other bindings

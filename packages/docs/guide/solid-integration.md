@@ -3,7 +3,7 @@ title: Solid Integration
 description: How to use createWizard, field() and WizardProvider to integrate wizards into your Solid application
 ---
 
-# Solid Integration
+# Solid Integration Guide
 
 `@gooonzick/wizard-solid` binds a `WizardMachine` to Solid signals. `createWizard()` returns an object whose properties are **reactive getters**: read them in JSX, `createEffect` or `createMemo` and Solid tracks exactly the channel you touched.
 
@@ -58,8 +58,12 @@ export function SignupWizard() {
 					<input value={name.value} onInput={(e) => (name.value = e.currentTarget.value)} />
 					<Show when={wizard.validationErrors?.name}>{(msg) => <p>{msg()}</p>}</Show>
 				</Match>
-				<Match when={wizard.currentStepId === "plan"}>{/* … */}</Match>
-				<Match when={wizard.currentStepId === "summary"}>{/* … */}</Match>
+				<Match when={wizard.currentStepId === "plan"}>
+					<p>Plan: {wizard.data.plan}</p>
+				</Match>
+				<Match when={wizard.currentStepId === "summary"}>
+					<p>Ready to submit {wizard.data.name}</p>
+				</Match>
 			</Switch>
 
 			<button onClick={() => void wizard.goPrevious().catch(() => {})} disabled={!wizard.canGoPrevious}>
@@ -167,6 +171,12 @@ Plugins are registered once at creation. See the [plugin contract](/guide/plugin
 - **Writes from effects.** Because effects run inside the transition, an effect that calls `wizard.actions.updateField(...)` when a step is entered re-enters the machine mid-transition. This works, but prefer step `onEnter` hooks for data initialisation.
 - `onError` must not throw — a throw propagates to the caller, as in every other binding.
 
+## SSR and SolidStart
+
+- **Never create a wizard at module scope.** On the server, module scope is shared across every request — a module-scoped wizard would leak one user's data into another's response. Create it inside a component instead.
+- Solid signals are not reactive on the server, so SSR renders the initial state only; interactivity takes over once the client hydrates.
+- This binding has no SSR-specific tests yet — treat SolidStart support as unverified beyond the two points above.
+
 ## Limitations
 
 - Solid 1.x only (`solid-js` ≥ 1.8).
@@ -174,8 +184,36 @@ Plugins are registered once at creation. See the [plugin contract](/guide/plugin
 - `definition`, `initialData`, `context` and `plugins` are not reactive.
 - Swapping the `wizard` passed to `WizardProvider` at runtime is not supported.
 
-## See also
+## Troubleshooting
+
+### My button/text doesn't update
+
+You destructured the wizard (`const { canGoNext } = wizard`) or read a getter outside a tracking scope — outside JSX, `createEffect` or `createMemo`. Read `wizard.<getter>` directly inside the tracked expression instead; see [Reactivity](#reactivity).
+
+### `canGoNext` is true but Next does nothing / `Uncaught (in promise)`
+
+`canGoNext` means "a next step exists", not "the current step is valid" — validation runs inside `goNext()`, which rejects when the current step is invalid. Render `wizard.validationErrors` and attach `.catch(() => {})` (or handle it via `onError`) to every navigation call, as in the [Quick Start](#quick-start).
+
+### The wizard is never destroyed
+
+Either it was created without an owner (module scope, a shared store) or inside a `createRoot` callback that takes **no** parameter — Solid treats that as an unowned root whose cleanups never run. Call `await wizard.destroy()` yourself in both cases; see [Lifecycle](#lifecycle).
+
+### After `restore()` my test still sees the old step
+
+`restore()` writes the restored state synchronously and then fires a fire-and-forget `validate()`, which lands one microtask later. Await two flushes before asserting:
+
+```ts
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+wizard.actions.restore(snapshot);
+await flush();
+await flush();
+expect(wizard.currentStepId).toBe("summary");
+```
+
+## Related Documentation
 
 - [Solid API reference](/guide/api/solid)
+- [Core Concepts](/guide/core-concepts)
 - [Plugins](/guide/plugins)
 - [Example app](https://github.com/gooonzick/wizard/tree/main/examples/solid-examples)
