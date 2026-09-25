@@ -47,7 +47,7 @@
 | `tests/reactivity.test.ts` | Signal tracking, batch atomicity, re-entrancy |
 | `tests/actions.test.ts` | Every action + loading flags |
 | `tests/field.test.ts` | `field(key)` |
-| `tests/errors.test.ts` | Listener isolation, `ErrorBoundary` |
+| `tests/errors.test.tsx` | Listener isolation, `ErrorBoundary` |
 | `tests/teardown.test.ts` | `autoDestroy`, `destroy()` |
 | `tests/plugins.test.ts` | Plugin option |
 | `tests/context.test.tsx` | Provider + hooks |
@@ -240,7 +240,8 @@ export default defineConfig({
 		"outDir": "./.tsbuild",
 		"emitDeclarationOnly": true,
 		"jsx": "preserve",
-		"jsxImportSource": "solid-js"
+		"jsxImportSource": "solid-js",
+		"types": ["node"]
 	},
 	"include": ["src/**/*", "tests/**/*"],
 	"references": [{ "path": "./tsconfig.build.json" }]
@@ -259,7 +260,7 @@ export default defineConfig({
 - [ ] **Step 7: Create placeholder `packages/solid/src/index.ts`**
 
 ```ts
-// Public API is added in Task 8.
+// Public API is added in Task 9.
 export {};
 ```
 
@@ -366,7 +367,7 @@ and after the `"examples/react-examples"` entry (add a comma to the preceding `}
 		}
 ```
 
-(The example is created in Task 11; knip is only run in Task 10 and Task 13, after the example exists.)
+(The example is created in Task 11. Until then knip only prints a "Remove from workspaces" hint for the missing folder and exits 0 — ignore it in Task 10.)
 
 - [ ] **Step 3: Add a syncpack rule to `.syncpackrc`**
 
@@ -1339,7 +1340,7 @@ describe("reactivity", () => {
 Run: `pnpm --filter @gooonzick/wizard-solid exec vitest run tests/reactivity.test.ts`
 Expected: X2 FAILS (`seen` contains `["plan", true]`). X1, X3, X4, X5 PASS.
 
-**X6 decision point:** X6 is expected to PASS. If it FAILS, the machine loses the effect's write when an effect re-enters mid-transition. That is a core bug, out of scope: **stop, do not change core**, mark X6 with `it.fails(...)` plus a comment `// Known core limitation: re-entrant write during a transition — see WIZ-015 plan Task 5`, and report it in the task summary so it can be filed as a separate issue. The docs (Task 12) then must say re-entrant writes from effects are not supported yet.
+**X6 decision point:** X6 is expected to PASS (verified during plan review against solid-js 1.9.15: the effect's write happens inside `navigateToStep` and is kept). If it FAILS, the machine loses the effect's write when an effect re-enters mid-transition. That is a core bug, out of scope: **stop, do not change core**, mark X6 with `it.fails(...)` plus a comment `// Known core limitation: re-entrant write during a transition — see WIZ-015 plan Task 5`, and report it in the task summary so it can be filed as a separate issue. The docs (Task 12) then must say re-entrant writes from effects are not supported yet.
 
 - [ ] **Step 3: Add `batch()` to the subscription**
 
@@ -1458,12 +1459,18 @@ describe("actions", () => {
 		expect(wizard.isValidating).toBe(false);
 	});
 
-	it("A5: canSubmit reflects current-step validity", async () => {
+	it("A5: canSubmit is true only on a valid LAST step", async () => {
 		const wizard = makeWizard();
 		await flush();
 
 		expect(await wizard.actions.canSubmit()).toBe(false);
 		wizard.actions.updateField("name", "ada");
+		// Valid, but not the last step: machine.canSubmit() = valid && !nextStep.
+		expect(await wizard.actions.canSubmit()).toBe(false);
+
+		await wizard.goNext();
+		await wizard.goNext();
+		expect(wizard.currentStepId).toBe("summary");
 		expect(await wizard.actions.canSubmit()).toBe(true);
 	});
 
@@ -1890,15 +1897,18 @@ describe("teardown", () => {
 		expect(destroyPlugin).toHaveBeenCalledTimes(1);
 	});
 
-	it("T5: after destroy() the signals stop changing", async () => {
+	it("T5: after destroy() the signals stop following the manager", async () => {
 		const wizard = makeWizard();
 		await flush();
-		wizard.actions.updateField("name", "ada");
 
 		await wizard.destroy();
-		await wizard.goNext().catch(() => {});
-		await flush();
+		// Drive the manager directly: destroy() cleared its subscribers, so even a
+		// channel change it would normally broadcast must not reach the signals.
+		const manager = wizard.getManager();
+		expect(manager.isDestroyed).toBe(true);
+		manager.setLoadingState({ isSubmitting: true });
 
+		expect(wizard.isSubmitting).toBe(false);
 		expect(wizard.currentStepId).toBe("personal");
 	});
 });
@@ -2081,7 +2091,7 @@ describe("context", () => {
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `pnpm --filter @gooonzick/wizard-solid exec vitest run tests/context.test.tsx`
-Expected: FAIL — `createWizard`/`WizardProvider` are not exported from `../src/index`.
+Expected: FAIL — `src/index.ts` is still the Task 1 placeholder, so e.g. `createWizard is not a function` / `WizardProvider` is undefined.
 
 - [ ] **Step 3: Create `packages/solid/src/context.ts`**
 
@@ -2180,7 +2190,6 @@ export type {
 Run: `pnpm --filter @gooonzick/wizard-solid exec vitest run tests/context.test.tsx`
 Expected: PASS, 3 tests.
 
-If Biome flags `children` in the `createComponent` call (`lint/correctness/noChildrenProp`), add `// biome-ignore lint/correctness/noChildrenProp: createComponent has no JSX children syntax` on the line above `get children()`.
 
 - [ ] **Step 6: Commit**
 
