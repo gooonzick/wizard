@@ -44,6 +44,7 @@ describe("errors", () => {
 		expect(onError).toHaveBeenCalledWith(
 			expect.objectContaining({ message: "boom" }),
 		);
+		expect(onError).toHaveBeenCalledTimes(1);
 		// Assert through getters, NOT another effect: Solid 1.x leaves sibling
 		// effects of the interrupted flush stale for good (see spec §5).
 		expect(wizard.currentStepId).toBe("plan");
@@ -69,14 +70,14 @@ describe("errors", () => {
 		}
 
 		render(() => (
-			<ErrorBoundary fallback={<p>caught</p>}>
+			<ErrorBoundary fallback={(err: Error) => <p>caught: {err.message}</p>}>
 				<Thrower wizard={wizard} />
 			</ErrorBoundary>
 		));
 
 		await wizard.goNext();
 
-		expect(await screen.findByText("caught")).toBeTruthy();
+		expect(await screen.findByText("caught: boom")).toBeTruthy();
 		expect(onError).not.toHaveBeenCalled();
 		expect(wizard.currentStepId).toBe("plan");
 	});

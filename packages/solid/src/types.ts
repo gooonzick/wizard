@@ -35,6 +35,7 @@ export interface CreateWizardOptions<T extends WizardData> {
 	/**
 	 * Receives machine errors AND errors thrown by Solid effects while the wizard
 	 * pushes new state into its signals (when no `<ErrorBoundary>` catches them).
+	 * Must not throw — a throw propagates to the caller, as in every other binding.
 	 */
 	onError?: (error: Error) => void;
 	onDataChange?: (prevData: T, nextData: T, changedFields: (keyof T)[]) => void;
