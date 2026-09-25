@@ -103,9 +103,18 @@ export function createWizard<T extends WizardData>(
 	// BEFORE notifying, and "all" listeners fire on every notify (including the
 	// async navigation recompute and loading changes). Released by destroy().
 	manager.subscribe(() => {
-		// Solid 1.x flushes effects on every unbatched write; batch() commits all
-		// four channels atomically so no effect sees a half-applied transition.
-		batch(syncSignals);
+		try {
+			// Solid 1.x flushes effects on every unbatched write; batch() commits all
+			// four channels atomically so no effect sees a half-applied transition.
+			batch(syncSignals);
+		} catch (error) {
+			// Effects run synchronously at the end of batch(), i.e. inside the
+			// machine's notifyStateChange() (which has no try/catch). A user effect
+			// that throws without an <ErrorBoundary> must not break a transition
+			// mid-flight — report it instead. Solid itself may leave sibling effects
+			// of this flush stale; the wizard (machine, manager, getters) is intact.
+			reportError(error);
+		}
 	}, "all");
 
 	const withNavigating = async (fn: () => Promise<void>): Promise<void> => {
