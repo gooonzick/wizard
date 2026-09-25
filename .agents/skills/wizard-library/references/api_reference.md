@@ -130,6 +130,8 @@ through Svelte primitives rather than a hook/composable:
   design. Two-way binding goes through `field(key)`, which calls `machine.updateField`.
 - Machine lifetime is bound to `createWizardStore()`…`destroy()`, never to subscriber
   count. `autoDestroy` (default `true`) registers `onDestroy` inside a try/catch.
+- There are deliberately no granular helpers — `derived()` plus the four sub-stores cover
+  that ground.
 
 Solid (`@gooonzick/wizard-solid`, Solid 1.x) mirrors the Svelte runes surface with signals:
 
@@ -145,9 +147,6 @@ Solid (`@gooonzick/wizard-solid`, Solid 1.x) mirrors the Svelte runes surface wi
   it) + `useWizardContext<T>()` (throws without a provider) / `hasWizardContext()`.
 - `autoDestroy` (default `true`) registers `onCleanup` only when `getOwner()` is non-null.
 - Destructuring the wizard loses reactivity (like Solid props).
-
-- There are deliberately no granular helpers — `derived()` plus the four sub-stores cover
-  that ground.
 
 Both React/Vue adapters' `useWizard` (and `<WizardProvider>`) accept an `onDataChange`
 option — `(prevData, nextData, changedFields) => void` (plain `T` params) — that
