@@ -33,7 +33,15 @@
 			"entry": ["src/index.ts!", "src/runes/index.svelte.ts!"],
 			"project": ["src/**/*.ts", "tests/**/*.{ts,svelte}"]
 		},
+		"packages/solid": {
+			"entry": ["src/index.ts!"],
+			"project": ["src/**/*.ts", "tests/**/*.{ts,tsx}"]
+		},
 		"examples/react-examples": {
+			"entry": ["src/main.tsx"],
+			"project": ["src/**/*.{ts,tsx}"]
+		},
+		"examples/solid-examples": {
 			"entry": ["src/main.tsx"],
 			"project": ["src/**/*.{ts,tsx}"]
 		}

@@ -14,6 +14,19 @@
             "isIgnored": true
         },
         {
+            "label": "@gooonzick/wizard-solid supports Solid 1.8+, so its peer range is deliberately wider than the Solid 1.9 dev dependency CI builds against.",
+            "packages": [
+                "@gooonzick/wizard-solid"
+            ],
+            "dependencies": [
+                "solid-js"
+            ],
+            "dependencyTypes": [
+                "peer"
+            ],
+            "isIgnored": true
+        },
+        {
             "packages": [
                 "**"
             ],
