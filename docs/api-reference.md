@@ -12,6 +12,7 @@ Complete type and function reference for the Wizard packages.
 | `@gooonzick/wizard-react` | [React API](./api/react.md) |
 | `@gooonzick/wizard-vue` | [Vue API](./api/vue.md) |
 | `@gooonzick/wizard-svelte` | [Svelte API](./api/svelte.md) |
+| `@gooonzick/wizard-solid` | [Solid API](./api/solid.md) |
 
 ## Related guides
 
@@ -21,3 +22,4 @@ Complete type and function reference for the Wizard packages.
 - [React Integration](./react-integration.md)
 - [Vue Integration](./vue-integration.md)
 - [Svelte Integration](./svelte-integration.md)
+- [Solid Integration](./solid-integration.md)
