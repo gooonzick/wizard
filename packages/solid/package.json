@@ -1,0 +1,65 @@
+{
+	"name": "@gooonzick/wizard-solid",
+	"version": "1.9.0",
+	"description": "Solid.js integration for the WizardForm framework",
+	"type": "module",
+	"sideEffects": false,
+	"main": "./dist/index.js",
+	"module": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		},
+		"./package.json": "./package.json"
+	},
+	"files": [
+		"dist",
+		"README.md"
+	],
+	"scripts": {
+		"build": "vite build",
+		"typecheck": "tsc --build --verbose",
+		"test": "vitest --run",
+		"test:watch": "vitest --watch",
+		"lint": "biome check .",
+		"lint:fix": "biome check . --write"
+	},
+	"peerDependencies": {
+		"solid-js": "^1.8.0"
+	},
+	"dependencies": {
+		"@gooonzick/wizard-core": "workspace:*",
+		"@gooonzick/wizard-state": "workspace:*"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.5.3",
+		"@solidjs/testing-library": "^0.8.10",
+		"@types/node": "^26.1.1",
+		"@vitest/coverage-v8": "^4.1.10",
+		"jsdom": "^29.1.1",
+		"solid-js": "^1.9.15",
+		"typescript": "^6.0.3",
+		"vite": "^8.1.4",
+		"vite-plugin-dts": "^5.0.3",
+		"vite-plugin-solid": "^2.11.14",
+		"vitest": "^4.1.10"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/gooonzick/wizard",
+		"directory": "packages/solid"
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"keywords": [
+		"wizard",
+		"solid",
+		"solid-js",
+		"signals",
+		"form",
+		"multi-step"
+	]
+}
