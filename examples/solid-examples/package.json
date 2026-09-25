@@ -1,0 +1,26 @@
+{
+	"name": "@gooonzick/wizard-solid-example",
+	"private": true,
+	"version": "0.0.0",
+	"type": "module",
+	"scripts": {
+		"dev": "vite",
+		"build": "vite build",
+		"preview": "vite preview",
+		"typecheck": "tsc --noEmit -p tsconfig.json",
+		"lint": "biome check .",
+		"lint:fix": "biome check . --write"
+	},
+	"dependencies": {
+		"@gooonzick/wizard-core": "workspace:*",
+		"@gooonzick/wizard-solid": "workspace:*",
+		"solid-js": "^1.9.15"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.5.3",
+		"@types/node": "^26.1.1",
+		"typescript": "^6.0.3",
+		"vite": "^8.1.4",
+		"vite-plugin-solid": "^2.11.14"
+	}
+}
