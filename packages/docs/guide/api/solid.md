@@ -81,7 +81,7 @@ Creates a `WizardMachine` and a `WizardStateManager` and mirrors the manager's f
 | `updateData` | `(updater: (data: T) => T) => void` | |
 | `setData` | `(data: T) => void` | |
 | `validate` | `() => Promise<void>` | Toggles `isValidating`. Resolves on an invalid step; rejects only if aborted. |
-| `validateAll` | `(options?: { updateStatuses?: boolean }) => Promise<ValidationSummary>` | Toggles `isValidating`. Resolves on an invalid step; rejects only if aborted. |
+| `validateAll` | `(options?: { updateStatuses?: boolean }) => Promise<ValidationSummary>` | Toggles `isValidating`. Resolves even with invalid steps (a throwing validator counts as invalid); rejects if aborted or if a step's `enabled` guard throws. Not supersede-protected — a `reset()`/`cancel()` mid-call does not cancel it, and with `updateStatuses: true` its statuses still get written. |
 | `canSubmit` | `() => Promise<boolean>` | |
 | `submit` | `() => Promise<void>` | Toggles `isSubmitting`. |
 | `reset` | `(data?: T) => void` | Fire-and-forget; errors → `onError`. |
