@@ -2190,7 +2190,6 @@ export type {
 Run: `pnpm --filter @gooonzick/wizard-solid exec vitest run tests/context.test.tsx`
 Expected: PASS, 3 tests.
 
-
 - [ ] **Step 6: Commit**
 
 ```bash
