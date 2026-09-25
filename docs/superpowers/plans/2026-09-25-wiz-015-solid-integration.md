@@ -1902,8 +1902,8 @@ describe("teardown", () => {
 		await flush();
 
 		await wizard.destroy();
-		// Drive the manager directly: destroy() cleared its subscribers, so even a
-		// channel change it would normally broadcast must not reach the signals.
+		// destroy() cleared the manager's subscribers and the manager ignores
+		// post-destroy writes; the observable guarantee is that signals stay put.
 		const manager = wizard.getManager();
 		expect(manager.isDestroyed).toBe(true);
 		manager.setLoadingState({ isSubmitting: true });
