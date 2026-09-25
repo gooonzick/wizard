@@ -66,7 +66,11 @@ export function Signup() {
 			<button type="button" onClick={() => wizard.goPrevious()} disabled={!wizard.canGoPrevious}>
 				Back
 			</button>
-			<button type="button" onClick={() => wizard.goNext()} disabled={!wizard.canGoNext || wizard.isNavigating}>
+			<button
+				type="button"
+				onClick={() => void wizard.goNext().catch(() => {})}
+				disabled={!wizard.canGoNext || wizard.isNavigating}
+			>
 				Next
 			</button>
 		</form>
@@ -79,6 +83,12 @@ export function Signup() {
 - Read properties **inside** JSX, `createEffect` or `createMemo`. Destructuring (`const { canGoNext } = wizard`) reads once and loses reactivity — same as Solid props.
 - Tracking is per channel (`state`, `navigation`, `validation`, `loading`), not per field.
 - `definition`, `initialData`, `context` and `plugins` are read once. Recreate the wizard to reconfigure.
+
+## Things to know
+
+- `canGoNext` / `canGoPrevious` / `isLastStep` are computed asynchronously (guards and resolvers may be async), so `canGoNext` is `false` until the first computation settles.
+- `canGoNext` means "a next step exists", not "the current step is valid" — validation runs inside `goNext()`.
+- `goNext()`, `goPrevious()`, `goTo()`, `submit()` and `validate()` reject on failure (for example an invalid step) in addition to reporting to `onError` — `await` them in a `try`, or `.catch(() => {})` when the UI already renders `validationErrors`.
 
 ## Lifecycle
 
