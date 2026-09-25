@@ -148,8 +148,9 @@ Solid (`@gooonzick/wizard-solid`, Solid 1.x) mirrors the Svelte runes surface wi
 - `autoDestroy` (default `true`) registers `onCleanup` only when `getOwner()` is non-null.
 - Destructuring the wizard loses reactivity (like Solid props).
 
-Both React/Vue adapters' `useWizard` (and `<WizardProvider>`) accept an `onDataChange`
-option — `(prevData, nextData, changedFields) => void` (plain `T` params) — that
+All four adapters accept an `onDataChange` option — React/Vue `useWizard` (and
+`<WizardProvider>`), Svelte `createWizardStore` / runes `createWizard`, and Solid
+`createWizard` — `(prevData, nextData, changedFields) => void` (plain `T` params) — that
 fires on data mutations. `actions.updateField` delegates to the core
 `updateField` (Object.is no-op). `watchField` is core-only and is NOT part of the
 adapter surface.
