@@ -29,7 +29,7 @@ Use public exports from `@gooonzick/wizard-core`:
 
 Prefer building on exported APIs over importing deep internal modules.
 
-The React, Vue and Svelte adapters additionally re-export state-layer types from
+The React, Vue, Svelte and Solid adapters additionally re-export state-layer types from
 `@gooonzick/wizard-state` for typing consumers: all expose `StateSnapshot`,
 `LoadingState`, `NavigationState`, `ValidationState`, and `SubscriptionChannel`
 (alongside `WizardStateManager`). Prefer these public re-exports over importing the
@@ -130,6 +130,22 @@ through Svelte primitives rather than a hook/composable:
   design. Two-way binding goes through `field(key)`, which calls `machine.updateField`.
 - Machine lifetime is bound to `createWizardStore()`…`destroy()`, never to subscriber
   count. `autoDestroy` (default `true`) registers `onDestroy` inside a try/catch.
+
+Solid (`@gooonzick/wizard-solid`, Solid 1.x) mirrors the Svelte runes surface with signals:
+
+- `createWizard(options)` returns flat reactive getters (`wizard.currentStepId`,
+  `wizard.canGoNext`, …), slice getters `state` / `validation` / `navigation` / `loading`,
+  `actions`, `goNext`/`goPrevious`/`goTo` (+ deprecated `goBack`/`goToStep`),
+  `field(key): { get value, set value }`, `getMachine()` / `getManager()`, `destroy()`
+  and `isDestroyed`.
+- Four signals (one per manager channel) are refreshed from ONE `"all"` subscription
+  inside `batch()` (atomic) wrapped in `try/catch` (a throwing user effect goes to
+  `onError`, never into the machine). Tracking is per channel, not per field.
+- Context: `<WizardProvider wizard={wizard}>` (takes an existing wizard, never destroys
+  it) + `useWizardContext<T>()` (throws without a provider) / `hasWizardContext()`.
+- `autoDestroy` (default `true`) registers `onCleanup` only when `getOwner()` is non-null.
+- Destructuring the wizard loses reactivity (like Solid props).
+
 - There are deliberately no granular helpers — `derived()` plus the four sub-stores cover
   that ground.
 
@@ -259,7 +275,7 @@ Use context for external dependencies instead of hard-coding globals in guards/r
 Use package-manager equivalents as needed:
 
 ```bash
-npm install @gooonzick/wizard-core @gooonzick/wizard-react @gooonzick/wizard-vue @gooonzick/wizard-svelte
+npm install @gooonzick/wizard-core @gooonzick/wizard-react @gooonzick/wizard-vue @gooonzick/wizard-svelte @gooonzick/wizard-solid
 ```
 
 Install only the adapters your project uses.

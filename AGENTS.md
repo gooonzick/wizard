@@ -10,6 +10,7 @@ It combines build/test commands, code style guidelines, and architectural rules.
 - `packages/react`: React hooks and integration
 - `packages/vue`: Vue 3 composables and integration
 - `packages/svelte`: Svelte integration — stores (main entry) + Svelte 5 runes (`/runes` subpath)
+- `packages/solid`: Solid.js 1.x integration — signal-backed `createWizard()` + `WizardProvider`
 - `packages/state`: Framework-agnostic `WizardStateManager` used by the bindings
 - `packages/docs`: VitePress documentation site
 - `examples/`: Example applications
