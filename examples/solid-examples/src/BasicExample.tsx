@@ -102,7 +102,7 @@ export function BasicExample() {
 				<button
 					type="button"
 					class="secondary"
-					onClick={() => void wizard.goPrevious()}
+					onClick={() => void wizard.goPrevious().catch(() => {})}
 					disabled={!wizard.canGoPrevious || wizard.isNavigating}
 				>
 					Back
@@ -122,7 +122,7 @@ export function BasicExample() {
 				>
 					<button
 						type="button"
-						onClick={() => void wizard.actions.submit()}
+						onClick={() => void wizard.actions.submit().catch(() => {})}
 						disabled={wizard.isSubmitting || wizard.isCompleted}
 					>
 						{wizard.isSubmitting ? "Submitting…" : "Submit"}

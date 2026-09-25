@@ -24,7 +24,7 @@ export function ContextExample() {
 				<button
 					type="button"
 					class="secondary"
-					onClick={() => void wizard.goPrevious()}
+					onClick={() => void wizard.goPrevious().catch(() => {})}
 					disabled={!wizard.canGoPrevious}
 				>
 					Back
