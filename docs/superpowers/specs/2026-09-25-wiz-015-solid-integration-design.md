@@ -30,7 +30,7 @@ Solid.js has a growing audience, largely via the TanStack ecosystem (Form, Route
 - `WizardStateManager` (`packages/state/src/manager.ts`):
   - `subscribe(listener, channel = "all")` with channels `state | navigation | validation | loading | all`.
   - `notifySubscribers(channels)` refreshes **all affected channel caches first**, then calls the union of the channel listeners plus every `"all"` listener. `notifySubscribersForChannel(channel)` (used by `setLoadingState` and the async navigation recompute) also always notifies `"all"` listeners.
-  - Channel caches are frozen/cached objects; an unaffected channel keeps the same reference. Navigation caches are content-compared before replacement.
+  - Channel caches are frozen/cached objects; an **unaffected** channel keeps the same reference. An **affected** channel always gets a new object: `updateStateCache` and `updateNavigationCacheSync` rebuild unconditionally (only the async navigation recompute is content-compared before replacement). Consequence: tracking granularity is **per channel, not per field** — any data change re-runs effects reading any state or navigation field. Do not write tests asserting otherwise (e.g. "typing does not re-run an effect reading `currentStepId`" would fail).
   - `destroy()` sets `destroyed`, clears all subscriber sets and awaits `machine.destroy()` (plugins destroyed in reverse order; plugin-destroy rejections isolated by the machine).
   - `runReset(data)`, `runCancel()`, `runRestore(state)` own loading flags.
 - The Svelte runes binding (`packages/svelte/src/runes/create-wizard.svelte.ts`, `types.ts`, `context.svelte.ts`) is the reference implementation for wiring, actions, loading flags, `field()`, error reporting and teardown.
@@ -53,7 +53,7 @@ packages/solid/
   - `dependencies`: `@gooonzick/wizard-core`, `@gooonzick/wizard-state` (`workspace:*`).
   - `devDependencies`: `solid-js ^1.9`, `vite-plugin-solid`, `@solidjs/testing-library`, `jsdom`, plus the same biome/vite/vitest/`vite-plugin-dts`/`@vitest/coverage-v8`/typescript/`@types/node` versions used by `packages/svelte`.
 - **No JSX in `src/`.** `WizardProvider` is built with `createComponent`. The package therefore builds with a plain `vite build` (ESM lib) + `vite-plugin-dts`, needs no `"solid"` export condition and no `babel-preset-solid` at build time. `rollupOptions.external`: `solid-js`, `solid-js/web`, `@gooonzick/wizard-core`, `@gooonzick/wizard-state`.
-- **Tests:** `vitest.config.ts` uses `vite-plugin-solid` (compiles `.tsx` tests), `environment: "jsdom"`, `resolve.conditions: ["browser", "development"]` (otherwise Node resolves Solid's server build, where signals are not reactive), and aliases `@gooonzick/wizard-core` / `@gooonzick/wizard-state` to their `src/index.ts` (same as svelte/react/vue). Coverage thresholds 70/60/60/70; exclude `src/types.ts`.
+- **Tests:** `vitest.config.ts` uses `vite-plugin-solid` (compiles `.tsx` tests), `environment: "jsdom"`, `include: ["tests/**/*.test.{ts,tsx}"]`, and aliases `@gooonzick/wizard-core` / `@gooonzick/wizard-state` to their `src/index.ts` (same as svelte/react/vue). **Do not set `resolve.conditions`:** on Vite 6+ `vite-plugin-solid` already adds `solid` / `browser` / `development` in test mode (verified: client build, `isServer === false`), and an explicit list would replace Vite's default client conditions. In test mode the plugin also defaults `test.environment` to `jsdom`, sets `test.server.deps.external: [/solid-js/]`, and auto-adds `@testing-library/jest-dom` as a setup file if resolvable. Coverage thresholds 70/60/60/70; exclude `src/types.ts`.
 - **tsconfig:** `jsx: "preserve"`, `jsxImportSource: "solid-js"` so `.tsx` tests typecheck.
 - **Biome:** `.tsx` is linted normally; no exclusion needed.
 - **Monorepo wiring:**
@@ -119,6 +119,7 @@ Same shape as `packages/svelte/src/runes/types.ts` (names identical; Svelte-spec
 - Destructuring (`const { canGoNext } = wizard`) loses reactivity, as with Solid props.
 - `definition` / `initialData` / `context` / `plugins` are not reactive; recreate the wizard to reconfigure.
 - Solid 1.x only; no SSR guarantees.
+- **Synchronous re-entrancy.** Solid 1.x runs `createEffect`s synchronously at the end of `batch()`, i.e. inside the machine's `notifyStateChange()` call stack (before `afterTransition`). An effect that calls an action (e.g. `updateField` on step entry) re-enters the machine mid-transition. This is already possible via `onStateChange` in every binding, so it is not new machine behaviour, but it is more reachable here than in React/Vue/Svelte (which defer). Document it; covered by a test in §6.
 
 ## 5. Lifecycle, Context & Errors
 
@@ -131,7 +132,7 @@ Same shape as `packages/svelte/src/runes/types.ts` (names identical; Svelte-spec
 
 ### Context (`context.ts`)
 
-- `const WizardContext = createContext<Wizard<any> | undefined>(undefined)`.
+- `const WizardContext = createContext<Wizard<any> | undefined>(undefined)` with `// biome-ignore lint/suspicious/noExplicitAny` (precedent: `packages/react/src/wizard-provider.tsx:48`).
 - `WizardProvider<T>(props: { wizard: Wizard<T>; children?: JSX.Element }): JSX.Element` implemented as `createComponent(WizardContext.Provider, { value: props.wizard, get children() { return props.children; } })`. The provider takes an **existing** wizard (like Svelte's `setWizardContext`, unlike React's options-taking provider): creation and ownership stay with the caller; the provider never destroys anything. `props.wizard` is read once.
 - `useWizardContext<T>(): Wizard<T>` — throws `Error("useWizardContext() must be called inside a <WizardProvider wizard={...}>.")` when no provider is present.
 - `hasWizardContext(): boolean` — `useContext(WizardContext) !== undefined`. Solid's `useContext` returns the default outside a provider/owner, so no try/catch is needed.
@@ -139,21 +140,22 @@ Same shape as `packages/svelte/src/runes/types.ts` (names identical; Svelte-spec
 ### Errors
 
 - **Listener isolation** (see §4 step 3): a user `createEffect` that throws during the batched flush is caught and routed to `onError`, so the exception never propagates into `WizardStateManager.notifySubscribers` or the machine's `notifyStateChange()` mid-transition. With an `<ErrorBoundary>` above the effect, Solid handles the error first and it never reaches the binding.
+  - **Scope of the guarantee:** the *wizard* (machine, manager, signals, getters) survives. The *Solid UI* does not necessarily recover: Solid 1.x leaves other effects queued in the same flush stale (verified: a sibling effect ran 0 times after the throw, even after further writes). Docs must say "the wizard keeps working", not "the UI recovers", and recommend `<ErrorBoundary>` / `catchError` for user effects.
 - Machine-originated errors (validation, lifecycle, plugins, `onDataChange`) reach `onError` through the machine's `handleError`; the binding does not duplicate them.
 - `goNext` / `goPrevious` / `goTo` / `submit` / `validate` / `validateAll` / `cancel` return promises; rejections propagate to the caller; loading flags reset in `finally`.
 - `reset` / `restore` are fire-and-forget; a malformed snapshot (`WizardRestoreError`) goes to `onError`, never an unhandled rejection.
 
 ## 6. Testing
 
-Vitest + jsdom + `vite-plugin-solid`; component tests use `@solidjs/testing-library` (verify during planning that its `@solidjs/router` peer is optional/satisfiable without adding the router). Helpers `tests/helpers/wizard.ts` (3-step `signup`: `personal → plan → summary`, `personal` invalid while `name` is empty) and `tests/helpers/flush.ts` copied from `packages/svelte/tests/helpers/`. Tests assert through the public `Wizard` API and callbacks/spies only (AGENTS.md §4).
+Vitest + jsdom + `vite-plugin-solid`; component tests use `@solidjs/testing-library` (its `@solidjs/router` peer is optional — `peerDependenciesMeta.optional`, verified with 0.8.10; no router needed). Helpers `tests/helpers/wizard.ts` (3-step `signup`: `personal → plan → summary`, `personal` invalid while `name` is empty) and `tests/helpers/flush.ts` copied from `packages/svelte/tests/helpers/`. Tests assert through the public `Wizard` API and callbacks/spies only (AGENTS.md §4).
 
 | File | Covers |
 | --- | --- |
 | `create-wizard.test.ts` | Initial values; flat getters equal slice fields; `goNext` / `goPrevious` / `goTo` move the step; invalid step blocks `goNext` and sets `validationErrors`; `isNavigating` toggles; `onStepEnter` / `onStepLeave` / `onComplete` / `onStateChange` forwarded |
-| `reactivity.test.ts` | In `createRoot` + `createEffect` with run counters: `canGoNext` effect re-runs after the async navigation recompute; **batch atomicity** — an effect reading `currentStepId` + `isFirstStep` never observes a mixed state; a `loading` change does not re-run an effect reading only `currentStepId`; a no-op `updateField` re-runs nothing |
+| `reactivity.test.ts` | In `createRoot` + `createEffect` with run counters: `canGoNext` effect re-runs after the async navigation recompute; **batch atomicity** — an effect reading `currentStepId` + `isFirstStep` never observes a mixed state; a `loading` change does not re-run an effect reading only `currentStepId`; a no-op `updateField` re-runs nothing; **re-entrancy** — an effect on `currentStepId` that calls `actions.updateField` on step entry does not throw and leaves a consistent final state |
 | `actions.test.ts` | Every action; loading flags; malformed `restore` → `onError`, no unhandled rejection |
 | `field.test.ts` | Stable reference per key; reactive read; write → `onDataChange` with `changedFields = [key]`; `Object.is` no-op |
-| `errors.test.ts` | Throwing `createEffect` without `ErrorBoundary` → `onError` called and a subsequent `goNext` works; inside `<ErrorBoundary>` Solid catches it |
+| `errors.test.ts` | Throwing `createEffect` without `ErrorBoundary` → `onError` called and a subsequent `goNext` works — asserted via **getters** (`wizard.currentStepId`), not via another `createEffect` (Solid leaves sibling effects stale, see §5); inside `<ErrorBoundary>` Solid catches it |
 | `teardown.test.ts` | Inside `createRoot`: `dispose()` → `isDestroyed`, plugin `destroy` called. Without an owner: no `console.warn`, repeated `destroy()` is a no-op. Signals stop changing after destroy |
 | `plugins.test.ts` | `plugins` option: `onInit`, `beforeTransition` / `afterTransition`, veto, destroy on dispose |
 | `context.test.tsx` | `WizardProvider` → `useWizardContext()` in a child returns the same instance; missing provider throws; `hasWizardContext()` true/false |
@@ -182,8 +184,8 @@ Vitest + jsdom + `vite-plugin-solid`; component tests use `@solidjs/testing-libr
 
 ### Release
 
-- `.changeset/wiz-015-solid-integration.md`: `minor` for all fixed-group packages including `@gooonzick/wizard-solid`, same wording pattern as the WIZ-014 changeset.
-- `docs/ROADMAP.md` — **done after PR gooonzick/wizard#37 (roadmap sync to 1.9.0) is merged and this branch is rebased**, to avoid conflicts: WIZ-015 → `✅ Done (see "Shipped vs. specced deltas")` with the deltas (Svelte-runes API shape instead of the sketch, provider takes an existing wizard, Solid 1.x only); "What is Already Implemented" row; competitor matrix bindings cell (`React/Vue/Svelte/Solid`); Appendix A; a 1.10.0 row in the release table.
+- `.changeset/wiz-015-solid-integration.md`: `minor` for all fixed-group packages including `@gooonzick/wizard-solid`, same wording pattern as the WIZ-014 entry (the changeset file was consumed at release; copy the wording from `packages/svelte/CHANGELOG.md` 1.9.0).
+- `docs/ROADMAP.md` — **done after PR gooonzick/wizard#37 (roadmap sync to 1.9.0) is merged and this branch is rebased**, to avoid conflicts. If #37 is still open when steps 1–4 are done, open the WIZ-015 PR without the ROADMAP change and land it as a follow-up commit on the same branch once #37 merges (before the WIZ-015 PR is merged). Changes: WIZ-015 → `✅ Done (see "Shipped vs. specced deltas")` with the deltas (Svelte-runes API shape instead of the sketch, provider takes an existing wizard, Solid 1.x only); "What is Already Implemented" row; competitor matrix bindings cell (`React/Vue/Svelte/Solid`); Appendix A; a 1.10.0 row in the release table.
 
 ### Commit sequence on `feat/wiz-015-solid-integration`
 
