@@ -63,7 +63,11 @@ export function Signup() {
 					<p>Plan: {wizard.data.plan}</p>
 				</Match>
 			</Switch>
-			<button type="button" onClick={() => wizard.goPrevious()} disabled={!wizard.canGoPrevious}>
+			<button
+				type="button"
+				onClick={() => void wizard.goPrevious().catch(() => {})}
+				disabled={!wizard.canGoPrevious}
+			>
 				Back
 			</button>
 			<button
@@ -86,9 +90,9 @@ export function Signup() {
 
 ## Things to know
 
-- `canGoNext` / `canGoPrevious` / `isLastStep` are computed asynchronously (guards and resolvers may be async), so `canGoNext` is `false` until the first computation settles.
+- `canGoNext` / `canGoPrevious` / `isLastStep` / `availableSteps` are computed asynchronously (guards and resolvers may be async). Until the first computation settles, `canGoNext` and `canGoPrevious` are `false`, `isLastStep` is `true` and `availableSteps` is empty.
 - `canGoNext` means "a next step exists", not "the current step is valid" — validation runs inside `goNext()`.
-- `goNext()`, `goPrevious()`, `goTo()`, `submit()` and `validate()` reject on failure (for example an invalid step) in addition to reporting to `onError` — `await` them in a `try`, or `.catch(() => {})` when the UI already renders `validationErrors`.
+- `goNext()`, `goPrevious()`, `goTo()`, `submit()` and `cancel()` reject on failure (for example an invalid step) in addition to reporting to `onError` — `await` them in a `try`, or `.catch(() => {})` when the UI already renders `validationErrors`. `validate()` / `validateAll()` **resolve** and expose the result via `isValid` / `validationErrors` (or the returned summary), even on an invalid step — they reject only if the operation was already aborted (via an `AbortSignal` passed in context) before the call; a `reset()`/`cancel()` while a validator is in flight does not reject it, it just supersedes the result.
 
 ## Lifecycle
 

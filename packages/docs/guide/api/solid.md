@@ -69,7 +69,7 @@ Creates a `WizardMachine` and a `WizardStateManager` and mirrors the manager's f
 | ------ | ------- | ----- |
 | `goNext()` | `Promise<void>` | Validates, runs `onSubmit`, moves. Rejects on invalid step. Toggles `isNavigating`. |
 | `goPrevious()` | `Promise<void>` | Toggles `isNavigating`. |
-| `goTo(stepId, options?)` | `Promise<void>` | `GoToOptions`: `skipValidation`, `skipLifecycle`. |
+| `goTo(stepId, options?)` | `Promise<void>` | `GoToOptions`: `skipValidation`, `skipLifecycle`, `skipGuards`. |
 | `goBack(steps?)` | `Promise<void>` | Deprecated — use `goPrevious()`. |
 | `goToStep(stepId)` | `Promise<void>` | Deprecated — `goTo(stepId, { skipValidation: true })`. |
 
@@ -80,8 +80,8 @@ Creates a `WizardMachine` and a `WizardStateManager` and mirrors the manager's f
 | `updateField` | `<K extends keyof T>(field: K, value: T[K]) => void` | No-op when `Object.is`-equal. |
 | `updateData` | `(updater: (data: T) => T) => void` | |
 | `setData` | `(data: T) => void` | |
-| `validate` | `() => Promise<void>` | Toggles `isValidating`. |
-| `validateAll` | `(options?: { updateStatuses?: boolean }) => Promise<ValidationSummary>` | Toggles `isValidating`. |
+| `validate` | `() => Promise<void>` | Toggles `isValidating`. Resolves on an invalid step; rejects only if aborted. |
+| `validateAll` | `(options?: { updateStatuses?: boolean }) => Promise<ValidationSummary>` | Toggles `isValidating`. Resolves on an invalid step; rejects only if aborted. |
 | `canSubmit` | `() => Promise<boolean>` | |
 | `submit` | `() => Promise<void>` | Toggles `isSubmitting`. |
 | `reset` | `(data?: T) => void` | Fire-and-forget; errors → `onError`. |
