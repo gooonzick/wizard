@@ -7,7 +7,7 @@ import type {
 } from "@gooonzick/wizard-core";
 import { WizardMachine } from "@gooonzick/wizard-core";
 import { WizardStateManager } from "@gooonzick/wizard-state";
-import { createSignal, getOwner, onCleanup } from "solid-js";
+import { batch, createSignal, getOwner, onCleanup } from "solid-js";
 import type {
 	CreateWizardOptions,
 	Wizard,
@@ -19,7 +19,7 @@ import type {
  * Creates a signal-backed wizard.
  *
  * The four manager channels (state / validation / navigation / loading) are
- * mirrored into four signals. The manager hands out frozen, cached snapshots and
+ * mirrored into four signals. The manager hands out cached snapshots and
  * keeps an unaffected channel's reference, so Solid's default `===` equality
  * skips signals whose channel did not change.
  */
@@ -102,7 +102,11 @@ export function createWizard<T extends WizardData>(
 	// One "all" subscription: the manager refreshes every affected channel cache
 	// BEFORE notifying, and "all" listeners fire on every notify (including the
 	// async navigation recompute and loading changes). Released by destroy().
-	manager.subscribe(syncSignals, "all");
+	manager.subscribe(() => {
+		// Solid 1.x flushes effects on every unbatched write; batch() commits all
+		// four channels atomically so no effect sees a half-applied transition.
+		batch(syncSignals);
+	}, "all");
 
 	const withNavigating = async (fn: () => Promise<void>): Promise<void> => {
 		manager.setLoadingState({ isNavigating: true });
