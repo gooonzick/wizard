@@ -40,7 +40,16 @@
 
 ### Current Release
 
-The published version is **1.5.1** (`core`, `react`, `vue`, and `state` are fixed-versioned together). The WIZ-001..008 runtime foundation above has shipped and was subsequently hardened by a pre-release audit covering concurrency/veto-safety, resolver-safety, StrictMode-safe React/Vue bindings, and real-machine state tests.
+The published version is **1.9.0** (`core`, `react`, `vue`, `svelte`, and `state` are fixed-versioned together). The WIZ-001..008 runtime foundation above shipped by 1.5.0 and was hardened in 1.5.1 by a pre-release audit covering concurrency/veto-safety, resolver-safety, StrictMode-safe React/Vue bindings, and real-machine state tests. Later releases:
+
+| Version | Shipped                                                                                   |
+| ------- | ----------------------------------------------------------------------------------------- |
+| 1.6.0   | `onDataChange` event, `updateField` / `watchField`, plugin `onDataChange` hook (WIZ-010)   |
+| 1.7.0   | Built-in `createAnalyticsPlugin` (WIZ-016)                                                 |
+| 1.8.0   | Built-in `createPersistencePlugin` + storage adapters (WIZ-006 follow-up)                  |
+| 1.9.0   | `@gooonzick/wizard-svelte` (WIZ-014); React/Vue `updateField` and reset/restore error fixes |
+
+Remaining backlog: WIZ-011 (sub-wizards), WIZ-012 (DevTools / Mermaid export), WIZ-013 (lazy steps), WIZ-015 (Solid.js).
 
 ### Architectural Decisions
 
@@ -730,11 +739,10 @@ If `updateStatuses: true` — set `error` for invalid steps.
 
 #### WIZ-010: onDataChange Event / Field-level Subscriptions
 
-**Status:** 📋 Planned
+**Status:** ✅ Done (see "Shipped vs. specced deltas")
 **Priority:** 🟠 Medium
 **Effort:** S (2–3 hours)
 **Package:** `@gooonzick/wizard-core`
-**Status:** ✅ DONE
 
 ##### Problem
 
@@ -787,7 +795,7 @@ WIZ-010 should also add `onDataChange` to the `WizardPlugin` interface so plugin
 ##### Shipped vs. specced deltas
 
 - The config interface is `WizardEvents<T>` (this spec called it `WizardCallbacks`); its `onDataChange` params are plain `T`, matching the other machine events.
-- `updateField(field, value)` was added to the **core** machine (previously framework-only sugar over `updateData`); the React/Vue `updateField` hooks now delegate to it, so `changedFields = [field]` is authoritative. (Correction: React's *granular* `useWizardActions().updateField` was missed here and kept routing through `updateData` until the WIZ-014 follow-up fix — see `.changeset/fix-react-vue-binding-bugs.md`.)
+- `updateField(field, value)` was added to the **core** machine (previously framework-only sugar over `updateData`); the React/Vue `updateField` hooks now delegate to it, so `changedFields = [field]` is authoritative. (Correction: React's *granular* `useWizardActions().updateField` was missed here and kept routing through `updateData` until the WIZ-014 follow-up fix shipped in 1.9.0 — see the 1.9.0 patch notes in `packages/react/CHANGELOG.md`.)
 - `setData` also fires `onDataChange` (shallow diff of top-level keys) — beyond the two methods named in the original spec — so plugins/watchers react to every data mutation.
 - A no-op `updateField` (new value is `Object.is`-equal to the current one) now fires **nothing** — no `onStateChange`, no `onDataChange`, no watchers/plugin hook. Previously the framework `updateData` sugar always created a new object and fired `onStateChange`.
 - The **plugin** `onDataChange` receives `DeepReadonly<TData>` data params (consistent with WIZ-007), and a new `"data"` value was added to `ErrorContext.phase` so isolated subscriber throws are attributed correctly via `onError`.
@@ -1162,7 +1170,7 @@ Svelte 4 users write `on:click={wizard.goNext}` instead of `onclick=`.
   the authoritative `changedFields = [field]` (WIZ-010) survive. It never routes through
   `updateData`. React's `use-wizard-granular.tsx` used to route through `updateData` instead
   (a pre-existing bug, so a same-value `updateField` still fired `onStateChange`); fixed in
-  the WIZ-014 follow-up (`.changeset/fix-react-vue-binding-bugs.md`), so all three bindings
+  the WIZ-014 follow-up (1.9.0 patch notes in `packages/react/CHANGELOG.md`), so all three bindings
   now agree.
 - **`reset`/`restore` return `void`** (React parity) but their rejection path is
   **terminated**: `void manager.runReset(...).catch(reportError)` forwards a
@@ -1354,30 +1362,30 @@ The plugin automatically:
 ## Appendix A: Implementation Order
 
 ```
-Phase 1 (Foundation):
-  WIZ-001 Navigation History  ─┐
-  WIZ-003 Step Status          ├── In parallel, no dependencies
-  WIZ-005 Reset / Cancel       ─┘
+Phase 1 (Foundation):                                          ✅ shipped
+  WIZ-001 Navigation History  ─┐                                 ✅ 1.1.0
+  WIZ-003 Step Status          ├── In parallel, no dependencies  ✅ 1.3.0
+  WIZ-005 Reset / Cancel       ─┘                                ✅ 1.4.0
 
-Phase 2 (Navigation):
-  WIZ-002 goTo()               ── depends on WIZ-001
-  WIZ-004 Progress API         ── depends on WIZ-003
+Phase 2 (Navigation):                                          ✅ shipped
+  WIZ-002 goTo()               ── depends on WIZ-001             ✅ 1.2.0
+  WIZ-004 Progress API         ── depends on WIZ-003             ✅ 1.4.0
 
-Phase 3 (Ecosystem):
-  WIZ-007 Plugin System        ── independent
-  WIZ-006 Persistence          ── depends on WIZ-001, WIZ-003
-  WIZ-008 Validate All         ── depends on WIZ-003
+Phase 3 (Ecosystem):                                           ✅ shipped
+  WIZ-007 Plugin System        ── independent                    ✅ 1.5.0
+  WIZ-006 Persistence          ── depends on WIZ-001, WIZ-003    ✅ 1.4.0 (plugin: 1.8.0)
+  WIZ-008 Validate All         ── depends on WIZ-003             ✅ 1.5.0
 
-Phase 4 (Integrations):
-  WIZ-010 onDataChange         ── independent
-  WIZ-016 Analytics Plugin     ── depends on WIZ-007
+Phase 4 (Integrations):                                        ✅ shipped
+  WIZ-010 onDataChange         ── independent                    ✅ 1.6.0
+  WIZ-016 Analytics Plugin     ── depends on WIZ-007             ✅ 1.7.0
 
-Phase 5 (Advanced):
-  WIZ-011 Sub-wizards          ── depends on WIZ-001–WIZ-005
-  WIZ-012 DevTools             ── depends on WIZ-003
-  WIZ-013 Lazy Steps           ── independent
-  WIZ-014 Svelte Integration   ── independent
-  WIZ-015 Solid Integration    ── independent
+Phase 5 (Advanced):                                            🚧 in progress
+  WIZ-011 Sub-wizards          ── depends on WIZ-001–WIZ-005     📋
+  WIZ-012 DevTools             ── depends on WIZ-003             📋
+  WIZ-013 Lazy Steps           ── independent                    📋
+  WIZ-014 Svelte Integration   ── independent                    ✅ 1.9.0
+  WIZ-015 Solid Integration    ── independent                    📋
 ```
 
 ## Appendix B: Breaking Changes Summary
@@ -1393,4 +1401,6 @@ Phase 5 (Advanced):
 | WIZ-011 Sub-wizards | New step type                            | Additive, non-breaking                      |
 | WIZ-013 Lazy Steps  | Steps can be a function                  | Requires `typeof step === 'function'` check |
 
-**Recommendation:** combine Phase 1 + Phase 2 into a single minor release (v1.1.0), Phase 3 into v1.2.0, Phase 4 into v1.3.0, and Phase 5 into v2.0.0 (if there is a breaking change with `useHistory` enabled by default).
+**Release history:** Phases 1–4 shipped incrementally as additive minor releases (1.1.0–1.8.0) rather than the originally proposed per-phase bundles; see Appendix A for per-task versions. WIZ-014 shipped additively in 1.9.0.
+
+**Recommendation for the rest of Phase 5:** ship WIZ-011, WIZ-012 and WIZ-015 as additive minors. Reserve a major (v2.0.0) for WIZ-013 only if lazy steps cannot be introduced without changing the `steps` type for existing consumers.
