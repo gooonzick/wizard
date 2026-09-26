@@ -13,7 +13,13 @@ import type {
 	WizardState,
 	WizardStepDefinition,
 } from "@gooonzick/wizard-core";
-import type { WizardStateManager } from "@gooonzick/wizard-state";
+import type {
+	LoadingState,
+	NavigationState,
+	StateSnapshot,
+	ValidationState,
+	WizardStateManager,
+} from "@gooonzick/wizard-state";
 
 /**
  * Options accepted by `createWizard()`.
@@ -58,48 +64,17 @@ export interface CreateWizardOptions<T extends WizardData> {
 	autoDestroy?: boolean;
 }
 
-/**
- * State slice - current step and data
- */
-export interface WizardStoreState<T extends WizardData> {
-	currentStepId: StepId;
-	currentStep: WizardStepDefinition<T>;
-	data: T;
-	isCompleted: boolean;
-	stepStatuses: Record<StepId, StepStatus>;
-	progress: WizardProgress;
-}
+/** State slice (current step, data, statuses, progress). */
+export type WizardStoreState<T extends WizardData> = StateSnapshot<T>;
 
-/**
- * Validation slice - validation state and errors
- */
-export interface WizardStoreValidation {
-	isValid: boolean;
-	validationErrors?: Record<string, string>;
-}
+/** Validation slice. */
+export type WizardStoreValidation = ValidationState;
 
-/**
- * Navigation slice - step navigation capabilities
- */
-export interface WizardStoreNavigation {
-	canGoNext: boolean;
-	canGoPrevious: boolean;
-	canGoBack: boolean;
-	isFirstStep: boolean;
-	isLastStep: boolean;
-	visitedSteps: StepId[];
-	availableSteps: StepId[];
-	stepHistory: StepId[];
-}
+/** Navigation slice (computed asynchronously by the manager). */
+export type WizardStoreNavigation = NavigationState;
 
-/**
- * Loading slice - async operation states
- */
-export interface WizardStoreLoading {
-	isValidating: boolean;
-	isSubmitting: boolean;
-	isNavigating: boolean;
-}
+/** Loading slice (async operation flags). */
+export type WizardStoreLoading = LoadingState;
 
 /**
  * Actions slice - data mutations and validation
