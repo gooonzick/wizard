@@ -25,11 +25,12 @@ Runs on every push to `main`/`develop` branches and on all pull requests.
 
 Versions and publishes packages. Runs on every push to `main` and on manual dispatch.
 
-**Jobs:**
+**What it does** (one job, `changesets/action@v1`):
 
-- **Select mode** - `changesets/action/select-mode` decides what to do. With pending changesets it picks `version`; with none and unpublished package versions it picks `publish`; otherwise it does nothing.
-- **Version Packages PR** (`version` mode) - runs `pnpm changeset:version` and opens or updates the "Version Packages" PR. Permissions: `contents: write`, `pull-requests: write`.
-- **Publish to npm** (`publish` mode, i.e. after the Version Packages PR is merged) - builds, runs tests, publishes every package whose version is not on npm yet, then pushes release tags and creates GitHub releases. It is the only job with `id-token: write`.
+- **Pending changesets** - runs `pnpm changeset:version` and opens or updates the "Version Packages" PR.
+- **No changesets** (i.e. after the Version Packages PR is merged) - builds, runs tests, publishes every package whose version is not on npm yet, then pushes release tags and creates GitHub releases.
+
+The job has `contents: write`, `pull-requests: write` and `id-token: write`. `changesets/action@v2` would split versioning and publishing into separate jobs, so that only publishing gets `id-token`, but it requires `@changesets/cli` v3. The repo is on CLI v2.
 
 **Authentication: npm trusted publishing (OIDC).** There is no npm token. Each package has a trusted publisher on npmjs.com for repository `gooonzick/wizard` and workflow file `changesets.yml`. At publish time npm exchanges the GitHub OIDC token for a short-lived credential and attaches provenance automatically. This needs a GitHub-hosted runner and npm >= 11.5.1 (the job runs Node 24 and pins npm explicitly, because pnpm 10 delegates `pnpm publish` to the npm CLI).
 
