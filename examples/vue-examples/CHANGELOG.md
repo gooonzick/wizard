@@ -1,5 +1,15 @@
 # @gooonzick/wizard-vue-examples
 
+## 0.0.14
+
+### Patch Changes
+
+- Updated dependencies [5154f2e]
+- Updated dependencies [5154f2e]
+- Updated dependencies [5154f2e]
+  - @gooonzick/wizard-core@1.10.0
+  - @gooonzick/wizard-vue@1.10.0
+
 ## 0.0.13
 
 ### Patch Changes
