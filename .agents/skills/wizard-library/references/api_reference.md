@@ -29,7 +29,7 @@ Use public exports from `@gooonzick/wizard-core`:
 
 Prefer building on exported APIs over importing deep internal modules.
 
-The React, Vue and Svelte adapters additionally re-export state-layer types from
+The React, Vue, Svelte and Solid adapters additionally re-export state-layer types from
 `@gooonzick/wizard-state` for typing consumers: all expose `StateSnapshot`,
 `LoadingState`, `NavigationState`, `ValidationState`, and `SubscriptionChannel`
 (alongside `WizardStateManager`). Prefer these public re-exports over importing the
@@ -133,8 +133,24 @@ through Svelte primitives rather than a hook/composable:
 - There are deliberately no granular helpers — `derived()` plus the four sub-stores cover
   that ground.
 
-Both React/Vue adapters' `useWizard` (and `<WizardProvider>`) accept an `onDataChange`
-option — `(prevData, nextData, changedFields) => void` (plain `T` params) — that
+Solid (`@gooonzick/wizard-solid`, Solid 1.x) mirrors the Svelte runes surface with signals:
+
+- `createWizard(options)` returns flat reactive getters (`wizard.currentStepId`,
+  `wizard.canGoNext`, …), slice getters `state` / `validation` / `navigation` / `loading`,
+  `actions`, `goNext`/`goPrevious`/`goTo`,
+  `field(key): { get value, set value }`, `getMachine()` / `getManager()`, `destroy()`
+  and `isDestroyed`.
+- Four signals (one per manager channel) are refreshed from ONE `"all"` subscription
+  inside `batch()` (atomic) wrapped in `try/catch` (a throwing user effect goes to
+  `onError`, never into the machine). Tracking is per channel, not per field.
+- Context: `<WizardProvider wizard={wizard}>` (takes an existing wizard, never destroys
+  it) + `useWizardContext<T>()` (throws without a provider) / `hasWizardContext()`.
+- `autoDestroy` (default `true`) registers `onCleanup` only when `getOwner()` is non-null.
+- Destructuring the wizard loses reactivity (like Solid props).
+
+All four adapters accept an `onDataChange` option — React/Vue `useWizard` (and
+`<WizardProvider>`), Svelte `createWizardStore` / runes `createWizard`, and Solid
+`createWizard` — `(prevData, nextData, changedFields) => void` (plain `T` params) — that
 fires on data mutations. `actions.updateField` delegates to the core
 `updateField` (Object.is no-op). `watchField` is core-only and is NOT part of the
 adapter surface.
@@ -196,6 +212,9 @@ Use context for external dependencies instead of hard-coding globals in guards/r
 - Plugin hook `onDataChange(prevData, nextData, changedFields)` (DeepReadonly
   payloads, fire-and-forget, errors → `onError` phase "data") is part of
   `WizardPlugin` (WIZ-010). `ErrorContext.phase` now includes `"data"`.
+- A throwing `onStateChange` subscriber is isolated: the error goes to
+  `events.onError` and plugin `onError` with `phase: "state"`; the in-flight
+  operation (`goNext()`, `updateField`, ...) is NOT rejected.
 - `snapshot`, its `stepStatuses`, and `snapshot.progress` (with its `enabledStepIds`
   array) are frozen; `snapshot.data` is intentionally NOT frozen.
 
@@ -259,7 +278,7 @@ Use context for external dependencies instead of hard-coding globals in guards/r
 Use package-manager equivalents as needed:
 
 ```bash
-npm install @gooonzick/wizard-core @gooonzick/wizard-react @gooonzick/wizard-vue @gooonzick/wizard-svelte
+npm install @gooonzick/wizard-core @gooonzick/wizard-react @gooonzick/wizard-vue @gooonzick/wizard-svelte @gooonzick/wizard-solid
 ```
 
 Install only the adapters your project uses.

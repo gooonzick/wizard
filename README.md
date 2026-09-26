@@ -19,6 +19,7 @@ A declarative, type-safe, and extensible framework for building multi-step wizar
 - **React Integration**: Ready-to-use React hook included
 - **Vue Integration**: Vue 3 Composition API support
 - **Svelte Integration**: Svelte stores + Svelte 5 runes
+- **Solid Integration**: Signal-backed `createWizard()` for Solid 1.x
 - **Builder Pattern**: Fluent API for easy wizard creation
 
 ## 📦 Installation
@@ -35,6 +36,9 @@ npm install @gooonzick/wizard-core @gooonzick/wizard-vue
 
 # For Svelte integration
 npm install @gooonzick/wizard-core @gooonzick/wizard-svelte
+
+# For Solid integration
+npm install @gooonzick/wizard-core @gooonzick/wizard-solid
 ```
 
 ## 🚀 Quick Start
@@ -457,15 +461,20 @@ wizard-vite/
 │   │       ├── use-wizard.ts    # Main Vue composable
 │   │       ├── use-wizard-granular.ts # Granular composables
 │   │       └── wizard-provider.ts # Provide/inject provider
-│   └── svelte/                  # Svelte integration
+│   ├── svelte/                  # Svelte integration
+│   │   └── src/
+│   │       ├── create-wizard-store.ts # Store-based API (Svelte 4 + 5)
+│   │       ├── context.ts             # setWizardContext / getWizardContext
+│   │       └── runes/                 # Svelte 5 runes API (published uncompiled)
+│   └── solid/                   # Solid.js integration
 │       └── src/
-│           ├── create-wizard-store.ts # Store-based API (Svelte 4 + 5)
-│           ├── context.ts             # setWizardContext / getWizardContext
-│           └── runes/                 # Svelte 5 runes API (published uncompiled)
+│           ├── create-wizard.ts # Signal-backed createWizard()
+│           └── context.ts       # WizardProvider / useWizardContext
 ├── examples/
 │   ├── react-examples/          # React example application
 │   ├── vue-examples/            # Vue example application
-│   └── svelte-examples/         # Svelte example application
+│   ├── svelte-examples/         # Svelte example application
+│   └── solid-examples/          # Solid example application
 └── docs/                        # Documentation
 ```
 

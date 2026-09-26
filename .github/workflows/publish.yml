@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       package:
-        description: "Package to publish (core, react, vue, svelte, state, or all)"
+        description: "Package to publish (core, react, vue, svelte, solid, state, or all)"
         required: true
         default: "all"
         type: choice
@@ -15,6 +15,7 @@ on:
           - vue
           - state
           - svelte
+          - solid
       tag:
         description: "npm dist-tag (latest, next, beta)"
         required: true
@@ -67,7 +68,7 @@ jobs:
           echo "tag=$TAG" >> $GITHUB_OUTPUT
 
           if [ "$PACKAGE" = "all" ]; then
-            echo "packages=core react vue state svelte" >> $GITHUB_OUTPUT
+            echo "packages=core react vue state svelte solid" >> $GITHUB_OUTPUT
           else
             echo "packages=$PACKAGE" >> $GITHUB_OUTPUT
           fi
@@ -107,6 +108,14 @@ jobs:
       - name: Publish @gooonzick/wizard-svelte
         if: contains(steps.packages.outputs.packages, 'svelte')
         working-directory: ./packages/svelte
+        run: |
+          pnpm publish --access public --tag ${{ steps.packages.outputs.tag }} --no-git-checks --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish @gooonzick/wizard-solid
+        if: contains(steps.packages.outputs.packages, 'solid')
+        working-directory: ./packages/solid
         run: |
           pnpm publish --access public --tag ${{ steps.packages.outputs.tag }} --no-git-checks --provenance
         env:

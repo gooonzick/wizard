@@ -16,6 +16,10 @@
   - changed-files:
     - any-glob-to-any-file: 'packages/svelte/**/*'
 
+'package: solid':
+  - changed-files:
+    - any-glob-to-any-file: 'packages/solid/**/*'
+
 'documentation':
   - changed-files:
     - any-glob-to-any-file:

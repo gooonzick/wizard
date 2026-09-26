@@ -33,6 +33,17 @@ export class WizardStateManager<T extends WizardData> {
 	private navigationCache: NavigationState;
 	private validationCache: ValidationState;
 	private loadingCache: LoadingState;
+	// Per-flag reference counts for trackLoading(): a flag stays true while any
+	// tracked operation holding it is in flight.
+	private loadingCounts: Record<keyof LoadingState, number> = {
+		isValidating: 0,
+		isSubmitting: 0,
+		isNavigating: 0,
+	};
+	// Bumped whenever the flags are forced off (reset/restore/cancel). A tracked
+	// operation that started in an older epoch was aborted by that force-off, so
+	// its later release is ignored instead of stealing a newer operation's count.
+	private loadingEpoch = 0;
 	// Cached raw machine snapshot (FIX 12): same reference until state changes
 	private snapshotCache: WizardState<T>;
 
@@ -397,6 +408,76 @@ export class WizardStateManager<T extends WizardData> {
 	}
 
 	/**
+	 * Run `fn` while holding a reference on the `flag` loading flag.
+	 *
+	 * Reference-counted: the flag turns on when the first tracked call starts and
+	 * off only when the last one settles (resolved OR rejected), so overlapping
+	 * operations — or one that is rejected immediately, e.g. a double-clicked
+	 * Next rejected as busy — never clear another operation's flag early. The
+	 * "loading" channel is notified only when the boolean actually changes.
+	 *
+	 * The flag is set synchronously, before `fn` is invoked. `fn`'s result is
+	 * returned and its rejection propagates unchanged.
+	 *
+	 * runReset()/runRestore()/runCancel() force every flag off and discard all
+	 * outstanding references; operations in flight at that moment release
+	 * nothing when they later settle.
+	 */
+	async trackLoading<R>(
+		flag: keyof LoadingState,
+		fn: () => Promise<R>,
+	): Promise<R> {
+		const epoch = this.loadingEpoch;
+		this.loadingCounts[flag] += 1;
+		this.setLoadingFlag(flag, true);
+		try {
+			return await fn();
+		} finally {
+			if (epoch === this.loadingEpoch) {
+				this.loadingCounts[flag] = Math.max(0, this.loadingCounts[flag] - 1);
+				if (this.loadingCounts[flag] === 0) {
+					this.setLoadingFlag(flag, false);
+				}
+			}
+		}
+	}
+
+	/**
+	 * Set a single loading flag, notifying "loading" only on an actual change.
+	 */
+	private setLoadingFlag(flag: keyof LoadingState, value: boolean): void {
+		if (this.loadingCache[flag] === value) return;
+		this.setLoadingState({ [flag]: value });
+	}
+
+	/**
+	 * Drop every outstanding trackLoading() reference (zero the counters and
+	 * start a new epoch). Does not touch the flags themselves.
+	 */
+	private discardLoadingRefs(): void {
+		this.loadingEpoch += 1;
+		this.loadingCounts = {
+			isValidating: 0,
+			isSubmitting: 0,
+			isNavigating: 0,
+		};
+	}
+
+	/**
+	 * Force every loading flag off (always notifies, as before) and discard all
+	 * trackLoading() references so aborted in-flight operations cannot drive a
+	 * counter negative or clear a newer operation's flag when they settle.
+	 */
+	private forceLoadingOff(): void {
+		this.discardLoadingRefs();
+		this.setLoadingState({
+			isValidating: false,
+			isSubmitting: false,
+			isNavigating: false,
+		});
+	}
+
+	/**
 	 * Get the underlying machine for direct access
 	 */
 	getMachine(): WizardMachine<T> {
@@ -442,19 +523,11 @@ export class WizardStateManager<T extends WizardData> {
 	 * must NOT notify them manually to avoid double-notify.
 	 */
 	async runReset(data?: T): Promise<void> {
-		this.setLoadingState({
-			isValidating: false,
-			isSubmitting: false,
-			isNavigating: false,
-		});
+		this.forceLoadingOff();
 		try {
 			this.machine.reset(data);
 		} finally {
-			this.setLoadingState({
-				isValidating: false,
-				isSubmitting: false,
-				isNavigating: false,
-			});
+			this.forceLoadingOff();
 		}
 	}
 
@@ -470,15 +543,15 @@ export class WizardStateManager<T extends WizardData> {
 	 * machine's onStateChange auto-routing.
 	 */
 	async runCancel(): Promise<void> {
+		// machine.cancel() supersedes any in-flight transition immediately, so
+		// release their references now: one settling while the cancel handlers
+		// run must not clear the isNavigating flag cancel() is holding.
+		this.discardLoadingRefs();
 		this.setLoadingState({ isNavigating: true });
 		try {
 			await this.machine.cancel();
 		} finally {
-			this.setLoadingState({
-				isValidating: false,
-				isSubmitting: false,
-				isNavigating: false,
-			});
+			this.forceLoadingOff();
 		}
 	}
 
@@ -493,19 +566,11 @@ export class WizardStateManager<T extends WizardData> {
 	 * onStateChange).
 	 */
 	async runRestore(serializedState: WizardSerializedState<T>): Promise<void> {
-		this.setLoadingState({
-			isValidating: false,
-			isSubmitting: false,
-			isNavigating: false,
-		});
+		this.forceLoadingOff();
 		try {
 			this.machine.restore(serializedState);
 		} finally {
-			this.setLoadingState({
-				isValidating: false,
-				isSubmitting: false,
-				isNavigating: false,
-			});
+			this.forceLoadingOff();
 		}
 	}
 

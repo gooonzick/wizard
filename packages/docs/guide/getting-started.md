@@ -18,6 +18,8 @@ npm install @gooonzick/wizard-core @gooonzick/wizard-react
 npm install @gooonzick/wizard-core @gooonzick/wizard-vue
 # Svelte
 npm install @gooonzick/wizard-core @gooonzick/wizard-svelte
+# Solid
+npm install @gooonzick/wizard-core @gooonzick/wizard-solid
 ```
 
 ### Using yarn
@@ -26,6 +28,7 @@ npm install @gooonzick/wizard-core @gooonzick/wizard-svelte
 yarn add @gooonzick/wizard-core @gooonzick/wizard-react
 # or: yarn add @gooonzick/wizard-core @gooonzick/wizard-vue
 # or: yarn add @gooonzick/wizard-core @gooonzick/wizard-svelte
+# or: yarn add @gooonzick/wizard-core @gooonzick/wizard-solid
 ```
 
 ### Using pnpm
@@ -34,14 +37,16 @@ yarn add @gooonzick/wizard-core @gooonzick/wizard-react
 pnpm add @gooonzick/wizard-core @gooonzick/wizard-react
 # or: pnpm add @gooonzick/wizard-core @gooonzick/wizard-vue
 # or: pnpm add @gooonzick/wizard-core @gooonzick/wizard-svelte
+# or: pnpm add @gooonzick/wizard-core @gooonzick/wizard-solid
 ```
 
 ## Core vs Framework Integrations
 
-- **`@gooonzick/wizard-core`**: Framework-agnostic state machine. Use this if you're building a wizard in vanilla TypeScript, Solid, or any other framework without a dedicated binding.
+- **`@gooonzick/wizard-core`**: Framework-agnostic state machine. Use this if you're building a wizard in vanilla TypeScript or any other framework without a dedicated binding.
 - **`@gooonzick/wizard-react`**: React-specific integration with the `useWizard()` hook. Use this for React applications.
 - **`@gooonzick/wizard-vue`**: Vue 3 Composition API integration. Use this for Vue applications.
 - **`@gooonzick/wizard-svelte`**: Svelte integration — `createWizardStore()` on the main entry (Svelte 4 + 5) and a Svelte 5 runes API on `@gooonzick/wizard-svelte/runes`.
+- **`@gooonzick/wizard-solid`**: Solid.js 1.x integration — `createWizard()` with signal-backed reactive getters, `field()` and `WizardProvider`.
 
 ## Your First Wizard (React)
 

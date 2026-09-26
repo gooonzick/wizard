@@ -4,7 +4,7 @@ A framework-agnostic, type-safe state machine for building multi-step wizards in
 
 ## Features
 
-- **Framework Agnostic** - Use with React, Vue, Svelte, vanilla JS, or any TypeScript project
+- **Framework Agnostic** - Use with React, Vue, Svelte, Solid, vanilla JS, or any TypeScript project
 - **Type Safe** - Full TypeScript generics support for your data types
 - **Flexible Navigation** - Static, conditional, or dynamic step transitions
 - **Navigation History** - Built-in history stack for reliable back navigation through conditional flows

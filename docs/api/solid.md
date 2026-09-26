@@ -1,0 +1,133 @@
+# Solid Package (`@gooonzick/wizard-solid`)
+
+API reference for `@gooonzick/wizard-solid`.
+
+## `createWizard(options)`
+
+```ts
+function createWizard<T extends WizardData>(options: CreateWizardOptions<T>): Wizard<T>;
+```
+
+Creates a `WizardMachine` and a `WizardStateManager` and mirrors the manager's four channel snapshots into Solid signals.
+
+### `CreateWizardOptions<T>`
+
+| Option | Type | Default | Notes |
+| ------ | ---- | ------- | ----- |
+| `definition` | `WizardDefinition<T>` | — | Read once. |
+| `initialData` | `T` | — | Read once. Also the default for `actions.reset()`. |
+| `context` | `WizardContext` | `{}` | Read once. |
+| `plugins` | `WizardPlugin<T>[]` | — | Registered once at creation. |
+| `autoDestroy` | `boolean` | `true` | Registers `onCleanup(destroy)` when an owner exists. |
+| `onStateChange` | `(state: WizardState<T>) => void` | — | |
+| `onStepEnter` | `(stepId: StepId, data: T) => void` | — | |
+| `onStepLeave` | `(stepId: StepId, data: T) => void` | — | |
+| `onComplete` | `(data: T) => void` | — | |
+| `onCancel` | `(data: T) => void \| Promise<void>` | — | |
+| `onReset` | `() => void` | — | |
+| `onError` | `(error: Error) => void` | — | Machine errors and effect errors thrown during signal updates. When omitted, effect errors and `reset`/`restore` failures are logged with `console.error`. |
+| `onDataChange` | `(prev: T, next: T, changedFields: (keyof T)[]) => void` | — | |
+
+### `Wizard<T>`
+
+**Reactive getters (read-only)**
+
+| Getter | Type | Channel |
+| ------ | ---- | ------- |
+| `currentStepId` | `StepId` | state |
+| `currentStep` | `WizardStepDefinition<T>` | state |
+| `data` | `T` | state |
+| `isCompleted` | `boolean` | state |
+| `stepStatuses` | `Record<StepId, StepStatus>` | state |
+| `progress` | `WizardProgress` | state |
+| `isValid` | `boolean` | validation |
+| `validationErrors` | `Record<string, string> \| undefined` | validation |
+| `canGoNext` | `boolean` | navigation (async) |
+| `canGoPrevious` | `boolean` | navigation (async) |
+| `canGoBack` | `boolean` | navigation |
+| `isFirstStep` | `boolean` | navigation |
+| `isLastStep` | `boolean` | navigation (async) |
+| `visitedSteps` | `StepId[]` | navigation |
+| `availableSteps` | `StepId[]` | navigation (async) |
+| `stepHistory` | `StepId[]` | navigation |
+| `isValidating` | `boolean` | loading |
+| `isSubmitting` | `boolean` | loading |
+| `isNavigating` | `boolean` | loading |
+| `state` | `WizardStoreState<T>` | state |
+| `validation` | `WizardStoreValidation` | validation |
+| `navigation` | `WizardStoreNavigation` | navigation |
+| `loading` | `WizardStoreLoading` | loading |
+
+**Navigation**
+
+| Method | Returns | Notes |
+| ------ | ------- | ----- |
+| `goNext()` | `Promise<void>` | Validates, runs `onSubmit`, moves. Rejects on invalid step. Toggles `isNavigating`. |
+| `goPrevious()` | `Promise<void>` | Toggles `isNavigating`. |
+| `goTo(stepId, options?)` | `Promise<void>` | `GoToOptions`: `skipValidation`, `skipLifecycle`, `skipGuards`. |
+
+**`actions: WizardStoreActions<T>`**
+
+| Action | Signature | Notes |
+| ------ | --------- | ----- |
+| `updateField` | `<K extends keyof T>(field: K, value: T[K]) => void` | No-op when `Object.is`-equal. |
+| `updateData` | `(updater: (data: T) => T) => void` | |
+| `setData` | `(data: T) => void` | |
+| `validate` | `() => Promise<void>` | Toggles `isValidating`. Resolves on an invalid step; rejects only if aborted. |
+| `validateAll` | `(options?: { updateStatuses?: boolean }) => Promise<ValidationSummary>` | Toggles `isValidating`. Resolves even with invalid steps (a throwing validator counts as invalid); rejects if aborted or if a step's `enabled` guard throws. Not supersede-protected — a `reset()`/`cancel()` mid-call does not cancel it, and with `updateStatuses: true` its statuses still get written. |
+| `canSubmit` | `() => Promise<boolean>` | |
+| `submit` | `() => Promise<void>` | Toggles `isSubmitting`. |
+| `reset` | `(data?: T) => void` | Fire-and-forget; errors → `onError` (else `console.error`). |
+| `cancel` | `() => Promise<void>` | Calls `onCancel`, then resets. |
+| `serialize` | `() => WizardSerializedState<T>` | |
+| `restore` | `(state: WizardSerializedState<T>) => void` | Fire-and-forget; `WizardRestoreError` → `onError` (else `console.error`). |
+
+**Other members**
+
+| Member | Type | Notes |
+| ------ | ---- | ----- |
+| `field(key)` | `<K extends keyof T>(key: K) => WizardField<T[K]>` | Stable per key. |
+| `getMachine()` | `WizardMachine<T>` | |
+| `getManager()` | `WizardStateManager<T>` | |
+| `destroy()` | `Promise<void>` | Idempotent. |
+| `isDestroyed` | `boolean` | |
+
+### `WizardField<V>`
+
+```ts
+interface WizardField<V> {
+	get value(): V; // reactive
+	set value(v: V); // machine.updateField(key, v)
+}
+```
+
+## Context
+
+### `WizardProvider`
+
+```ts
+function WizardProvider<T extends WizardData>(props: WizardProviderProps<T>): JSX.Element;
+
+interface WizardProviderProps<T extends WizardData> {
+	wizard: Wizard<T>; // read once; never destroyed by the provider
+	children?: JSX.Element;
+}
+```
+
+### `useWizardContext<T>()`
+
+Returns the nearest provided `Wizard<T>`. Throws `Error("useWizardContext() must be called inside a <WizardProvider wizard={...}>.")` when there is none.
+
+### `hasWizardContext()`
+
+Returns `true` when a `WizardProvider` is above the caller, otherwise `false`. Never throws.
+
+## Re-exports
+
+For convenience the package re-exports `WizardProgress`, `WizardSerializedState` and `WizardRestoreError` from `@gooonzick/wizard-core`, and `WizardStateManager`, `LoadingState`, `NavigationState`, `StateSnapshot`, `SubscriptionChannel`, `ValidationState` from `@gooonzick/wizard-state`.
+
+## Related Documentation
+
+- See the [Solid Integration guide](../solid-integration.md) for usage patterns
+- See the [Core API](./core.md) for the framework-agnostic wizard engine
+- See the [React API](./react.md), [Vue API](./vue.md) and [Svelte API](./svelte.md) for the other bindings

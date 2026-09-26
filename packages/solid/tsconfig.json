@@ -1,0 +1,12 @@
+{
+	"extends": "../../tsconfig.base.json",
+	"compilerOptions": {
+		"outDir": "./.tsbuild",
+		"emitDeclarationOnly": true,
+		"jsx": "preserve",
+		"jsxImportSource": "solid-js",
+		"types": ["node"]
+	},
+	"include": ["src/**/*", "tests/**/*"],
+	"references": [{ "path": "./tsconfig.build.json" }]
+}

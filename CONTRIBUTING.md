@@ -53,7 +53,8 @@ wizard-vite/
 │   ├── core/       # @gooonzick/wizard-core - Framework-agnostic core
 │   ├── react/      # @gooonzick/wizard-react - React integration
 │   ├── vue/        # @gooonzick/wizard-vue - Vue integration
-│   └── svelte/     # @gooonzick/wizard-svelte - Svelte integration (stores + runes)
+│   ├── svelte/     # @gooonzick/wizard-svelte - Svelte integration (stores + runes)
+│   └── solid/      # @gooonzick/wizard-solid - Solid.js integration (signals)
 ├── examples/       # Example applications
 └── docs/          # Documentation
 ```
@@ -74,6 +75,7 @@ pnpm --filter=@gooonzick/wizard-core test
 pnpm --filter=@gooonzick/wizard-react test
 pnpm --filter=@gooonzick/wizard-vue test
 pnpm --filter=@gooonzick/wizard-svelte test
+pnpm --filter=@gooonzick/wizard-solid test
 ```
 
 ### Building
@@ -163,6 +165,7 @@ Scopes:
 - `react`: Changes to @gooonzick/wizard-react
 - `vue`: Changes to @gooonzick/wizard-vue
 - `svelte`: Changes to @gooonzick/wizard-svelte
+- `solid`: Changes to @gooonzick/wizard-solid
 - `examples`: Changes to examples
 - `ci`: Changes to CI/CD
 

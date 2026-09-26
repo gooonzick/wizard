@@ -23,6 +23,7 @@ export default defineConfig({
 			{ text: "React Integration", link: "/guide/react-integration" },
 			{ text: "Vue Integration", link: "/guide/vue-integration" },
 			{ text: "Svelte Integration", link: "/guide/svelte-integration" },
+			{ text: "Solid Integration", link: "/guide/solid-integration" },
 			{ text: "API", link: "/guide/api/core" },
 			{ text: "CI/CD", link: "/guide/ci-cd" },
 		],
@@ -47,6 +48,10 @@ export default defineConfig({
 							text: "Svelte Integration",
 							link: "/guide/svelte-integration",
 						},
+						{
+							text: "Solid Integration",
+							link: "/guide/solid-integration",
+						},
 					],
 				},
 				{
@@ -56,6 +61,7 @@ export default defineConfig({
 						{ text: "React API", link: "/guide/api/react" },
 						{ text: "Vue API", link: "/guide/api/vue" },
 						{ text: "Svelte API", link: "/guide/api/svelte" },
+						{ text: "Solid API", link: "/guide/api/solid" },
 					],
 				},
 				{
