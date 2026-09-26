@@ -3,6 +3,7 @@ title: GitHub Actions Workflows
 description: Automated CI/CD workflows for the wizard-vite monorepo
 ---
 
+
 # GitHub Actions Workflows
 
 This directory contains automated CI/CD workflows for the wizard-vite monorepo.
@@ -20,30 +21,21 @@ Runs on every push to `main`/`develop` branches and on all pull requests.
 - **Build** - Builds all packages and uploads artifacts
 - **Test** - Runs tests on Node 18, 20, and 22
 
-### 2. Publish (`publish.yml`)
+### 2. Changesets release (`changesets.yml`)
 
-Publishes packages to npm registry.
+Versions and publishes packages. Runs on every push to `main` and on manual dispatch.
 
-**Triggers:**
+**Jobs:**
 
-- GitHub Release published
-- Manual workflow dispatch (allows selecting specific package)
+- **Select mode** - `changesets/action/select-mode` decides what to do. With pending changesets it picks `version`; with none and unpublished package versions it picks `publish`; otherwise it does nothing.
+- **Version Packages PR** (`version` mode) - runs `pnpm changeset:version` and opens or updates the "Version Packages" PR. Permissions: `contents: write`, `pull-requests: write`.
+- **Publish to npm** (`publish` mode, i.e. after the Version Packages PR is merged) - builds, runs tests, publishes every package whose version is not on npm yet, then pushes release tags and creates GitHub releases. It is the only job with `id-token: write`.
 
-**Options:**
+**Authentication: npm trusted publishing (OIDC).** There is no npm token. Each package has a trusted publisher on npmjs.com for repository `gooonzick/wizard` and workflow file `changesets.yml`. At publish time npm exchanges the GitHub OIDC token for a short-lived credential and attaches provenance automatically. This needs a GitHub-hosted runner and npm >= 11.5.1 (the job runs Node 24 and pins npm explicitly, because pnpm 10 delegates `pnpm publish` to the npm CLI).
 
-- `package` - Which package to publish (all, core, react, vue)
-- `tag` - npm dist-tag (latest, next, beta)
+> **Do not rename `changesets.yml`.** The trusted publisher is bound to the file name; a rename breaks publishing until every package's trusted publisher is updated. npm allows one trusted publisher per package, so no other workflow can publish.
 
-**Features:**
-
-- ✅ npm provenance support
-- ✅ Runs tests before publishing
-- ✅ Publishes with proper access control
-- ✅ Creates summary in GitHub Actions
-
-**Required Secrets:**
-
-- `NPM_TOKEN` - npm authentication token with publish access
+**Manual re-run:** Actions → Changesets → Run workflow. In `publish` mode it retries publishing any version that is not on npm yet (for example after a failed publish).
 
 ### 3. PR Checks (`pr-checks.yml`)
 
@@ -76,15 +68,24 @@ Creates GitHub releases from git tags.
 
 ## Setup Instructions
 
-### 1. Configure npm Token
+### 1. Configure npm trusted publishing
 
-1. Generate an npm access token at https://www.npmjs.com/settings/YOUR_USERNAME/tokens
-   - Select "Automation" token type
-   - Enable "Publish" permission
-2. Add the token to GitHub repository secrets:
-   - Go to repository Settings → Secrets and variables → Actions
-   - Create new secret named `NPM_TOKEN`
-   - Paste your npm token
+For each package (`@gooonzick/wizard-core`, `-react`, `-vue`, `-state`, `-svelte`, `-solid`):
+
+1. On npmjs.com open the package → **Settings** → **Trusted Publisher** → **GitHub Actions**, and enter:
+   - Organization or user: `gooonzick`
+   - Repository: `wizard`
+   - Workflow filename: `changesets.yml`
+   - Environment: leave empty
+2. Or, with npm >= 11.15 and a logged-in account that has 2FA enabled:
+
+   ```bash
+   npm trust github @gooonzick/wizard-core --repo gooonzick/wizard --file changesets.yml --allow-publish
+   ```
+
+A brand-new package must exist on npm before a trusted publisher can be configured, so its first version has to be published once by other means.
+
+After trusted publishing works, the recommended hardening is package **Settings → Publishing access → "Require two-factor authentication and disallow tokens"**, and deleting any old `NPM_TOKEN` secret.
 
 ### 2. Configure Codecov (Optional)
 
@@ -99,40 +100,9 @@ Ensure GitHub Actions is enabled in repository Settings → Actions → General.
 
 ## Publishing Workflow
 
-### Automated Publishing (Recommended)
-
-1. Update version in package.json:
-
-   ```bash
-   # For all packages
-   pnpm version patch  # or minor, major
-
-   # For specific package
-   cd packages/core
-   pnpm version patch
-   ```
-
-2. Create and push a git tag:
-
-   ```bash
-   # For all packages
-   git tag v1.2.3
-   git push origin v1.2.3
-
-   # For specific package
-   git tag @gooonzick/wizard-core@1.2.3
-   git push origin @gooonzick/wizard-core@1.2.3
-   ```
-
-3. Create a GitHub Release from the tag
-4. Publish workflow will automatically run
-
-### Manual Publishing
-
-1. Go to Actions → Publish to npm
-2. Click "Run workflow"
-3. Select package and npm tag
-4. Click "Run workflow"
+1. In a feature PR, add a changeset: `pnpm changeset` (choose packages and bump type). All publishable packages are in one fixed version group, so they always release together.
+2. Merge the PR to `main`. The Changesets workflow opens or updates the **Version Packages** PR with the version bumps and CHANGELOG entries.
+3. Merge the Version Packages PR. The workflow publishes the new versions to npm via trusted publishing, pushes `@gooonzick/wizard-<name>@<version>` tags and creates GitHub releases.
 
 ## Testing Locally
 
@@ -161,11 +131,12 @@ Add to your README.md:
 
 ## Troubleshooting
 
-### Publish fails with "need auth"
+### Publish fails with E404 / E401 / "need auth"
 
-- Verify `NPM_TOKEN` secret is set correctly
-- Ensure token has publish permissions
-- Check token hasn't expired
+- Check the package's trusted publisher on npmjs.com: repository `gooonzick/wizard` and workflow `changesets.yml` must match exactly (case-sensitive, including `.yml`).
+- Make sure the publish job still has `permissions: id-token: write` and runs on a GitHub-hosted runner.
+- Make sure npm on the runner is >= 11.5.1 (see the "Update npm" step).
+- A new package needs its first version published before a trusted publisher can be added.
 
 ### Tests fail on specific Node version
 
