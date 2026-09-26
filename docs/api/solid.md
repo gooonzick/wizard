@@ -65,8 +65,6 @@ Creates a `WizardMachine` and a `WizardStateManager` and mirrors the manager's f
 | `goNext()` | `Promise<void>` | Validates, runs `onSubmit`, moves. Rejects on invalid step. Toggles `isNavigating`. |
 | `goPrevious()` | `Promise<void>` | Toggles `isNavigating`. |
 | `goTo(stepId, options?)` | `Promise<void>` | `GoToOptions`: `skipValidation`, `skipLifecycle`, `skipGuards`. |
-| `goBack(steps?)` | `Promise<void>` | Deprecated — use `goPrevious()`. |
-| `goToStep(stepId)` | `Promise<void>` | Deprecated — `goTo(stepId, { skipValidation: true })`. |
 
 **`actions: WizardStoreActions<T>`**
 

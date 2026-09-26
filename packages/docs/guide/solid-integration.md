@@ -95,7 +95,7 @@ export function SignupWizard() {
 | ----- | ------- |
 | Flat getters | `currentStepId`, `currentStep`, `data`, `isCompleted`, `stepStatuses`, `progress`, `isValid`, `validationErrors`, `canGoNext`, `canGoPrevious`, `canGoBack`, `isFirstStep`, `isLastStep`, `visitedSteps`, `availableSteps`, `stepHistory`, `isValidating`, `isSubmitting`, `isNavigating` |
 | Slices | `state`, `navigation`, `validation`, `loading` — the manager's frozen snapshots |
-| Navigation | `goNext()`, `goPrevious()`, `goTo(stepId, options?)` (+ deprecated `goBack`, `goToStep`) |
+| Navigation | `goNext()`, `goPrevious()`, `goTo(stepId, options?)` |
 | Actions | `wizard.actions.updateField`, `updateData`, `setData`, `validate`, `validateAll`, `canSubmit`, `submit`, `reset`, `cancel`, `serialize`, `restore` |
 | Binding | `field(key)` |
 | Escape hatches | `getMachine()`, `getManager()`, `destroy()`, `isDestroyed` |

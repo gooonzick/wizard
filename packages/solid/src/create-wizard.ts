@@ -133,10 +133,8 @@ export function createWizard<T extends WizardData>(
 
 	const goNext = () => withNavigating(() => machine.goNext());
 	const goPrevious = () => withNavigating(() => machine.goPrevious());
-	const goBack = (steps = 1) => withNavigating(() => machine.goBack(steps));
 	const goTo = (stepId: StepId, opts?: GoToOptions) =>
 		withNavigating(() => machine.goTo(stepId, opts));
-	const goToStep = (stepId: StepId) => goTo(stepId, { skipValidation: true });
 
 	const actions: WizardStoreActions<T> = {
 		updateData: (updater) => machine.updateData(updater),
@@ -271,9 +269,7 @@ export function createWizard<T extends WizardData>(
 		actions,
 		goNext,
 		goPrevious,
-		goBack,
 		goTo,
-		goToStep,
 		field,
 		getMachine: () => machine,
 		getManager: () => manager,

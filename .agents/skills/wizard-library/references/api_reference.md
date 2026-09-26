@@ -137,7 +137,7 @@ Solid (`@gooonzick/wizard-solid`, Solid 1.x) mirrors the Svelte runes surface wi
 
 - `createWizard(options)` returns flat reactive getters (`wizard.currentStepId`,
   `wizard.canGoNext`, …), slice getters `state` / `validation` / `navigation` / `loading`,
-  `actions`, `goNext`/`goPrevious`/`goTo` (+ deprecated `goBack`/`goToStep`),
+  `actions`, `goNext`/`goPrevious`/`goTo`,
   `field(key): { get value, set value }`, `getMachine()` / `getManager()`, `destroy()`
   and `isDestroyed`.
 - Four signals (one per manager channel) are refreshed from ONE `"all"` subscription

@@ -170,11 +170,7 @@ export interface Wizard<T extends WizardData> {
 
 	goNext(): Promise<void>;
 	goPrevious(): Promise<void>;
-	/** @deprecated Use `goPrevious()`. */
-	goBack(steps?: number): Promise<void>;
 	goTo(stepId: StepId, options?: GoToOptions): Promise<void>;
-	/** @deprecated Use `goTo(stepId)`. */
-	goToStep(stepId: StepId): Promise<void>;
 
 	/** Stable reference per key; reads are reactive, writes go through `machine.updateField`. */
 	field<K extends keyof T>(key: K): WizardField<T[K]>;

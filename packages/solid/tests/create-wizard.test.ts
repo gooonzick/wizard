@@ -157,11 +157,14 @@ describe("createWizard", () => {
 		expect(wizard.isCompleted).toBe(true);
 	});
 
-	it("C9: goToStep skips validation (deprecated alias)", async () => {
+	it("C9: goTo with skipValidation leaves an invalid step; no deprecated aliases", async () => {
 		const wizard = makeWizard();
 		await flush();
 
-		await wizard.goToStep("plan");
+		// "personal" is invalid while name is empty.
+		await wizard.goTo("plan", { skipValidation: true });
 		expect(wizard.currentStepId).toBe("plan");
+		expect("goBack" in wizard).toBe(false);
+		expect("goToStep" in wizard).toBe(false);
 	});
 });
