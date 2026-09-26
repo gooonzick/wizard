@@ -5,90 +5,20 @@ on:
     branches:
       - main
   # Manual re-run: publishes any package whose local version is not on npm yet
-  # (e.g. after a failed publish). Replaces the old token-based publish.yml.
+  # (e.g. after a failed publish).
   workflow_dispatch:
 
-# Least privilege by default; each job widens only what it needs.
 permissions:
-  contents: read
+  contents: write
+  pull-requests: write
+  # npm trusted publishing (OIDC). No npm token is used anywhere.
+  id-token: write
 
 jobs:
-  select:
-    name: Select mode
-    runs-on: ubuntu-latest
-    outputs:
-      mode: ${{ steps.mode.outputs.mode }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.23.0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      # "version": changesets present -> open/update the Version Packages PR.
-      # "publish": no changesets, publishable packages -> publish to npm.
-      # "none": nothing to do.
-      - name: Select mode
-        id: mode
-        uses: changesets/action/select-mode@v2
-
-  version:
-    name: Version Packages PR
-    needs: select
-    if: needs.select.outputs.mode == 'version'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.23.0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Create or update Version Packages PR
-        uses: changesets/action/version@v2
-        with:
-          script: "pnpm changeset:version"
-          pr-title: "Version Packages"
-          commit-message: "Version Packages"
-
-  publish:
-    name: Publish to npm
-    needs: select
-    if: needs.select.outputs.mode == 'publish'
+  release:
+    name: Version or Publish
     # Trusted publishing only works on GitHub-hosted runners.
     runs-on: ubuntu-latest
-    permissions:
-      # Push release tags and create GitHub releases.
-      contents: write
-      # npm trusted publishing (OIDC). No npm token is used anywhere.
-      id-token: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -123,13 +53,19 @@ jobs:
       - name: Run tests
         run: pnpm test
 
+      # changesets/action v1 (compatible with @changesets/cli v2; v2 of the action
+      # requires CLI v3). With NPM_TOKEN unset and OIDC available it skips writing
+      # an .npmrc and npm uses trusted publishing.
+      #
       # Every package has a trusted publisher on npmjs.com pointing at THIS file
-      # (repository gooonzick/wizard, workflow changesets.yml). npm exchanges the
+      # (repository gooonzick/wizard, workflow changesets.yml); npm exchanges the
       # GitHub OIDC token for a short-lived publish token and attaches provenance
       # automatically. Renaming this file breaks publishing until the trusted
       # publisher settings on npmjs.com are updated.
-      - name: Publish
-        uses: changesets/action/publish@v2
+      - name: Create Release PR or Publish
+        uses: changesets/action@v1
         with:
-          script: "pnpm release"
-          create-github-releases: true
+          version: "pnpm changeset:version"
+          publish: "pnpm release"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
