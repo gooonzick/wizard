@@ -117,14 +117,11 @@ export function createWizard<T extends WizardData>(
 		}
 	}, "all");
 
-	const withNavigating = async (fn: () => Promise<void>): Promise<void> => {
-		manager.setLoadingState({ isNavigating: true });
-		try {
-			await fn();
-		} finally {
-			manager.setLoadingState({ isNavigating: false });
-		}
-	};
+	// Reference-counted (manager.trackLoading): an overlapping or immediately
+	// rejected call — e.g. a double-clicked Next rejected as busy — must not
+	// clear the flag while another operation is still in flight.
+	const withNavigating = (fn: () => Promise<void>): Promise<void> =>
+		manager.trackLoading("isNavigating", fn);
 
 	const goNext = () => withNavigating(() => machine.goNext());
 	const goPrevious = () => withNavigating(() => machine.goPrevious());
@@ -138,31 +135,14 @@ export function createWizard<T extends WizardData>(
 		setData: (data) => machine.setData(data),
 		// Direct call — preserves the Object.is no-op guard and changedFields=[field].
 		updateField: (field, value) => machine.updateField(field, value),
-		validate: async () => {
-			manager.setLoadingState({ isValidating: true });
-			try {
+		validate: () =>
+			manager.trackLoading("isValidating", async () => {
 				await machine.validate();
-			} finally {
-				manager.setLoadingState({ isValidating: false });
-			}
-		},
-		validateAll: async (opts) => {
-			manager.setLoadingState({ isValidating: true });
-			try {
-				return await machine.validateAll(opts);
-			} finally {
-				manager.setLoadingState({ isValidating: false });
-			}
-		},
+			}),
+		validateAll: (opts) =>
+			manager.trackLoading("isValidating", () => machine.validateAll(opts)),
 		canSubmit: () => machine.canSubmit(),
-		submit: async () => {
-			manager.setLoadingState({ isSubmitting: true });
-			try {
-				await machine.submit();
-			} finally {
-				manager.setLoadingState({ isSubmitting: false });
-			}
-		},
+		submit: () => manager.trackLoading("isSubmitting", () => machine.submit()),
 		// Fire-and-forget, but the machine's synchronous reset()/restore() can throw
 		// (a malformed snapshot raises WizardRestoreError, which the machine does NOT
 		// route through handleError). Terminating the chain here keeps it from
