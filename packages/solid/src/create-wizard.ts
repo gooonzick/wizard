@@ -108,11 +108,14 @@ export function createWizard<T extends WizardData>(
 			// four channels atomically so no effect sees a half-applied transition.
 			batch(syncSignals);
 		} catch (error) {
-			// Effects run synchronously at the end of batch(), i.e. inside the
-			// machine's notifyStateChange() (which has no try/catch). A user effect
-			// that throws without an <ErrorBoundary> must not break a transition
-			// mid-flight — report it instead. Solid itself may leave sibling effects
-			// of this flush stale; the wizard (machine, manager, getters) is intact.
+			// Machine-originated notifications are already isolated by core
+			// (WizardMachine.notifyStateChange), but loading-channel notifications
+			// raised by this binding (trackLoading) and the manager's async
+			// navigation recompute reach Solid effects directly. Solid runs effects
+			// synchronously at the end of batch(), so a user effect that throws
+			// without an <ErrorBoundary> would otherwise reject the calling action
+			// or be swallowed by the manager — report it instead. Solid may leave
+			// sibling effects of this flush stale; the wizard is intact.
 			reportError(error);
 		}
 	}, "all");

@@ -81,4 +81,55 @@ describe("errors", () => {
 		expect(onError).not.toHaveBeenCalled();
 		expect(wizard.currentStepId).toBe("plan");
 	});
+
+	it("E3: an effect throwing on a loading-flag change goes to onError and navigation completes", async () => {
+		const onError = vi.fn();
+		const wizard = makeWizard({ onError });
+		await flush();
+		wizard.actions.updateField("name", "ada");
+
+		// The loading channel is written by the binding (trackLoading), not the
+		// machine, so core's onStateChange isolation never sees this throw.
+		createRoot((dispose) => {
+			disposers.push(dispose);
+			createEffect(() => {
+				if (wizard.isNavigating) {
+					throw new Error("loading boom");
+				}
+			});
+		});
+
+		await expect(wizard.goNext()).resolves.toBeUndefined();
+
+		expect(onError).toHaveBeenCalledTimes(1);
+		expect(onError).toHaveBeenCalledWith(
+			expect.objectContaining({ message: "loading boom" }),
+		);
+		expect(wizard.currentStepId).toBe("plan");
+	});
+
+	it("E4: an effect throwing on the async navigation recompute goes to onError", async () => {
+		const onError = vi.fn();
+		const wizard = makeWizard({ onError });
+		// No flush before the effect: canGoNext starts false and only turns true
+		// once the manager's async navigation compute settles.
+		expect(wizard.canGoNext).toBe(false);
+
+		createRoot((dispose) => {
+			disposers.push(dispose);
+			createEffect(() => {
+				if (wizard.canGoNext) {
+					throw new Error("navigation boom");
+				}
+			});
+		});
+
+		await flush();
+
+		expect(wizard.canGoNext).toBe(true);
+		expect(onError).toHaveBeenCalledTimes(1);
+		expect(onError).toHaveBeenCalledWith(
+			expect.objectContaining({ message: "navigation boom" }),
+		);
+	});
 });
