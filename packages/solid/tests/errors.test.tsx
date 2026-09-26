@@ -132,4 +132,33 @@ describe("errors", () => {
 			expect.objectContaining({ message: "navigation boom" }),
 		);
 	});
+
+	it("E5: without onError, an isolated effect error is logged with console.error", async () => {
+		const consoleError = vi
+			.spyOn(console, "error")
+			.mockImplementation(() => {});
+		try {
+			const wizard = makeWizard();
+			await flush();
+			wizard.actions.updateField("name", "ada");
+
+			createRoot((dispose) => {
+				disposers.push(dispose);
+				createEffect(() => {
+					if (wizard.currentStepId === "plan") {
+						throw new Error("unhandled boom");
+					}
+				});
+			});
+
+			await expect(wizard.goNext()).resolves.toBeUndefined();
+
+			expect(consoleError).toHaveBeenCalledWith(
+				expect.objectContaining({ message: "unhandled boom" }),
+			);
+			expect(wizard.currentStepId).toBe("plan");
+		} finally {
+			consoleError.mockRestore();
+		}
+	});
 });

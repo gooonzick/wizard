@@ -73,10 +73,15 @@ export function createWizard<T extends WizardData>(
 	managerRef = manager;
 	previousState = machine.snapshot;
 
+	// Errors the binding catches itself (isolated effect throws, reset/restore
+	// failures). Without an onError they are logged rather than silently lost.
 	const reportError = (error: unknown): void => {
-		callbacks.onError?.(
-			error instanceof Error ? error : new Error(String(error)),
-		);
+		const err = error instanceof Error ? error : new Error(String(error));
+		if (callbacks.onError) {
+			callbacks.onError(err);
+		} else {
+			console.error(err);
+		}
 	};
 
 	const [stateSnapshot, setStateSnapshot] = createSignal(
@@ -149,7 +154,7 @@ export function createWizard<T extends WizardData>(
 		// Fire-and-forget, but the machine's synchronous reset()/restore() can throw
 		// (a malformed snapshot raises WizardRestoreError, which the machine does NOT
 		// route through handleError). Terminating the chain here keeps it from
-		// becoming an unhandled rejection and surfaces it on onError instead.
+		// becoming an unhandled rejection and surfaces it via reportError instead.
 		reset: (data?: T) => {
 			void manager.runReset(data ?? initialData).catch(reportError);
 		},

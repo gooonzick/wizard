@@ -35,6 +35,8 @@ export interface CreateWizardOptions<T extends WizardData> {
 	/**
 	 * Receives machine errors AND errors thrown by Solid effects while the wizard
 	 * pushes new state into its signals (when no `<ErrorBoundary>` catches them).
+	 * When omitted, those effect errors and `reset()` / `restore()` failures are
+	 * logged with `console.error` instead of being dropped.
 	 * Must not throw — a throw propagates to the caller, as in every other binding.
 	 */
 	onError?: (error: Error) => void;
