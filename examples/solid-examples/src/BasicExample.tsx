@@ -109,7 +109,7 @@ export function BasicExample() {
 				</button>
 
 				<Show
-					when={wizard.isLastStep}
+					when={wizard.progress.isLastStep}
 					fallback={
 						<button
 							type="button"

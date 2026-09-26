@@ -70,7 +70,7 @@ export function SignupWizard() {
 				Back
 			</button>
 			<Show
-				when={wizard.isLastStep}
+				when={wizard.progress.isLastStep}
 				fallback={
 					<button
 						onClick={() => void wizard.goNext().catch(() => {})}
@@ -107,7 +107,7 @@ The shape matches the Svelte runes API (`@gooonzick/wizard-svelte/runes`), so co
 - **Read inside a tracking scope.** `wizard.canGoNext` in JSX re-renders when navigation changes. `const { canGoNext } = wizard` reads once and never updates — the same rule as Solid props.
 - **Per-channel tracking.** The wizard holds four signals: `state`, `navigation`, `validation`, `loading`. Reading `wizard.data.name` subscribes to the whole `state` channel, so any data change re-runs that expression (DOM writes still only happen when the value differs).
 - **Atomic updates.** All four signals are refreshed inside one `batch()`, so an effect never sees a new `currentStepId` together with a stale `canGoNext`.
-- **Async navigation flags.** `canGoNext`, `canGoPrevious`, `isLastStep` and `availableSteps` are computed asynchronously (guards and resolvers may be async). Right after creation `canGoNext` and `canGoPrevious` start `false`, `isLastStep` starts `true` and `availableSteps` starts empty, until the first computation settles one microtask later — disable buttons on `canGoNext`/`canGoPrevious` rather than assuming `true`. Because `isLastStep` starts `true`, a `<Show when={wizard.isLastStep}>` toggle between Submit and Next (as in the Quick Start) renders Submit for that first moment on mount.
+- **Async navigation flags.** `canGoNext`, `canGoPrevious`, `isLastStep` and `availableSteps` are computed asynchronously (guards and resolvers may be async). Right after creation `canGoNext` and `canGoPrevious` start `false`, `isLastStep` starts `true` and `availableSteps` starts empty, until the first computation settles one microtask later — disable buttons on `canGoNext`/`canGoPrevious` rather than assuming `true`. To toggle Submit/Next, use the synchronous, graph-derived `wizard.progress.isLastStep` (as in the Quick Start).
 - **`canGoNext` is not validity.** It means "a next step exists"; validation runs inside `goNext()`, which rejects (and reports to `onError`) when the current step is invalid.
 - **Non-reactive options.** `definition`, `initialData`, `context` and `plugins` are read once. Recreate the wizard (e.g. inside a keyed `<Show>`) to reconfigure.
 
