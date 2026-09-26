@@ -72,18 +72,27 @@ describe("teardown", () => {
 		expect(destroyPlugin).toHaveBeenCalledTimes(1);
 	});
 
-	it("T5: after destroy() the signals stop following the manager", async () => {
+	it("T5: after destroy() the binding stops following the machine", async () => {
 		const wizard = makeWizard();
 		await flush();
 
 		await wizard.destroy();
-		// destroy() cleared the manager's subscribers and the manager ignores
-		// post-destroy writes; the observable guarantee is that signals stay put.
-		const manager = wizard.getManager();
-		expect(manager.isDestroyed).toBe(true);
-		manager.setLoadingState({ isSubmitting: true });
+		expect(wizard.isDestroyed).toBe(true);
 
-		expect(wizard.isSubmitting).toBe(false);
-		expect(wizard.currentStepId).toBe("personal");
+		// core's destroy() only tears down plugins: the machine itself still
+		// accepts writes. The binding must no longer mirror them.
+		let accepted = true;
+		try {
+			wizard.getMachine().updateField("name", "x");
+		} catch {
+			accepted = false;
+		}
+		await flush();
+
+		expect(wizard.data.name).toBe("");
+		if (accepted) {
+			// Proves the write really happened below the binding.
+			expect(wizard.getMachine().snapshot.data.name).toBe("x");
+		}
 	});
 });
