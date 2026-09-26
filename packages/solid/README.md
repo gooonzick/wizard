@@ -92,6 +92,7 @@ export function Signup() {
 
 - `canGoNext` / `canGoPrevious` / `isLastStep` / `availableSteps` are computed asynchronously (guards and resolvers may be async). Until the first computation settles, `canGoNext` and `canGoPrevious` are `false`, `isLastStep` is `true` and `availableSteps` is empty.
 - `canGoNext` means "a next step exists", not "the current step is valid" — validation runs inside `goNext()`.
+- Loading flags (`isNavigating`, `isValidating`, `isSubmitting`) are reference-counted: a flag stays `true` while any operation that set it is still in flight, so a double-clicked Next rejected as busy, or an overlapping `validate()`, no longer clears another operation's flag.
 - `goNext()`, `goPrevious()`, `goTo()`, `submit()` and `cancel()` reject on failure (for example an invalid step) in addition to reporting to `onError` — `await` them in a `try`, or `.catch(() => {})` when the UI already renders `validationErrors`. `validate()` **resolves** and exposes the result via `isValid` / `validationErrors`, even on an invalid step — it rejects only if the operation was already aborted (via an `AbortSignal` passed in context) before the call; a `reset()`/`cancel()` while it is in flight does not reject it, it just supersedes the result. `validateAll()` also **resolves** with a `ValidationSummary` even when steps are invalid (a throwing step validator counts as invalid) — it rejects if the wizard was already aborted, or if a step's `enabled` guard throws. Unlike `validate()`, it has no supersede protection: a `reset()`/`cancel()` fired while it's running does not cancel it, and with `updateStatuses: true` its step statuses are still written into the (now post-reset) state.
 
 ## Lifecycle
@@ -100,7 +101,7 @@ Created inside a component or `createRoot`, the wizard is destroyed with its own
 
 ## Errors
 
-Machine errors go to `onError`. A `createEffect` that throws while the wizard updates its signals is also reported to `onError` (unless an `<ErrorBoundary>` catches it first): the wizard keeps working, but Solid may leave other effects of that update stale — wrap user effects in `<ErrorBoundary>` or `catchError`.
+Machine errors go to `onError`. A `createEffect` that throws while the wizard updates its signals is also reported to `onError` (unless an `<ErrorBoundary>` catches it first): the wizard keeps working, but Solid may leave other effects of that update stale — wrap user effects in `<ErrorBoundary>` or `catchError`. This covers every signal update, including loading-flag changes and the async navigation recompute. Without an `onError`, these effect errors and `reset()` / `restore()` failures are logged with `console.error` instead of being dropped.
 
 ## Documentation
 
