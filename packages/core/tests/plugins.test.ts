@@ -52,7 +52,7 @@ describe("plugin types", () => {
 
 	test("ErrorContext phase is a fixed union", () => {
 		expectTypeOf<ErrorContext<Data>["phase"]>().toEqualTypeOf<
-			"validation" | "transition" | "lifecycle" | "submit" | "data"
+			"validation" | "transition" | "lifecycle" | "submit" | "data" | "state"
 		>();
 	});
 

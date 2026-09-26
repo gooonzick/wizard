@@ -31,7 +31,13 @@ export interface TransitionEvent<TData> {
 /** Context passed to a plugin's onError hook. */
 export interface ErrorContext<TData> {
 	stepId: StepId;
-	phase: "validation" | "transition" | "lifecycle" | "submit" | "data";
+	phase:
+		| "validation"
+		| "transition"
+		| "lifecycle"
+		| "submit"
+		| "data"
+		| "state";
 	data: DeepReadonly<TData>;
 }
 

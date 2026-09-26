@@ -212,6 +212,9 @@ Use context for external dependencies instead of hard-coding globals in guards/r
 - Plugin hook `onDataChange(prevData, nextData, changedFields)` (DeepReadonly
   payloads, fire-and-forget, errors → `onError` phase "data") is part of
   `WizardPlugin` (WIZ-010). `ErrorContext.phase` now includes `"data"`.
+- A throwing `onStateChange` subscriber is isolated: the error goes to
+  `events.onError` and plugin `onError` with `phase: "state"`; the in-flight
+  operation (`goNext()`, `updateField`, ...) is NOT rejected.
 - `snapshot`, its `stepStatuses`, and `snapshot.progress` (with its `enabledStepIds`
   array) are frozen; `snapshot.data` is intentionally NOT frozen.
 

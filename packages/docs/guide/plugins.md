@@ -63,7 +63,7 @@ interface TransitionEvent<TData> {
 /** Context passed to a plugin's onError hook. */
 interface ErrorContext<TData> {
   stepId: StepId;
-  phase: "validation" | "transition" | "lifecycle" | "submit" | "data";
+  phase: "validation" | "transition" | "lifecycle" | "submit" | "data" | "state";
   data: DeepReadonly<TData>;
 }
 
@@ -201,6 +201,8 @@ If `beforeTransition` returns `false`, the transition is **silently cancelled** 
 Each error is reported to plugins **exactly once** regardless of where it originates. When a thrown error is first caught (e.g., inside a validator), `onError` fires immediately. The calling method (e.g., `goNext`) does not re-report the same error so your plugin's `onError` will not be called twice for the same failure.
 
 Plugin hook errors themselves are **isolated**: if your plugin's `onComplete` throws, the error is routed through `onError` at phase `"lifecycle"` and does not propagate to the calling code.
+
+A throwing `onStateChange` subscriber (the machine-level event, or a framework binding's listener) is isolated the same way: the error is routed through `onError` at phase `"state"` and the in-flight operation (e.g. `goNext()`, `updateField`) still completes.
 
 ### Re-entrancy / Busy Guard
 

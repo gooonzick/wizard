@@ -1409,7 +1409,14 @@ export class WizardMachine<T extends WizardData> {
 	 * Notifies about state change
 	 */
 	private notifyStateChange(): void {
-		this.events.onStateChange?.(this.snapshot);
+		// Isolate subscriber throws (mirrors emitDataChange): a throwing
+		// onStateChange must not reject the in-flight operation. handleError only
+		// calls events.onError and the plugin host, so it cannot recurse here.
+		try {
+			this.events.onStateChange?.(this.snapshot);
+		} catch (err) {
+			this.handleError(err, "state");
+		}
 	}
 
 	private assertRestorableState(

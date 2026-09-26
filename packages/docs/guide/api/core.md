@@ -503,6 +503,7 @@ constructor(
 
 ```ts
 interface WizardEvents<T> {
+  /** Fired after every committed state change. Isolated: a throw is routed to onError (plugin phase "state") and never rejects the in-flight operation. */
   onStateChange?: (state: WizardState<T>) => void;
   onStepEnter?: (stepId: StepId, data: T) => void;
   onStepLeave?: (stepId: StepId, data: T) => void;
@@ -985,7 +986,7 @@ Context passed to `onError`.
 ```ts
 interface ErrorContext<TData> {
   stepId: StepId;
-  phase: "validation" | "transition" | "lifecycle" | "submit" | "data";
+  phase: "validation" | "transition" | "lifecycle" | "submit" | "data" | "state";
   data: DeepReadonly<TData>;
 }
 ```
