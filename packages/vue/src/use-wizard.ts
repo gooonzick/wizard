@@ -1,20 +1,13 @@
-import type {
-	GoToOptions,
-	StepId,
-	WizardData,
-	WizardSerializedState,
-	WizardState,
-} from "@gooonzick/wizard-core";
-import { WizardMachine } from "@gooonzick/wizard-core";
-import { WizardStateManager } from "@gooonzick/wizard-state";
+import type { WizardData, WizardState } from "@gooonzick/wizard-core";
 import {
-	type ComputedRef,
-	computed,
-	onScopeDispose,
-	reactive,
-	shallowRef,
-	watch,
-} from "vue";
+	createMachineAndManager,
+	createWizardActions,
+	type LoadingState,
+	type NavigationState,
+	type WizardCallbacks,
+} from "@gooonzick/wizard-state";
+import { type ComputedRef, computed, onScopeDispose, shallowRef } from "vue";
+import { toRawDeep } from "./internal/to-raw-deep";
 import type {
 	UseWizardActions,
 	UseWizardLoading,
@@ -34,7 +27,6 @@ export function useWizard<T extends WizardData>(
 ): UseWizardReturn<T> {
 	const {
 		definition,
-		initialData,
 		context = {},
 		onStateChange,
 		onStepEnter,
@@ -47,9 +39,22 @@ export function useWizard<T extends WizardData>(
 		plugins,
 	} = options;
 
-	// Callbacks captured once at setup time (composables run once per component)
-	const callbacks = {
-		onStateChange,
+	// Raw machine state. Written on EVERY machine onStateChange emission
+	// (including async follow-ups after reset/restore/validate), so everything
+	// derived from it below stays current. Seeded from the manager once it is
+	// built; constructor-time emissions land here too and are overwritten then.
+	const state = shallowRef<WizardState<T>>(
+		undefined as unknown as WizardState<T>,
+	);
+
+	// Callbacks are captured once at setup time (composables run once per
+	// component). onStateChange is wrapped so the reactive `state` mirrors the
+	// machine before the user callback runs.
+	const callbacks: WizardCallbacks<T> = {
+		onStateChange: (newState: WizardState<T>) => {
+			state.value = newState;
+			onStateChange?.(newState);
+		},
 		onStepEnter,
 		onStepLeave,
 		onComplete,
@@ -59,319 +64,77 @@ export function useWizard<T extends WizardData>(
 		onDataChange,
 	};
 
-	// Forward reference for state - needed for createMachine callback
-	let stateRef: { value: WizardState<T> };
-	// Forward reference for manager - needed to route onStateChange to channels
-	let managerRef: WizardStateManager<T> | null = null;
+	// The machine deep-clones data with `structuredClone`, which throws
+	// DataCloneError on Vue proxies — accept ref()/reactive() form state by
+	// unwrapping it to plain data first.
+	const initialData = toRawDeep(options.initialData);
 
-	// Factory function to create machine with proper events
-	const createMachine = (data?: T): WizardMachine<T> => {
-		return new WizardMachine(
-			definition,
-			context,
-			data || initialData,
-			{
-				onStateChange: (newState: WizardState<T>) => {
-					// The machine fires this synchronously from its constructor
-					// (initializeFirstStep) before `stateRef`/`managerRef` are wired up.
-					// The initial snapshot is read directly below, so skip these early
-					// notifications instead of writing through an undefined ref.
-					if (!stateRef) {
-						return;
-					}
-					const oldState = stateRef.value;
-					stateRef.value = newState;
-					// Route the change to the manager's navigation/validation channels so
-					// async follow-up notifications (e.g. after reset/cancel/restore
-					// onEnter/validate) refresh navigation state in the view.
-					if (oldState && managerRef) {
-						managerRef.handleStateChange(newState, oldState);
-					}
-					callbacks.onStateChange?.(newState);
-				},
-				onStepEnter: (stepId: StepId, d: T) => {
-					callbacks.onStepEnter?.(stepId, d);
-				},
-				onStepLeave: (stepId: StepId, d: T) => {
-					callbacks.onStepLeave?.(stepId, d);
-				},
-				onComplete: (d: T) => {
-					callbacks.onComplete?.(d);
-				},
-				onCancel: async (d: T) => {
-					await callbacks.onCancel?.(d);
-				},
-				onReset: () => {
-					callbacks.onReset?.();
-				},
-				onError: (error: Error) => {
-					callbacks.onError?.(error);
-				},
-				onDataChange: (prev: T, next: T, changedFields: (keyof T)[]) => {
-					callbacks.onDataChange?.(prev, next, changedFields);
-				},
-			},
-			plugins,
-		);
-	};
+	const { manager } = createMachineAndManager<T>({
+		definition,
+		context,
+		initialData,
+		getCallbacks: () => callbacks,
+		plugins,
+	});
 
-	// Initialize machine and manager immediately (not as shallowRef with null)
-	const initialMachine = createMachine();
-	const initialManager = new WizardStateManager(
-		initialMachine,
-		definition.initialStepId,
+	state.value = manager.getSnapshot();
+
+	// Navigation and loading mirror the manager's cached snapshots. The manager
+	// replaces the snapshot object on every change, so a shallowRef suffices.
+	const navigation = shallowRef<NavigationState>(
+		manager.getNavigationSnapshot(),
 	);
-	managerRef = initialManager;
+	const loading = shallowRef<LoadingState>(manager.getLoadingSnapshot());
 
-	// Create wizard machine and manager in shallow refs to avoid deep reactivity on functions
-	const machine = shallowRef<WizardMachine<T>>(initialMachine);
-	const manager = shallowRef<WizardStateManager<T>>(initialManager);
+	const unsubscribeNavigation = manager.subscribe(() => {
+		navigation.value = manager.getNavigationSnapshot();
+	}, "navigation");
+	const unsubscribeLoading = manager.subscribe(() => {
+		loading.value = manager.getLoadingSnapshot();
+	}, "loading");
 
-	// Initialize state with actual value from manager (use shallowRef to avoid unwrapping issues)
-	const state = shallowRef<WizardState<T>>(manager.value.getSnapshot());
-	stateRef = state as { value: WizardState<T> };
-
-	// Navigation state
-	const navigationState = reactive({
-		canGoNext: false,
-		canGoPrevious: false,
-		canGoBack: false,
-		isFirstStep: false,
-		isLastStep: false,
-		availableSteps: [] as StepId[],
-	});
-
-	// Loading state
-	const loadingState = reactive({
-		isValidating: false,
-		isSubmitting: false,
-		isNavigating: false,
-	});
-
-	// Update navigation state
-	const updateNavigationState = () => {
-		try {
-			const nav = manager.value.getNavigationSnapshot();
-			navigationState.canGoNext = nav.canGoNext ?? false;
-			navigationState.canGoPrevious = nav.canGoPrevious ?? false;
-			navigationState.canGoBack = nav.canGoBack ?? false;
-			navigationState.isFirstStep = nav.isFirstStep ?? false;
-			navigationState.isLastStep = nav.isLastStep ?? false;
-			navigationState.availableSteps = nav.availableSteps ?? [];
-		} catch (error) {
-			// Log error for debugging when debug flag is enabled
-			if (context.debug) {
-				console.error("[useWizard] Failed to update navigation state:", error);
-			}
-			callbacks.onError?.(
-				error instanceof Error ? error : new Error(String(error)),
-			);
+	// reset()/restore() failures (e.g. WizardRestoreError from a malformed
+	// snapshot) go to the user's onError, falling back to console.error.
+	const reportError = (error: unknown) => {
+		const err = error instanceof Error ? error : new Error(String(error));
+		if (onError) {
+			onError(err);
+		} else {
+			console.error("[useWizard]", err);
 		}
 	};
 
-	// Initialize navigation state
-	updateNavigationState();
-
-	// Subscribe to navigation channel so we pick up async computation results
-	// (the manager resolves canGoNext/canGoPrevious asynchronously)
-	const unsubscribeNavigation = manager.value.subscribe(() => {
-		updateNavigationState();
-	}, "navigation");
-
-	// Watch for step changes and update navigation (with cleanup)
-	const stopStepWatcher = watch(
-		() => state.value.currentStepId,
-		() => {
-			updateNavigationState();
-		},
-	);
+	// Loading flags are reference-counted in the manager (trackLoading), so the
+	// `loading` slice and `manager.getLoadingSnapshot()` always agree.
+	const baseActions = createWizardActions(manager, reportError);
+	// Every data-carrying action strips Vue reactivity before it reaches the
+	// machine (see toRawDeep). Plain data passes through by reference, so
+	// updateField's Object.is no-op and updateData's same-reference handling
+	// are unchanged.
+	const actions: typeof baseActions = {
+		...baseActions,
+		updateData: (updater) =>
+			baseActions.updateData((data) => toRawDeep(updater(data))),
+		setData: (data) => baseActions.setData(toRawDeep(data)),
+		updateField: (field, value) =>
+			baseActions.updateField(field, toRawDeep(value)),
+		reset: (data) => baseActions.reset(toRawDeep(data)),
+		restore: (serialized) => baseActions.restore(toRawDeep(serialized)),
+	};
 
 	// Cleanup on scope dispose (component unmount)
 	onScopeDispose(() => {
-		stopStepWatcher();
 		unsubscribeNavigation();
+		unsubscribeLoading();
 		// WIZ-007: tear down plugins (machine.destroy via the manager). Isolated
 		// rejections are handled internally — fire-and-forget here.
-		void manager.value.destroy();
+		void manager.destroy();
 	});
-
-	// Computed values derived from reactive state
-	// These access state.value.currentStepId to establish a reactive dependency,
-	// then delegate to manager for the actual lookup (manager methods are not reactive).
-	const currentStep = computed(() => {
-		const stepId = state.value.currentStepId;
-		return definition.steps[stepId];
-	});
-	const visitedSteps = computed(() => {
-		// Re-evaluate when step changes; manager tracks visited set internally
-		void state.value.currentStepId;
-		return manager.value.getVisitedSteps();
-	});
-	const stepHistory = computed(() => {
-		// Re-evaluate when step changes; manager tracks history internally
-		void state.value.currentStepId;
-		return manager.value.getStepHistory();
-	});
-	const isFirstStep = computed(() => navigationState.isFirstStep);
-	const isLastStep = computed(() => navigationState.isLastStep);
-
-	// Data mutations
-	const updateData = (updater: (data: T) => T) => {
-		machine.value.updateData(updater);
-		updateNavigationState();
-	};
-
-	const setData = (data: T) => {
-		machine.value.setData(data);
-		updateNavigationState();
-	};
-
-	const updateField = <K extends keyof T>(field: K, value: T[K]) => {
-		machine.value.updateField(field, value);
-		updateNavigationState();
-	};
-
-	// Validation
-	const validate = async () => {
-		loadingState.isValidating = true;
-		try {
-			await machine.value.validate();
-		} finally {
-			loadingState.isValidating = false;
-		}
-	};
-
-	const validateAll = async (options?: { updateStatuses?: boolean }) => {
-		loadingState.isValidating = true;
-		try {
-			return await machine.value.validateAll(options);
-		} finally {
-			loadingState.isValidating = false;
-		}
-	};
-
-	const canSubmit = async (): Promise<boolean> => {
-		return machine.value.canSubmit();
-	};
-
-	const submit = async () => {
-		loadingState.isSubmitting = true;
-		try {
-			await machine.value.submit();
-		} finally {
-			loadingState.isSubmitting = false;
-		}
-	};
-
-	// Navigation
-	const goNext = async () => {
-		loadingState.isNavigating = true;
-		try {
-			await machine.value.goNext();
-		} finally {
-			loadingState.isNavigating = false;
-		}
-	};
-
-	const goPrevious = async () => {
-		loadingState.isNavigating = true;
-		try {
-			await machine.value.goPrevious();
-		} finally {
-			loadingState.isNavigating = false;
-		}
-	};
-
-	const goBack = async (steps = 1) => {
-		loadingState.isNavigating = true;
-		try {
-			await machine.value.goBack(steps);
-		} finally {
-			loadingState.isNavigating = false;
-		}
-	};
-
-	const goTo = async (stepId: StepId, options?: GoToOptions) => {
-		loadingState.isNavigating = true;
-		try {
-			await machine.value.goTo(stepId, options);
-		} finally {
-			loadingState.isNavigating = false;
-		}
-	};
-
-	/** @deprecated Use goTo instead */
-	const goToStep = async (stepId: StepId) => {
-		return goTo(stepId, { skipValidation: true });
-	};
-
-	// NOTE (loading semantics): reset/cancel/restore call the machine directly and
-	// mirror the loading flags on this local `loadingState` reactive, rather than
-	// routing through `manager.runReset`/`runCancel`/`runRestore`. The shared
-	// `WizardStateManager.getLoadingSnapshot()` therefore reflects React's binding
-	// but NOT Vue's. In Vue, read loading via the composable's `loading` slice, not
-	// the manager. reset()/restore() additionally catch a synchronous machine throw
-	// (e.g. WizardRestoreError from a malformed snapshot) and forward it to
-	// `callbacks.onError` instead of letting it escape uncaught — cancel() does not
-	// need this because WizardMachine.cancel() already routes handler errors through
-	// its internal handleError before rejecting.
-	const reset = (data?: T) => {
-		loadingState.isValidating = false;
-		loadingState.isSubmitting = false;
-		loadingState.isNavigating = false;
-		try {
-			machine.value.reset(data);
-		} catch (error) {
-			callbacks.onError?.(
-				error instanceof Error ? error : new Error(String(error)),
-			);
-			return;
-		}
-		// onStateChange (sync + async follow-up) drives state.value; refresh nav
-		// to mirror the synchronous reset snapshot immediately.
-		state.value = machine.value.snapshot;
-		updateNavigationState();
-	};
-
-	const cancel = async () => {
-		loadingState.isNavigating = true;
-		try {
-			await machine.value.cancel();
-		} finally {
-			loadingState.isValidating = false;
-			loadingState.isSubmitting = false;
-			loadingState.isNavigating = false;
-			// onStateChange drives state.value; refresh nav from the reset snapshot.
-			state.value = machine.value.snapshot;
-			updateNavigationState();
-		}
-	};
-
-	const serialize = () => {
-		return machine.value.serialize();
-	};
-
-	const restore = (serializedState: WizardSerializedState<T>) => {
-		loadingState.isValidating = false;
-		loadingState.isSubmitting = false;
-		loadingState.isNavigating = false;
-		try {
-			machine.value.restore(serializedState);
-		} catch (error) {
-			callbacks.onError?.(
-				error instanceof Error ? error : new Error(String(error)),
-			);
-			return;
-		}
-		// onStateChange drives state.value; refresh nav from the restored snapshot.
-		state.value = machine.value.snapshot;
-		updateNavigationState();
-	};
 
 	// Build organized return value
 	const stateSlice: UseWizardState<T> = {
 		currentStepId: computed(() => state.value.currentStepId),
-		currentStep,
+		currentStep: computed(() => definition.steps[state.value.currentStepId]),
 		data: computed(() => state.value.data) as ComputedRef<T>,
 		isCompleted: computed(() => state.value.isCompleted),
 		stepStatuses: computed(() => state.value.stepStatuses),
@@ -384,39 +147,39 @@ export function useWizard<T extends WizardData>(
 	};
 
 	const navigationSlice: UseWizardNavigation = {
-		canGoNext: computed(() => navigationState.canGoNext),
-		canGoPrevious: computed(() => navigationState.canGoPrevious),
-		canGoBack: computed(() => navigationState.canGoBack),
-		isFirstStep,
-		isLastStep,
-		visitedSteps,
-		availableSteps: computed(() => navigationState.availableSteps),
-		stepHistory,
-		goNext,
-		goPrevious,
-		goBack,
-		goTo,
-		goToStep,
+		canGoNext: computed(() => navigation.value.canGoNext),
+		canGoPrevious: computed(() => navigation.value.canGoPrevious),
+		canGoBack: computed(() => navigation.value.canGoBack),
+		isFirstStep: computed(() => navigation.value.isFirstStep),
+		isLastStep: computed(() => navigation.value.isLastStep),
+		visitedSteps: computed(() => navigation.value.visitedSteps),
+		availableSteps: computed(() => navigation.value.availableSteps),
+		stepHistory: computed(() => navigation.value.stepHistory),
+		goNext: actions.goNext,
+		goPrevious: actions.goPrevious,
+		goBack: actions.goBack,
+		goTo: actions.goTo,
+		goToStep: actions.goToStep,
 	};
 
 	const loadingSlice: UseWizardLoading = {
-		isValidating: computed(() => loadingState.isValidating),
-		isSubmitting: computed(() => loadingState.isSubmitting),
-		isNavigating: computed(() => loadingState.isNavigating),
+		isValidating: computed(() => loading.value.isValidating),
+		isSubmitting: computed(() => loading.value.isSubmitting),
+		isNavigating: computed(() => loading.value.isNavigating),
 	};
 
 	const actionsSlice: UseWizardActions<T> = {
-		updateData,
-		setData,
-		updateField,
-		validate,
-		validateAll,
-		canSubmit,
-		submit,
-		reset,
-		cancel,
-		serialize,
-		restore,
+		updateData: actions.updateData,
+		setData: actions.setData,
+		updateField: actions.updateField,
+		validate: actions.validate,
+		validateAll: actions.validateAll,
+		canSubmit: actions.canSubmit,
+		submit: actions.submit,
+		reset: actions.reset,
+		cancel: actions.cancel,
+		serialize: actions.serialize,
+		restore: actions.restore,
 	};
 
 	return {

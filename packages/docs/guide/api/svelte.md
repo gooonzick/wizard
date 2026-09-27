@@ -156,11 +156,12 @@ interface WizardStoreActions<T> {
   validateAll(options?: { updateStatuses?: boolean }): Promise<ValidationSummary>;
   canSubmit(): Promise<boolean>;
   submit(): Promise<void>;
-  /** Fire-and-forget (`void manager.runReset(...)`), mirroring React. */
+  /** Fire-and-forget (`void manager.runReset(data)`). `reset(X)` makes X the
+   *  new baseline; `reset()` returns to the current baseline. */
   reset(data?: T): void;
   cancel(): Promise<void>;
   serialize(): WizardSerializedState<T>;
-  /** Fire-and-forget (`void manager.runRestore(...)`), mirroring React. */
+  /** Fire-and-forget (`void manager.runRestore(...)`). */
   restore(state: WizardSerializedState<T>): void;
 }
 ```
@@ -169,10 +170,19 @@ interface WizardStoreActions<T> {
 terminated: a malformed snapshot raises `WizardRestoreError`, which is forwarded to the
 `onError` option instead of becoming an unhandled rejection.
 
-Loading flags are owned by `WizardStateManager` (the React model): `validate` /
-`validateAll` toggle `isValidating`, `submit` toggles `isSubmitting`, navigation toggles
-`isNavigating`, and `reset` / `cancel` / `restore` go through `manager.runReset` /
-`runCancel` / `runRestore`.
+`reset(data)` passes `data` through to the machine unchanged. `reset(X)` makes `X` the
+reset baseline, so a later `reset()` (or `cancel()`) returns to `X`, not to the original
+`initialData`. With no argument ever passed, the baseline is `initialData`.
+
+Both entry points build their actions with `createWizardActions()` from
+`@gooonzick/wizard-state`, the helper every binding shares. Loading flags are owned by
+`WizardStateManager` and are reference-counted (`manager.trackLoading()`): `validate` /
+`validateAll` hold `isValidating`, `submit` holds `isSubmitting`, and navigation holds
+`isNavigating`. A flag turns off only when the last operation holding it settles, so a
+double-clicked Next whose second call is rejected as busy (`WizardNavigationError`) does
+not clear `isNavigating` while the first transition is still in flight. `reset` / `cancel`
+/ `restore` go through `manager.runReset` / `runCancel` / `runRestore`, which force every
+flag off.
 
 ## Context helpers (store layer)
 

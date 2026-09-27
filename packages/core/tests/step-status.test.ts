@@ -141,15 +141,20 @@ describe("Step Status Tracking", () => {
 			expect(stepStatuses.step3).toBe("pristine");
 		});
 
-		it("sets dynamically guarded steps to pristine (not skipped)", () => {
-			// Function guards are NOT eagerly evaluated — only static booleans
+		it("applies function guards asynchronously after the initial step is entered", async () => {
+			// Function guards are not evaluated synchronously in the constructor
+			// (only static booleans are): the first snapshot is still "pristine".
 			const machine = createMachine(withDynamicGuard(), {
 				needsInvoice: false,
 			});
+			expect(machine.snapshot.stepStatuses.invoice).toBe("pristine");
+
+			// initializeFirstStep refreshes guard statuses right after onEnter.
+			await new Promise((r) => setTimeout(r, 0));
 			const { stepStatuses } = machine.snapshot;
 
 			expect(stepStatuses.step1).toBe("active");
-			expect(stepStatuses.invoice).toBe("pristine");
+			expect(stepStatuses.invoice).toBe("skipped");
 			expect(stepStatuses.step3).toBe("pristine");
 		});
 	});

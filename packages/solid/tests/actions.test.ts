@@ -156,6 +156,30 @@ describe("actions", () => {
 		});
 	});
 
+	it("A9b: reset(X) makes X the baseline for a later bare reset()", async () => {
+		const wizard = makeWizard();
+		await flush();
+		const baseline: SignupData = {
+			name: "grace",
+			email: "g@h.io",
+			plan: "pro",
+		};
+
+		wizard.actions.reset(baseline);
+		await flush();
+		expect(wizard.data).toEqual(baseline);
+
+		wizard.actions.updateField("name", "ada");
+		await wizard.goNext();
+
+		wizard.actions.reset();
+		await flush();
+
+		expect(wizard.currentStepId).toBe("personal");
+		expect(wizard.data).toEqual(baseline);
+		expect(wizard.data).not.toEqual(initialData);
+	});
+
 	it("A10: cancel calls onCancel and then resets", async () => {
 		const onCancel = vi.fn();
 		const wizard = makeWizard({ onCancel });

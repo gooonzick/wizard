@@ -104,6 +104,9 @@ interface UseWizardActions<T> {
 }
 ```
 
+- `reset(data)` makes `data` the new reset baseline: a later `reset()` (or `cancel()`) restores `data`, not the original `initialData` prop.
+- `isValidating` / `isSubmitting` / `isNavigating` are reference-counted. A second `goNext()` rejected because a navigation is already in flight does not clear `isNavigating` early.
+
 **Example:**
 
 ```ts

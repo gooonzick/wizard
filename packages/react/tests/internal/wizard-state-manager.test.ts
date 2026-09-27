@@ -55,6 +55,10 @@ describe("WizardStateManager", () => {
 			expect(nav).toHaveProperty("isLastStep");
 			expect(nav).toHaveProperty("visitedSteps");
 			expect(nav).toHaveProperty("stepHistory");
+			// Seeded synchronously from snapshot.progress.isLastStep: a non-last
+			// first step is never reported as last, and Next is enabled.
+			expect(nav.isLastStep).toBe(false);
+			expect(nav.canGoNext).toBe(true);
 		});
 
 		it("recomputes real navigation values asynchronously", async () => {

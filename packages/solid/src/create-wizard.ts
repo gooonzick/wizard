@@ -1,12 +1,8 @@
-import type {
-	GoToOptions,
-	StepId,
-	WizardData,
-	WizardSerializedState,
-	WizardState,
-} from "@gooonzick/wizard-core";
-import { WizardMachine } from "@gooonzick/wizard-core";
-import { WizardStateManager } from "@gooonzick/wizard-state";
+import type { WizardData } from "@gooonzick/wizard-core";
+import {
+	createMachineAndManager,
+	createWizardActions,
+} from "@gooonzick/wizard-state";
 import { batch, createSignal, getOwner, onCleanup } from "solid-js";
 import type {
 	CreateWizardOptions,
@@ -35,43 +31,15 @@ export function createWizard<T extends WizardData>(
 		...callbacks
 	} = options;
 
-	// Forward references. The machine may fire onStateChange synchronously from its
-	// constructor (initializeFirstStep) BEFORE these are assigned — hence the guard.
-	let managerRef: WizardStateManager<T> | null = null;
-	let previousState: WizardState<T> | null = null;
-
-	const machine = new WizardMachine<T>(
+	// Shared wiring: the manager tracks the previous state itself and routes
+	// its navigation-recompute errors to onError (console.error fallback).
+	const { machine, manager } = createMachineAndManager<T>({
 		definition,
 		context,
 		initialData,
-		{
-			onStateChange: (newState: WizardState<T>) => {
-				const oldState = previousState;
-				previousState = newState;
-				if (oldState && managerRef) {
-					managerRef.handleStateChange(newState, oldState);
-				}
-				callbacks.onStateChange?.(newState);
-			},
-			onStepEnter: (stepId: StepId, data: T) =>
-				callbacks.onStepEnter?.(stepId, data),
-			onStepLeave: (stepId: StepId, data: T) =>
-				callbacks.onStepLeave?.(stepId, data),
-			onComplete: (data: T) => callbacks.onComplete?.(data),
-			onCancel: async (data: T) => {
-				await callbacks.onCancel?.(data);
-			},
-			onReset: () => callbacks.onReset?.(),
-			onError: (error: Error) => callbacks.onError?.(error),
-			onDataChange: (prev: T, next: T, changedFields: (keyof T)[]) =>
-				callbacks.onDataChange?.(prev, next, changedFields),
-		},
+		getCallbacks: () => callbacks,
 		plugins,
-	);
-
-	const manager = new WizardStateManager(machine, definition.initialStepId);
-	managerRef = manager;
-	previousState = machine.snapshot;
+	});
 
 	// Errors the binding catches itself (isolated effect throws, reset/restore
 	// failures). Without an onError they are logged rather than silently lost.
@@ -126,42 +94,27 @@ export function createWizard<T extends WizardData>(
 		}
 	}, "all");
 
-	// Reference-counted (manager.trackLoading): an overlapping or immediately
-	// rejected call — e.g. a double-clicked Next rejected as busy — must not
-	// clear the flag while another operation is still in flight.
-	const withNavigating = (fn: () => Promise<void>): Promise<void> =>
-		manager.trackLoading("isNavigating", fn);
+	// Shared actions: loading flags are reference-counted (manager.trackLoading),
+	// so a busy-rejected double click does not clear the flag of the navigation
+	// still in flight; reset()/restore() failures go to reportError. reset(data)
+	// passes data through, so reset() uses the machine's current baseline.
+	const bindingActions = createWizardActions(manager, reportError);
+	const { goNext, goPrevious, goTo } = bindingActions;
 
-	const goNext = () => withNavigating(() => machine.goNext());
-	const goPrevious = () => withNavigating(() => machine.goPrevious());
-	const goTo = (stepId: StepId, opts?: GoToOptions) =>
-		withNavigating(() => machine.goTo(stepId, opts));
-
+	// Solid deliberately exposes only the non-deprecated surface (no goBack /
+	// goToStep), so pick the members of WizardStoreActions explicitly.
 	const actions: WizardStoreActions<T> = {
-		updateData: (updater) => machine.updateData(updater),
-		setData: (data) => machine.setData(data),
-		// Direct call — preserves the Object.is no-op guard and changedFields=[field].
-		updateField: (field, value) => machine.updateField(field, value),
-		validate: () =>
-			manager.trackLoading("isValidating", async () => {
-				await machine.validate();
-			}),
-		validateAll: (opts) =>
-			manager.trackLoading("isValidating", () => machine.validateAll(opts)),
-		canSubmit: () => machine.canSubmit(),
-		submit: () => manager.trackLoading("isSubmitting", () => machine.submit()),
-		// Fire-and-forget, but the machine's synchronous reset()/restore() can throw
-		// (a malformed snapshot raises WizardRestoreError, which the machine does NOT
-		// route through handleError). Terminating the chain here keeps it from
-		// becoming an unhandled rejection and surfaces it via reportError instead.
-		reset: (data?: T) => {
-			void manager.runReset(data ?? initialData).catch(reportError);
-		},
-		cancel: () => manager.runCancel(),
-		serialize: () => machine.serialize(),
-		restore: (serialized: WizardSerializedState<T>) => {
-			void manager.runRestore(serialized).catch(reportError);
-		},
+		updateData: bindingActions.updateData,
+		setData: bindingActions.setData,
+		updateField: bindingActions.updateField,
+		validate: bindingActions.validate,
+		validateAll: bindingActions.validateAll,
+		canSubmit: bindingActions.canSubmit,
+		submit: bindingActions.submit,
+		reset: bindingActions.reset,
+		cancel: bindingActions.cancel,
+		serialize: bindingActions.serialize,
+		restore: bindingActions.restore,
 	};
 
 	const fields = new Map<keyof T, unknown>();

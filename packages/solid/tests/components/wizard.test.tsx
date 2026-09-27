@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { createWizard, type Wizard } from "../../src/index";
 import { flush } from "../helpers/flush";
 import {
+	createAsyncTerminalDefinition,
 	createTestDefinition,
 	initialData,
 	type SignupData,
@@ -44,19 +45,35 @@ function SignupForm(props: { wizard: Wizard<SignupData> }) {
 }
 
 describe("rendered component", () => {
-	it("M1: the Next button is disabled until navigation is computed", async () => {
-		const wizard = createWizard<SignupData>({
+	it("M1: the Next button tracks the sync seed, then the async navigation compute", async () => {
+		// Linear first step: enabled from the very first render (sync seed).
+		const linear = createWizard<SignupData>({
 			definition: createTestDefinition(),
 			initialData,
 		});
-		render(() => <SignupForm wizard={wizard} />);
+		const first = render(() => <SignupForm wizard={linear} />);
+		const linearNext = screen.getByRole("button", {
+			name: "Next",
+		}) as HTMLButtonElement;
+		expect(linearNext.disabled).toBe(false);
+		await flush();
+		expect(linearNext.disabled).toBe(false);
+		first.unmount();
+
+		// Async resolver returning null: enabled from the seed, disabled once the
+		// async compute learns there is no next step.
+		const resolver = createWizard<SignupData>({
+			definition: createAsyncTerminalDefinition(),
+			initialData,
+		});
+		render(() => <SignupForm wizard={resolver} />);
 		const next = screen.getByRole("button", {
 			name: "Next",
 		}) as HTMLButtonElement;
 
-		expect(next.disabled).toBe(true);
-		await flush();
 		expect(next.disabled).toBe(false);
+		await flush();
+		expect(next.disabled).toBe(true);
 	});
 
 	it("M2: an invalid click shows the validation error and stays on the step", async () => {

@@ -2,6 +2,7 @@ import type { StandardSchemaV1 } from "@standard-schema/spec";
 import {
 	combineValidators,
 	createStandardSchemaValidator,
+	type RequiredFieldsOptions,
 	requiredFields,
 	type StandardSchemaValidatorOptions,
 } from "../machine/validators";
@@ -112,8 +113,8 @@ export class StepBuilder<T extends WizardData> {
 	 * step.required('firstName', 'lastName')
 	 * step.required('email', { messages: { email: 'Please enter your email' } })
 	 */
-	required(...fields: Array<keyof T>): this {
-		const requiredValidator = requiredFields<T>(...fields);
+	required(...args: Array<keyof T | RequiredFieldsOptions<T>>): this {
+		const requiredValidator = requiredFields<T>(...args);
 
 		if (this.step.validate) {
 			// Compose with existing validator

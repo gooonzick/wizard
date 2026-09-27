@@ -100,7 +100,14 @@ export interface PersistencePluginConfig<TData> {
 
 /** A WizardPlugin augmented with imperative persistence controls. */
 export type PersistencePlugin<TData> = WizardPlugin<TData> & {
-	/** Settles once, on the first completed restore attempt. NEVER rejects. */
+	/**
+	 * Outcome of the restore attempt of the LATEST `onInit`. NEVER rejects.
+	 * Each `onInit` whose predecessor attempt already settled (e.g. a React
+	 * StrictMode re-init or a remount re-using a hoisted plugin instance) re-arms
+	 * this with a fresh promise, so read it AFTER the machine was constructed /
+	 * `use()` returned — a reference captured earlier may reflect a previous
+	 * machine (e.g. `{ skipped: "destroyed" }`).
+	 */
 	readonly ready: Promise<PersistenceRestoreOutcome<TData>>;
 	/** Cancels the debounce and drains any pending write. Resolves when the adapter settles. */
 	flush(): Promise<void>;
@@ -133,7 +140,8 @@ type EventTargetLike = {
  * `use()` / the `WizardMachine` constructor returns. With an asynchronous adapter
  * there is no ordering guarantee, so a late load is DISCARDED when the wizard has
  * moved on, is busy, or the plugin was destroyed/superseded — never force-applied.
- * `await plugin.ready` to observe the outcome.
+ * `await plugin.ready` (read after the machine / `use()` call — it re-arms per
+ * `onInit`) to observe the outcome.
  */
 export function createPersistencePlugin<TData>(
 	config: PersistencePluginConfig<TData>,
@@ -165,15 +173,27 @@ export function createPersistencePlugin<TData>(
 	let warnedSave = false;
 	let unloadHandler: (() => void) | null = null;
 
-	let settled = false;
-	let settle!: (o: PersistenceRestoreOutcome<TData>) => void;
-	const ready = new Promise<PersistenceRestoreOutcome<TData>>((res) => {
-		settle = res;
-	});
+	// `ready` is a per-onInit deferred: onInit re-arms it (a fresh, unsettled
+	// promise) whenever the current one has already settled, so a re-used plugin
+	// instance (React StrictMode probe, a remount with a hoisted plugin) reports
+	// the NEW machine's restore outcome. It never rejects.
+	type Deferred = {
+		promise: Promise<PersistenceRestoreOutcome<TData>>;
+		resolve: (o: PersistenceRestoreOutcome<TData>) => void;
+		settled: boolean;
+	};
+	const createDeferred = (): Deferred => {
+		let resolve!: (o: PersistenceRestoreOutcome<TData>) => void;
+		const promise = new Promise<PersistenceRestoreOutcome<TData>>((res) => {
+			resolve = res;
+		});
+		return { promise, resolve, settled: false };
+	};
+	let deferred = createDeferred();
 	const settleOnce = (o: PersistenceRestoreOutcome<TData>): void => {
-		if (settled) return;
-		settled = true;
-		settle(o);
+		if (deferred.settled) return;
+		deferred.settled = true;
+		deferred.resolve(o);
 	};
 
 	const toError = (e: unknown): Error =>
@@ -334,9 +354,18 @@ export function createPersistencePlugin<TData>(
 
 	// ── restore ──────────────────────────────────────────────────────
 	function applyLoaded(raw: unknown, seq: number): void {
+		if (seq !== initSeq) {
+			// Superseded by a newer onInit: that init owns `restorePending`, the
+			// pending writes and the current `ready` deferred — touch none of them.
+			safe(
+				() => config.onRestoreSkipped?.("destroyed"),
+				(e) => reportRestoreError(e, undefined),
+			);
+			return;
+		}
 		restorePending = false;
 		const m = machine;
-		if (destroyed || seq !== initSeq || !m) {
+		if (destroyed || !m) {
 			skip("destroyed");
 			return;
 		}
@@ -400,7 +429,9 @@ export function createPersistencePlugin<TData>(
 
 	return {
 		name,
-		ready,
+		get ready(): Promise<PersistenceRestoreOutcome<TData>> {
+			return deferred.promise;
+		},
 
 		flush(): Promise<void> {
 			cancelTimer();
@@ -416,8 +447,14 @@ export function createPersistencePlugin<TData>(
 			destroyed = false;
 			movedOn = false;
 			inert = false;
+			restorePending = false;
 			cancelTimer();
 			pendingOp = null;
+			// Re-arm `ready` only when the previous attempt already settled; an
+			// unsettled deferred is simply carried over to this init.
+			if (deferred.settled) {
+				deferred = createDeferred();
+			}
 			machine = view;
 			const seq = ++initSeq;
 			registerUnload(); // idempotent; no-op unless flushOnUnload
@@ -445,8 +482,11 @@ export function createPersistencePlugin<TData>(
 				loaded.then(
 					(v) => applyLoaded(v, seq),
 					(err) => {
-						restorePending = false;
 						reportRestoreError(err, undefined);
+						// A superseded init's late rejection must not release the
+						// current init's write suppression or settle its `ready`.
+						if (seq !== initSeq) return;
+						restorePending = false;
 						settleOnce({ status: "failed", error: toError(err) });
 						if (pendingOp !== null) void drain();
 					},

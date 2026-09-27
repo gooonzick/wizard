@@ -74,16 +74,18 @@ describe("WizardStateManager", () => {
 			expect(loadingSnapshot.isNavigating).toBe(false);
 		});
 
-		it("should expose navigation safe defaults before the async recompute settles", () => {
+		it("should seed navigation from core's sync progress before the async recompute settles", () => {
 			const { manager } = buildLinear();
 
-			// Synchronously after construction, the async recompute has not run yet.
+			// Synchronously after construction, the async recompute has not run
+			// yet. isLastStep/canGoNext are seeded from snapshot.progress.isLastStep
+			// (step1 has a static next => not last), not a hardcoded "last" default.
 			const navSnapshot = manager.getNavigationSnapshot();
-			expect(navSnapshot.canGoNext).toBe(false);
+			expect(navSnapshot.canGoNext).toBe(true);
 			expect(navSnapshot.canGoPrevious).toBe(false);
 			expect(navSnapshot.availableSteps).toEqual([]);
 			expect(navSnapshot.isFirstStep).toBe(true);
-			expect(navSnapshot.isLastStep).toBe(true);
+			expect(navSnapshot.isLastStep).toBe(false);
 		});
 
 		it("should recompute real navigation values after settle", async () => {
@@ -364,6 +366,151 @@ describe("WizardStateManager", () => {
 
 			// Final state must reflect the LAST edit (goNext:false => false).
 			expect(manager.getNavigationSnapshot().canGoNext).toBe(false);
+		});
+	});
+
+	// --- Sync navigation seed: no "Finish" flash on non-last steps ----------
+	describe("navigation sync seed from snapshot.progress.isLastStep", () => {
+		function buildLinear3() {
+			const definition = createLinearWizard<{ name: string }>({
+				id: "linear3",
+				steps: [{ id: "step1" }, { id: "step2" }, { id: "step3" }],
+			});
+			return createWiredManager<{ name: string }>(definition, { name: "" });
+		}
+
+		it("reports isLastStep false / canGoNext true synchronously after construction (3-step linear)", () => {
+			const { manager } = buildLinear3();
+
+			const nav = manager.getNavigationSnapshot();
+			expect(nav.isLastStep).toBe(false);
+			expect(nav.canGoNext).toBe(true);
+		});
+
+		it("reports isLastStep true / canGoNext false synchronously for a single-step wizard", async () => {
+			const definition = createLinearWizard<{ name: string }>({
+				id: "single",
+				steps: [{ id: "only" }],
+			});
+			const { manager } = createWiredManager<{ name: string }>(definition, {
+				name: "",
+			});
+			const listener = vi.fn();
+			manager.subscribe(listener, "navigation");
+
+			const nav = manager.getNavigationSnapshot();
+			expect(nav.isLastStep).toBe(true);
+			expect(nav.canGoNext).toBe(false);
+
+			// The async compute agrees with the seed on the booleans.
+			await settle();
+			expect(manager.getNavigationSnapshot().isLastStep).toBe(true);
+			expect(manager.getNavigationSnapshot().canGoNext).toBe(false);
+		});
+
+		it("delivers isLastStep true in the SAME synchronous notify after goNext to the last step", async () => {
+			const { machine, manager } = buildLinear3();
+			await settle();
+			await machine.goNext();
+			await settle();
+			expect(manager.getStateSnapshot().currentStepId).toBe("step2");
+			expect(manager.getNavigationSnapshot().isLastStep).toBe(false);
+
+			// Capture the navigation slice the listener sees on each notify.
+			const seen: Array<{
+				stepId: string;
+				isLastStep: boolean;
+				canGoNext: boolean;
+			}> = [];
+			manager.subscribe(() => {
+				const nav = manager.getNavigationSnapshot();
+				seen.push({
+					stepId: manager.getStateSnapshot().currentStepId,
+					isLastStep: nav.isLastStep,
+					canGoNext: nav.canGoNext,
+				});
+			}, "navigation");
+
+			const navigating = machine.goNext();
+			await navigating;
+			// No settle yet: the first notify that reached step3 must already
+			// report the last-step values from the sync seed.
+			const firstOnStep3 = seen.find((e) => e.stepId === "step3");
+			expect(firstOnStep3).toEqual({
+				stepId: "step3",
+				isLastStep: true,
+				canGoNext: false,
+			});
+			// No notify on step3 ever reported the stale "not last" values.
+			expect(seen.filter((e) => e.stepId === "step3" && !e.isLastStep)).toEqual(
+				[],
+			);
+
+			await settle();
+			expect(manager.getNavigationSnapshot().isLastStep).toBe(true);
+			expect(manager.getNavigationSnapshot().canGoNext).toBe(false);
+		});
+
+		it("seeds isLastStep false for an async resolver next; the async compute commits the true value", async () => {
+			let release: (value: string | null) => void = () => {};
+			const gate = new Promise<string | null>((r) => {
+				release = r;
+			});
+			const definition = createWizard<{ name: string }>("async-next")
+				.initialStep("step1")
+				.step("step1", (b) => b.nextResolver(() => gate))
+				.step("step2", (b) => b.previous("step1"))
+				.build();
+			const { manager } = createWiredManager<{ name: string }>(definition, {
+				name: "",
+			});
+			const listener = vi.fn();
+			manager.subscribe(listener, "navigation");
+
+			// Sync seed: next is async => undetermined => conservatively not last.
+			expect(manager.getNavigationSnapshot().isLastStep).toBe(false);
+			expect(manager.getNavigationSnapshot().canGoNext).toBe(true);
+
+			// The resolver actually resolves to "no next step" => terminal.
+			release(null);
+			await settle();
+
+			expect(manager.getNavigationSnapshot().isLastStep).toBe(true);
+			expect(manager.getNavigationSnapshot().canGoNext).toBe(false);
+			expect(listener).toHaveBeenCalled();
+		});
+
+		it("keeps an async-proven isLastStep on data edits to the same step (no re-seed flicker, no extra notify)", async () => {
+			const definition = createWizard<{ n: number }>("async-terminal")
+				.initialStep("step1")
+				.step("step1", (b) => b.nextResolver(async () => null))
+				.build();
+			const { machine, manager } = createWiredManager<{ n: number }>(
+				definition,
+				{ n: 0 },
+			);
+			await settle();
+			expect(manager.getNavigationSnapshot().isLastStep).toBe(true);
+			expect(manager.getNavigationSnapshot().canGoNext).toBe(false);
+
+			const seen: boolean[] = [];
+			const listener = vi.fn(() => {
+				seen.push(manager.getNavigationSnapshot().isLastStep);
+			});
+			manager.subscribe(listener, "navigation");
+
+			machine.updateData((d) => ({ ...d, n: 1 }));
+			// Synchronously after the edit: the async-proven value is kept.
+			expect(manager.getNavigationSnapshot().isLastStep).toBe(true);
+			expect(manager.getNavigationSnapshot().canGoNext).toBe(false);
+
+			await settle();
+			expect(manager.getNavigationSnapshot().isLastStep).toBe(true);
+			// Never a [true, false, true] sequence.
+			expect(seen).not.toContain(false);
+			// Only the data-change notify itself; the async recompute matches the
+			// cache, so the equality gate suppresses a second notify.
+			expect(listener).toHaveBeenCalledTimes(1);
 		});
 	});
 });

@@ -106,8 +106,8 @@ export class PluginHost<TData> {
 	 * (navigateToStep rethrows it; withTransition's catch reports it once).
 	 */
 	async dispatchBeforeTransition(e: TransitionEvent<TData>): Promise<boolean> {
-		for (const plugin of this.plugins) {
-			if (!plugin.beforeTransition) {
+		for (const plugin of [...this.plugins]) {
+			if (!plugin.beforeTransition || !this.isLive(plugin)) {
 				continue;
 			}
 			const result = await plugin.beforeTransition(e);
@@ -120,21 +120,52 @@ export class PluginHost<TData> {
 
 	/** Isolated: each throw is reported; remaining plugins still run. */
 	async dispatchAfterTransition(e: TransitionEvent<TData>): Promise<void> {
-		for (const plugin of this.plugins) {
+		for (const plugin of [...this.plugins]) {
+			if (!this.isLive(plugin)) {
+				continue;
+			}
 			await this.runIsolated(() => plugin.afterTransition?.(e));
 		}
 	}
 
-	/** Isolated onComplete dispatch. */
-	async dispatchComplete(data: DeepReadonly<TData>): Promise<void> {
-		for (const plugin of this.plugins) {
-			await this.runIsolated(() => plugin.onComplete?.(data), "lifecycle");
+	/**
+	 * Isolated onComplete dispatch. Unlike the other async dispatchers, every
+	 * live plugin's onComplete is INVOKED SYNCHRONOUSLY, in registration order,
+	 * with no await between plugins — so a teardown triggered right after this
+	 * call (e.g. `destroy()` from the app's `events.onComplete`) cannot pre-empt
+	 * a later plugin. Sync throws and promise rejections are each reported via
+	 * the error reporter (phase "lifecycle"); remaining plugins still run. The
+	 * returned promise settles once every returned promise has settled and
+	 * NEVER rejects.
+	 */
+	dispatchComplete(data: DeepReadonly<TData>): Promise<void> {
+		const pending: Promise<void>[] = [];
+		for (const plugin of [...this.plugins]) {
+			if (!plugin.onComplete || !this.isLive(plugin)) {
+				continue;
+			}
+			try {
+				const result = plugin.onComplete(data);
+				if (result instanceof Promise) {
+					pending.push(
+						result.then(undefined, (err: unknown) =>
+							this.reportError(err, "lifecycle"),
+						),
+					);
+				}
+			} catch (err) {
+				this.reportError(err, "lifecycle");
+			}
 		}
+		return Promise.all(pending).then(() => undefined);
 	}
 
 	/** Isolated onReset dispatch. */
 	async dispatchReset(): Promise<void> {
-		for (const plugin of this.plugins) {
+		for (const plugin of [...this.plugins]) {
+			if (!this.isLive(plugin)) {
+				continue;
+			}
 			await this.runIsolated(() => plugin.onReset?.(), "lifecycle");
 		}
 	}
@@ -145,7 +176,10 @@ export class PluginHost<TData> {
 		next: DeepReadonly<TData>,
 		changedFields: readonly (keyof TData)[],
 	): Promise<void> {
-		for (const plugin of this.plugins) {
+		for (const plugin of [...this.plugins]) {
+			if (!this.isLive(plugin)) {
+				continue;
+			}
 			await this.runIsolated(
 				() => plugin.onDataChange?.(prev, next, changedFields),
 				"data",
@@ -161,8 +195,8 @@ export class PluginHost<TData> {
 		error: WizardError | Error,
 		ctx: ErrorContext<TData>,
 	): Promise<void> {
-		for (const plugin of this.plugins) {
-			if (!plugin.onError) {
+		for (const plugin of [...this.plugins]) {
+			if (!plugin.onError || !this.isLive(plugin)) {
 				continue;
 			}
 			try {
@@ -188,6 +222,16 @@ export class PluginHost<TData> {
 		for (const plugin of reversed) {
 			await this.runIsolated(() => plugin.destroy?.(), "lifecycle");
 		}
+	}
+
+	/**
+	 * Async dispatch loops iterate a SNAPSHOT of the plugin list (so a
+	 * remove() splicing mid-loop cannot skip the next plugin) and re-check this
+	 * before each invocation, so a plugin removed — or torn down by
+	 * destroyAll() — while an earlier plugin's hook was awaited is never invoked.
+	 */
+	private isLive(plugin: WizardPlugin<TData>): boolean {
+		return !this.destroyed && this.plugins.includes(plugin);
 	}
 
 	/** Awaits a hook, catching + reporting any throw/rejection. */

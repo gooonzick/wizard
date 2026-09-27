@@ -63,3 +63,15 @@ export interface StateSnapshot<T extends WizardData> {
  * Listener type for subscription callbacks
  */
 export type SubscriptionListener = () => void;
+
+/**
+ * Options for {@link WizardStateManager}.
+ */
+export interface WizardStateManagerOptions {
+	/**
+	 * Receives errors the manager catches itself — currently failures of the
+	 * background navigation recompute (a throwing user guard / transition
+	 * resolver). When omitted they are logged with `console.error`.
+	 */
+	onError?: (error: Error) => void;
+}

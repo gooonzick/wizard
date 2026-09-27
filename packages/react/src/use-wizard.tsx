@@ -12,8 +12,12 @@ import type {
 	WizardState,
 	WizardStepDefinition,
 } from "@gooonzick/wizard-core";
-import { WizardMachine } from "@gooonzick/wizard-core";
-import { WizardStateManager } from "@gooonzick/wizard-state";
+import {
+	createMachineAndManager,
+	createWizardActions,
+	type WizardBindingActions,
+	type WizardStateManager,
+} from "@gooonzick/wizard-state";
 import {
 	useCallback,
 	useEffect,
@@ -161,6 +165,11 @@ export interface UseWizardActions<T extends WizardData> {
 	validateAll: ValidateAllFn;
 	canSubmit: CanSubmitFn;
 	submit: SubmitFn;
+	/**
+	 * Resets to the initial step. `reset(data)` also makes `data` the new reset
+	 * baseline, so a later `reset()` (or `cancel()`) restores `data` rather than
+	 * the original `initialData`.
+	 */
 	reset: ResetFn<T>;
 	cancel: CancelFn;
 	serialize: SerializeFn<T>;
@@ -176,6 +185,45 @@ export interface UseWizardReturn<T extends WizardData> {
 	navigation: UseWizardNavigation;
 	loading: UseWizardLoading;
 	actions: UseWizardActions<T>;
+}
+
+/**
+ * Picks the navigation methods out of a shared action set. Explicit (no spread)
+ * so the slice never carries the data actions. Package-internal.
+ */
+export function pickNavigationActions<T extends WizardData>(
+	actions: WizardBindingActions<T>,
+): UseWizardNavigationActions {
+	return {
+		goNext: actions.goNext,
+		goPrevious: actions.goPrevious,
+		goBack: actions.goBack,
+		goTo: actions.goTo,
+		goToStep: actions.goToStep,
+	};
+}
+
+/**
+ * Picks the data/validation/lifecycle methods out of a shared action set.
+ * Explicit (no spread) so the slice never carries the navigation methods.
+ * Package-internal.
+ */
+export function pickDataActions<T extends WizardData>(
+	actions: WizardBindingActions<T>,
+): UseWizardActions<T> {
+	return {
+		updateData: actions.updateData,
+		setData: actions.setData,
+		updateField: actions.updateField,
+		validate: actions.validate,
+		validateAll: actions.validateAll,
+		canSubmit: actions.canSubmit,
+		submit: actions.submit,
+		reset: actions.reset,
+		cancel: actions.cancel,
+		serialize: actions.serialize,
+		restore: actions.restore,
+	};
 }
 
 /**
@@ -230,75 +278,6 @@ export function useWizard<T extends WizardData>(
 	const definitionRef = useRef(definition);
 	const pluginsRef = useRef(plugins);
 
-	// Track previous state for change detection
-	const previousStateRef = useRef<WizardState<T> | null>(null);
-
-	// Helper function to create events object
-	const createEvents = useCallback(
-		(getManager: () => WizardStateManager<T> | null) => ({
-			onStateChange: (newState: WizardState<T>) => {
-				const oldState = previousStateRef.current;
-				previousStateRef.current = newState;
-
-				// Notify subscribers via channel-based system
-				const mgr = getManager();
-				if (oldState && mgr) {
-					mgr.handleStateChange(newState, oldState);
-				}
-
-				callbacksRef.current.onStateChange?.(newState);
-			},
-			onStepEnter: (stepId: StepId, data: T) => {
-				callbacksRef.current.onStepEnter?.(stepId, data);
-			},
-			onStepLeave: (stepId: StepId, data: T) => {
-				callbacksRef.current.onStepLeave?.(stepId, data);
-			},
-			onComplete: (data: T) => {
-				callbacksRef.current.onComplete?.(data);
-			},
-			onCancel: async (data: T) => {
-				await callbacksRef.current.onCancel?.(data);
-			},
-			onReset: () => {
-				callbacksRef.current.onReset?.();
-			},
-			onError: (error: Error) => {
-				callbacksRef.current.onError?.(error);
-			},
-			onDataChange: (prev: T, next: T, changedFields: (keyof T)[]) => {
-				callbacksRef.current.onDataChange?.(prev, next, changedFields);
-			},
-		}),
-		[],
-	);
-
-	// Helper function to create a new manager
-	const createManager = useCallback(
-		(data: T): WizardStateManager<T> => {
-			// We need to pass a getter that returns the manager we're about to create
-			// This is a bit circular, but the events won't be called until after the manager exists
-			let newManager: WizardStateManager<T> | null = null;
-			const events = createEvents(() => newManager);
-
-			const machine = new WizardMachine(
-				definitionRef.current,
-				contextRef.current,
-				data,
-				events,
-				pluginsRef.current,
-			);
-
-			newManager = new WizardStateManager(
-				machine,
-				definitionRef.current.initialStepId,
-			);
-			previousStateRef.current = machine.snapshot;
-			return newManager;
-		},
-		[createEvents],
-	);
-
 	// Ref-guarded lazy creation. useRef persists across StrictMode's double
 	// render (same fiber) and across a discarded-then-retried render, so the
 	// side-effecting `new WizardMachine(...)` (plugin onInit) runs exactly once
@@ -308,7 +287,15 @@ export function useWizard<T extends WizardData>(
 	if (managerRef.current === null || managerRef.current.isDestroyed) {
 		// isDestroyed is only true after the StrictMode mount->unmount->remount
 		// probe tore the previous manager down; recreate re-applies the plugins.
-		managerRef.current = createManager(initialDataRef.current);
+		// `getCallbacks` reads the ref at event time, so callbacks swapped on a
+		// later render are the ones invoked.
+		managerRef.current = createMachineAndManager<T>({
+			definition: definitionRef.current,
+			context: contextRef.current,
+			initialData: initialDataRef.current,
+			getCallbacks: () => callbacksRef.current,
+			plugins: pluginsRef.current,
+		}).manager;
 	}
 	// `useState` holds the identity so a recreate triggers a re-render + resubscribe.
 	const [, forceRerender] = useState(0);
@@ -366,145 +353,25 @@ export function useWizard<T extends WizardData>(
 		useCallback(() => manager.getLoadingSnapshot(), [manager]),
 	);
 
-	// Data mutations
-	const updateData = useCallback(
-		(updater: (data: T) => T) => {
-			manager.getMachine().updateData(updater);
-		},
-		[manager],
-	);
-
-	const setData = useCallback(
-		(data: T) => {
-			manager.getMachine().setData(data);
-		},
-		[manager],
-	);
-
-	const updateField = useCallback(
-		<K extends keyof T>(field: K, value: T[K]) => {
-			manager.getMachine().updateField(field, value);
-		},
-		[manager],
-	);
-
-	// Validation
-	const validate = useCallback(async () => {
-		manager.setLoadingState({ isValidating: true });
-		try {
-			await manager.getMachine().validate();
-		} finally {
-			manager.setLoadingState({ isValidating: false });
-		}
-	}, [manager]);
-
-	const validateAll = useCallback(
-		async (options?: { updateStatuses?: boolean }) => {
-			manager.setLoadingState({ isValidating: true });
-			try {
-				return await manager.getMachine().validateAll(options);
-			} finally {
-				manager.setLoadingState({ isValidating: false });
-			}
-		},
-		[manager],
-	);
-
-	const canSubmitFn = useCallback(async (): Promise<boolean> => {
-		return manager.getMachine().canSubmit();
-	}, [manager]);
-
-	const submit = useCallback(async () => {
-		manager.setLoadingState({ isSubmitting: true });
-		try {
-			await manager.getMachine().submit();
-		} finally {
-			manager.setLoadingState({ isSubmitting: false });
-		}
-	}, [manager]);
-
-	// Navigation
-	const goNext = useCallback(async () => {
-		manager.setLoadingState({ isNavigating: true });
-		try {
-			await manager.getMachine().goNext();
-		} finally {
-			manager.setLoadingState({ isNavigating: false });
-		}
-	}, [manager]);
-
-	const goPrevious = useCallback(async () => {
-		manager.setLoadingState({ isNavigating: true });
-		try {
-			await manager.getMachine().goPrevious();
-		} finally {
-			manager.setLoadingState({ isNavigating: false });
-		}
-	}, [manager]);
-
-	const goBack = useCallback(
-		async (steps = 1) => {
-			manager.setLoadingState({ isNavigating: true });
-			try {
-				await manager.getMachine().goBack(steps);
-			} finally {
-				manager.setLoadingState({ isNavigating: false });
-			}
-		},
-		[manager],
-	);
-
-	const goTo = useCallback(
-		async (stepId: StepId, options?: GoToOptions) => {
-			manager.setLoadingState({ isNavigating: true });
-			try {
-				await manager.getMachine().goTo(stepId, options);
-			} finally {
-				manager.setLoadingState({ isNavigating: false });
-			}
-		},
-		[manager],
-	);
-
-	/** @deprecated Use goTo instead */
-	const goToStep = useCallback(
-		async (stepId: StepId) => {
-			return goTo(stepId, { skipValidation: true });
-		},
-		[goTo],
-	);
-
 	// `reset`/`restore` are fire-and-forget (`void`), but the machine's synchronous
 	// reset()/restore() can throw — a malformed snapshot raises WizardRestoreError,
-	// which the machine does NOT route through handleError. Terminating the chain here
-	// keeps a bad snapshot from becoming an unhandled rejection and surfaces it on
-	// `onError` instead. Reads `callbacksRef.current` at call time, so the empty
-	// dependency array cannot go stale.
+	// which the machine does NOT route through handleError. createWizardActions
+	// terminates the chain with this reporter, so a bad snapshot surfaces on
+	// `onError` instead of becoming an unhandled rejection. Reads
+	// `callbacksRef.current` at call time, so the empty dependency array cannot
+	// go stale.
 	const reportError = useCallback((error: unknown) => {
 		callbacksRef.current.onError?.(
 			error instanceof Error ? error : new Error(String(error)),
 		);
 	}, []);
 
-	const reset = useCallback(
-		(data?: T) => {
-			void manager.runReset(data ?? initialDataRef.current).catch(reportError);
-		},
-		[manager, reportError],
-	);
-
-	const cancel = useCallback(async () => {
-		await manager.runCancel();
-	}, [manager]);
-
-	const serialize = useCallback(() => {
-		return manager.getMachine().serialize();
-	}, [manager]);
-
-	const restore = useCallback(
-		(serializedState: WizardSerializedState<T>) => {
-			void manager.runRestore(serializedState).catch(reportError);
-		},
+	// One action set per manager: identities are stable until a StrictMode-driven
+	// recreate swaps the manager. Loading flags use the manager's
+	// reference-counted trackLoading(), and reset(data) passes `data` through so
+	// the machine's sticky reset baseline applies.
+	const actions = useMemo(
+		() => createWizardActions(manager, reportError),
 		[manager, reportError],
 	);
 
@@ -546,11 +413,7 @@ export function useWizard<T extends WizardData>(
 			visitedSteps: navigationSnapshot.visitedSteps,
 			availableSteps: navigationSnapshot.availableSteps,
 			stepHistory: navigationSnapshot.stepHistory,
-			goNext,
-			goPrevious,
-			goBack,
-			goTo,
-			goToStep,
+			...pickNavigationActions(actions),
 		}),
 		[
 			navigationSnapshot.canGoNext,
@@ -561,11 +424,7 @@ export function useWizard<T extends WizardData>(
 			navigationSnapshot.visitedSteps,
 			navigationSnapshot.availableSteps,
 			navigationSnapshot.stepHistory,
-			goNext,
-			goPrevious,
-			goBack,
-			goTo,
-			goToStep,
+			actions,
 		],
 	);
 
@@ -583,32 +442,8 @@ export function useWizard<T extends WizardData>(
 	);
 
 	const actionsSlice: UseWizardActions<T> = useMemo(
-		() => ({
-			updateData,
-			setData,
-			updateField,
-			validate,
-			validateAll,
-			canSubmit: canSubmitFn,
-			submit,
-			reset,
-			cancel,
-			serialize,
-			restore,
-		}),
-		[
-			updateData,
-			setData,
-			updateField,
-			validate,
-			validateAll,
-			canSubmitFn,
-			submit,
-			reset,
-			cancel,
-			serialize,
-			restore,
-		],
+		() => pickDataActions(actions),
+		[actions],
 	);
 
 	// Return organized slices

@@ -4,6 +4,7 @@ import { createWizard } from "../src/create-wizard";
 import type { CreateWizardOptions } from "../src/types";
 import { flush } from "./helpers/flush";
 import {
+	createAsyncTerminalDefinition,
 	createTestDefinition,
 	initialData,
 	type SignupData,
@@ -33,7 +34,9 @@ afterEach(() => {
 
 describe("reactivity", () => {
 	it("X1: an effect on canGoNext re-runs after the async navigation compute", async () => {
-		const wizard = makeWizard();
+		// canGoNext is seeded `true` synchronously; the async resolver then
+		// reports no next step and the compute flips it to `false`.
+		const wizard = makeWizard({ definition: createAsyncTerminalDefinition() });
 		const seen: boolean[] = [];
 		track(() => {
 			seen.push(wizard.canGoNext);
@@ -41,7 +44,25 @@ describe("reactivity", () => {
 
 		await flush();
 
-		expect(seen).toEqual([false, true]);
+		expect(seen).toEqual([true, false]);
+	});
+
+	it("X1b: when the seed is already right, the async compute still delivers availableSteps", async () => {
+		// Linear first step: canGoNext is final from the sync seed; the async
+		// compute only adds availableSteps (seeded empty), which re-runs the
+		// effect because the navigation channel is one signal.
+		const wizard = makeWizard();
+		const seen: Array<[boolean, number]> = [];
+		track(() => {
+			seen.push([wizard.canGoNext, wizard.availableSteps.length]);
+		});
+
+		await flush();
+
+		expect(seen).toEqual([
+			[true, 0],
+			[true, 3],
+		]);
 	});
 
 	it("X2: an effect never observes a half-applied transition (batch atomicity)", async () => {

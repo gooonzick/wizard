@@ -47,9 +47,10 @@ export interface WizardProviderProps<T extends WizardData> {
 	 * component mounts has no effect (the machine is created once). To reconfigure,
 	 * remount the provider with a new `key`.
 	 *
-	 * Must be structured-cloneable and nested Vue reactivity is stripped: the
-	 * machine deep-clones via `structuredClone`, so pass plain serializable form
-	 * data (no functions, symbols, or class instances).
+	 * `ref()` / `reactive()` values are accepted: Vue reactivity (refs and
+	 * proxies, including nested ones) is stripped to plain data before the
+	 * machine deep-clones it via `structuredClone`. The unwrapped data must still
+	 * be structured-cloneable (no functions, symbols, or class instances).
 	 */
 	initialData: T;
 	/**
@@ -113,7 +114,8 @@ export const WizardProvider = defineComponent({
 	},
 	setup(props, { slots }) {
 		// Use the main composable - this handles all machine management
-		// Use toRaw to unwrap Vue's reactive proxies before passing to WizardMachine
+		// Props are reactive proxies: toRaw unwraps them before they reach the
+		// machine (useWizard additionally deep-unwraps initialData).
 		const wizard = useWizard({
 			definition: toRaw(props.definition),
 			initialData: toRaw(props.initialData),

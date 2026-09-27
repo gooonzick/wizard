@@ -16,6 +16,18 @@ interface WizardDefinition<T> {
   id: string;
   initialStepId: StepId;
   steps: Record<StepId, WizardStepDefinition<T>>;
+  /**
+   * Awaited BEFORE `isCompleted` is committed (it observes `isCompleted: false`).
+   * A throw leaves `isCompleted: false` and rejects `submit()`/`goNext()`, so the
+   * user can retry. A reset()/cancel()/restore() while it runs cancels the
+   * completion (no `onComplete` event, no plugin `onComplete`).
+   *
+   * Once it resolves: `isCompleted: true` and the final step's "completed"
+   * status are committed in one write → `onStateChange` → every plugin's
+   * `onComplete` (invoked synchronously, registration order) →
+   * `events.onComplete`. Plugins therefore see completion before app code can
+   * tear the wizard down from `events.onComplete`.
+   */
   onComplete?: CompleteHandler<T>;
   /** Invoked by `cancel()` before the machine is reset. */
   onCancel?: CompleteHandler<T>;
@@ -118,11 +130,11 @@ Derived progress information, recomputed on every `onStateChange`.
 ```ts
 interface WizardProgress {
   totalSteps: number; // all steps in the definition
-  enabledSteps: number; // steps not currently skipped
+  enabledSteps: number; // steps not currently skipped (function guards refreshed at navigation time)
   completedSteps: number; // steps with status "completed"
   currentStepIndex: number; // 0-based index among enabled steps (-1 if current step is skipped)
   enabledStepIds: StepId[]; // ordered list of enabled step ids
-  percentage: number; // 0–100, completedSteps / enabledSteps * 100, rounded
+  percentage: number; // 0–100, completedSteps / enabledSteps * 100, rounded (100 once completed)
   isFirstStep: boolean; // currentStepId === definition.initialStepId
   isLastStep: boolean; // no resolvable next step (navigation-graph based)
 }
@@ -436,9 +448,11 @@ class WizardMachine<T> {
 
   // Persistence
   serialize(): WizardSerializedState<T>;
+  /** Like reset(), supersedes in-flight transitions and a pending initial-step onEnter. */
   restore(state: WizardSerializedState<T>): void;
 
   // Data operations
+  /** An in-place updater that returns the same object is committed as a shallow copy (new reference). */
   updateData(updater: (data: T) => T): void;
   setData(data: T): void;
   /** Update one top-level field. Object.is no-op guard. Fires onDataChange with changedFields=[field]. (WIZ-010) */
@@ -447,17 +461,25 @@ class WizardMachine<T> {
   watchField<K extends keyof T>(field: K, callback: (newValue: T[K], oldValue: T[K]) => void): () => void;
 
   // Validation & submission
+  /** A passing result also clears an "error" status on the current step. */
   validate(): Promise<ValidationResult>;
   // Validate ALL enabled steps without navigating (dry-run by default).
   validateAll(options?: { updateStatuses?: boolean }): Promise<ValidationSummary>;
   canSubmit(): Promise<boolean>;
+  /** A validation failure marks the current step "error". */
   submit(): Promise<void>;
 
   // Navigation
   goNext(): Promise<void>;
+  /**
+   * History-first: goes to the nearest earlier history entry whose `enabled`
+   * guard is true (throws reason "disabled" if none); falls back to the
+   * `previous` transition only when history holds just the current step.
+   */
   goPrevious(): Promise<void>;
   /** @deprecated Use goPrevious() instead */
   goBack(steps?: number): Promise<void>;
+  /** A validation failure (unless skipValidation) marks the current step "error". */
   goTo(stepId: StepId, options?: GoToOptions): Promise<void>;
   /** @deprecated Use goTo(stepId) instead */
   goToStep(stepId: StepId): Promise<void>;
@@ -473,6 +495,7 @@ class WizardMachine<T> {
 
   // Query
   getNextStepId(): Promise<StepId | null>;
+  /** Exactly the step goPrevious() would navigate to (history-first, guard-aware); null if none. */
   getPreviousStepId(): Promise<StepId | null>;
   canNavigateToStep(stepId: StepId): Promise<boolean>;
   getAvailableSteps(): Promise<StepId[]>; // Note: async
@@ -509,6 +532,11 @@ interface WizardEvents<T> {
   onStepLeave?: (stepId: StepId, data: T) => void;
   onValidation?: (result: ValidationResult) => void;
   onSubmit?: (stepId: StepId, data: T) => void;
+  /**
+   * Fired last on completion: after the committed `isCompleted` state change and
+   * after every plugin's `onComplete` has been invoked, so destroying/unmounting
+   * the wizard here is safe (analytics reports completion, not a drop-off).
+   */
   onComplete?: (data: T) => void;
   /** Fired by `cancel()` before the machine is reset. May be async. */
   onCancel?: (data: T) => void | Promise<void>;
@@ -1094,7 +1122,8 @@ A step's timer closes on `afterTransition` (or in `onComplete` for the terminal 
 `getReport()` folds the current step's still-open visit into `stepTimings` and
 `totalDuration`. A backtrack is any `previous` transition, or a `goTo` to a
 previously-visited step. `onDropOff` fires from `destroy()` only when the wizard never
-completed. Resetting the wizard restarts the analytics session in place and does not
+completed (checked against both the plugin's own `onComplete` bookkeeping and the
+machine's `snapshot.isCompleted`). Resetting the wizard restarts the analytics session in place and does not
 re-emit `onStepView`.
 
 ### `createPersistencePlugin`
@@ -1134,7 +1163,11 @@ interface PersistencePluginConfig<TData> {
 }
 
 type PersistencePlugin<TData> = WizardPlugin<TData> & {
-  /** Settles once, on the first completed restore attempt. NEVER rejects. */
+  /**
+   * Outcome of the LATEST onInit's restore attempt. NEVER rejects. Re-armed by
+   * an onInit whose predecessor already settled (StrictMode re-init, remount with
+   * a hoisted plugin), so read it after the machine / use() call.
+   */
   readonly ready: Promise<PersistenceRestoreOutcome<TData>>;
   /** Cancels the debounce and drains any pending write. */
   flush(): Promise<void>;

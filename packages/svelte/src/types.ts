@@ -138,11 +138,14 @@ export interface WizardStoreActions<T extends WizardData> {
 	validateAll: ValidateAllFn;
 	canSubmit: CanSubmitFn;
 	submit: SubmitFn;
-	/** Fire-and-forget (`void manager.runReset(...)`), mirroring React. */
+	/**
+	 * Fire-and-forget (`void manager.runReset(data)`). `reset(X)` makes X the
+	 * new reset baseline; `reset()` returns to the current baseline.
+	 */
 	reset: ResetFn<T>;
 	cancel: CancelFn;
 	serialize: SerializeFn<T>;
-	/** Fire-and-forget (`void manager.runRestore(...)`), mirroring React. */
+	/** Fire-and-forget (`void manager.runRestore(...)`). */
 	restore: RestoreFn<T>;
 }
 

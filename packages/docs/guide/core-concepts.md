@@ -497,7 +497,7 @@ machine.clearHistory(); // history: ["plan"] (keeps current step)
 ### Key Behaviors
 
 - **`goNext()`** pushes the current step onto the stack before navigating
-- **`goPrevious()`** pops from the stack (history-first), falls back to `previous` transition if history is empty
+- **`goPrevious()`** pops from the stack (history-first): it lands on the nearest earlier history entry whose `enabled` guard is currently true (disabled entries in between are popped too) and throws `WizardNavigationError` (reason `"disabled"`) if none is enabled. It falls back to the `previous` transition only when the history holds just the current step. `getPreviousStepId()` returns exactly the step `goPrevious()` would navigate to.
 - **`goToStep(stepId)`** pushes the current step onto the stack
 - **`clearHistory()`** resets the stack to just the current step
 - **`canGoBack`** is `true` when the history stack has more than one entry
@@ -532,8 +532,8 @@ Each step has one of six possible statuses:
 | `active`    | Currently displayed                   |
 | `visited`   | Was active, then user navigated away  |
 | `completed` | Successfully submitted via `goNext()` |
-| `error`     | Validation failed on `goNext()`       |
-| `skipped`   | Disabled by guard (`enabled: false`)  |
+| `error`     | Validation failed on `goNext()` / `goTo()` / `submit()` |
+| `skipped`   | Disabled by its `enabled` guard (static `false`, or a function guard that returned false) |
 
 ### Automatic Transitions
 
@@ -542,12 +542,29 @@ Statuses update automatically as users navigate:
 ```
 pristine ──(becomes currentStepId)──▶ active
 active ──(goNext succeeds)──▶ completed
-active ──(goNext validation fails)──▶ error
-active ──(goPrevious / goBack / goTo)──▶ visited
-completed / error ──(goTo back)──▶ active
-* ──(guard enabled=false)──▶ skipped
+active ──(goNext / goTo / submit validation fails)──▶ error
+error ──(validate() passes)──▶ active
+active / error ──(goPrevious / goBack / goTo away)──▶ visited
+completed ──(goPrevious / goBack / goTo away)──▶ completed (kept)
+completed ──(navigated back to)──▶ completed (kept)
+error / visited ──(navigated back to)──▶ active
+* ──(guard enabled=false)──▶ skipped        (never the current step)
 skipped ──(guard enabled=true)──▶ pristine
+active ──(wizard completes)──▶ completed      (final step; progress reaches 100%)
 ```
+
+**When guards are re-evaluated.** Static `enabled: true/false` guards are applied
+immediately, including on `updateData`/`setData`. Function (sync or async) `enabled`
+guards are re-evaluated at **navigation time**: right after the initial step is entered
+(on construction and after `reset()`, asynchronously) and after every committed
+`goNext` / `goPrevious` / `goTo`, folded into that navigation's single `onStateChange`
+snapshot. A data change alone does not re-run them. For example, on a personal-account
+path the `company` step (`enabled: (d) => d.accountType === "business"`) becomes
+`skipped` — excluded from `progress.enabledSteps` — so the wizard still reaches 100% on
+completion; switching back to `"business"` and navigating returns it to `pristine`.
+A guard that throws during this refresh leaves that step's status unchanged, does not
+fail the navigation, and is reported once via `onError` (phase `"transition"`, after
+the plugins' `afterTransition`).
 
 ### Using Step Statuses
 

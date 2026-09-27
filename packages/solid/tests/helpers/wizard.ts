@@ -38,3 +38,28 @@ export function createTestDefinition(): WizardDefinition<SignupData> {
 		],
 	});
 }
+
+/**
+ * The same 3-step fixture, except `personal` resolves its next step through an
+ * async resolver that returns `null` (no next step).
+ *
+ * The state manager seeds navigation synchronously from core's conservative
+ * `progress.isLastStep` (false for a resolver transition), so `canGoNext`
+ * starts `true` / `isLastStep` `false`; the async navigation compute then
+ * resolves the resolver to `null` and flips them to `canGoNext: false` /
+ * `isLastStep: true`. Use it to exercise a navigation change that only the
+ * async recompute produces.
+ */
+export function createAsyncTerminalDefinition(): WizardDefinition<SignupData> {
+	const definition = createTestDefinition();
+	return {
+		...definition,
+		steps: {
+			...definition.steps,
+			personal: {
+				...definition.steps.personal,
+				next: { type: "resolver", resolve: async () => null },
+			},
+		},
+	};
+}

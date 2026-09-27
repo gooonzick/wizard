@@ -168,7 +168,7 @@ Plugins are automatically destroyed via `onScopeDispose` when the component scop
 | `beforeTransition` | Before every `goNext` / `goPrevious` / `goTo` (incl. `skipLifecycle`, and the deprecated `goBack` / `goToStep` aliases) | **Yes** — return `false` | Sequential — a throw aborts the transition and rethrows to the caller (`goNext`/`goPrevious`/`goTo` reject); reported once via `onError` with phase `"transition"` |
 | `afterTransition` | After the transition succeeds | No | Isolated |
 | `onError` | When any hook or validation throws | No | Single reporter — fires **exactly once** per failure |
-| `onComplete` | When the wizard completes | No | Isolated |
+| `onComplete` | When the wizard completes — after the committed `isCompleted` state change, **before** `events.onComplete`. All plugins are invoked synchronously in registration order; async work is not awaited between plugins | No | Isolated (sync throws and rejections each reported, phase `"lifecycle"`) |
 | `onReset` | When the wizard resets or cancels | No | Isolated |
 | `destroy` | When the machine or plugin is torn down | No | Isolated |
 
@@ -184,6 +184,16 @@ A.beforeTransition → B.beforeTransition
 [transition executes]
   ↓
 A.afterTransition → B.afterTransition
+```
+
+On completion (after `definition.onComplete` resolves):
+
+```
+[isCompleted + final step "completed" committed] → onStateChange
+  ↓
+A.onComplete → B.onComplete   (all invoked synchronously, no await in between)
+  ↓
+events.onComplete             (safe to destroy()/unmount here)
 ```
 
 ### The `skipLifecycle` Rule
@@ -363,8 +373,10 @@ interface BacktrackEntry {
 - **Backtracks.** A backtrack is any `previous` transition, or a `goTo` to a step you
   have already visited this session.
 - **Drop-off.** `onDropOff` fires from `destroy()` **only if** the wizard was never
-  completed — completed wizards never drop off. In React/Vue this happens automatically
-  on unmount.
+  completed — completed wizards never drop off, even when the app unmounts or calls
+  `destroy()` from inside `events.onComplete` (plugin `onComplete` hooks run first, and
+  `destroy()` also checks the machine's `snapshot.isCompleted`). In React/Vue this
+  happens automatically on unmount.
 - **Injectable clock.** All durations use `config.now` (default `Date.now`), not the
   transition `timestamp`, so tests can inject a deterministic clock.
 - **Throw-safe.** The plugin updates its internal bookkeeping *before* invoking your
@@ -444,7 +456,7 @@ machine.use(
 The returned plugin is a `WizardPlugin` plus three members:
 
 ```ts
-plugin.ready;    // Promise<PersistenceRestoreOutcome<TData>> — settles once, never rejects
+plugin.ready;    // Promise<PersistenceRestoreOutcome<TData>> — latest onInit's outcome, never rejects
 await plugin.flush(); // cancel the debounce and drain any pending write
 await plugin.clear(); // drop any pending save and clear the stored record
 ```
@@ -452,6 +464,14 @@ await plugin.clear(); // drop any pending save and clear the stored record
 `ready` resolves to `{ status: "restored", state }`, `{ status: "skipped", reason }` or
 `{ status: "failed", error }`. Skip reasons are `"disabled"`, `"unsupported"`, `"empty"`,
 `"version-mismatch"`, `"expired"`, `"completed"`, `"stale"` and `"destroyed"`.
+
+`ready` tracks the **latest** `onInit`: when the same plugin instance is initialised again
+after its previous attempt settled (a React StrictMode probe, or a remount that re-uses a
+hoisted plugin after `destroy()` settled `{ status: "skipped", reason: "destroyed" }`), it is
+re-armed with a fresh promise. Read `plugin.ready` **after** the `WizardMachine` constructor /
+`use()` call; a reference captured earlier may still report the previous machine. A
+superseded init's late load never settles the current `ready` and never releases the current
+init's write suppression.
 
 ### Adapters
 
