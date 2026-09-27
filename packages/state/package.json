@@ -1,6 +1,6 @@
 {
 	"name": "@gooonzick/wizard-state",
-	"version": "1.10.0",
+	"version": "1.11.0",
 	"description": "State management adapter for the WizardForm framework, shared by the React, Vue, Svelte and Solid bindings",
 	"type": "module",
 	"sideEffects": false,
