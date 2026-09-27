@@ -1,5 +1,13 @@
 # @gooonzick/wizard-solid-example
 
+## 0.0.2
+
+### Patch Changes
+
+- Updated dependencies [d36dcd5]
+  - @gooonzick/wizard-core@1.11.0
+  - @gooonzick/wizard-solid@1.11.0
+
 ## 0.0.1
 
 ### Patch Changes
