@@ -1,18 +1,15 @@
-import type {
-	GoToOptions,
-	StepId,
-	WizardData,
-	WizardSerializedState,
-} from "@gooonzick/wizard-core";
+import type { WizardData } from "@gooonzick/wizard-core";
+import {
+	createMachineAndManager,
+	createWizardActions,
+} from "@gooonzick/wizard-state";
 import { onDestroy } from "svelte";
 import type { Writable } from "svelte/store";
 import { createChannelStore } from "./internal/channel-store";
-import { createMachineAndManager } from "./internal/wiring";
 import type {
 	CreateWizardStoreOptions,
 	WizardSnapshot,
 	WizardStore,
-	WizardStoreActions,
 } from "./types";
 
 /**
@@ -34,13 +31,13 @@ export function createWizardStore<T extends WizardData>(
 		...callbacks
 	} = options;
 
-	const { machine, manager } = createMachineAndManager(
+	const { machine, manager } = createMachineAndManager<T>({
 		definition,
 		context,
 		initialData,
-		callbacks,
+		getCallbacks: () => callbacks,
 		plugins,
-	);
+	});
 
 	// ---- per-channel stores ----
 	const stateStore = createChannelStore(manager, "state", () =>
@@ -80,73 +77,17 @@ export function createWizardStore<T extends WizardData>(
 	};
 	const aggregateStore = createChannelStore(manager, "all", readAggregate);
 
-	// ---- navigation (React semantics: manager owns the loading flags) ----
-	const withNavigating = async (fn: () => Promise<void>): Promise<void> => {
-		manager.setLoadingState({ isNavigating: true });
-		try {
-			await fn();
-		} finally {
-			manager.setLoadingState({ isNavigating: false });
-		}
-	};
-
-	const goNext = () => withNavigating(() => machine.goNext());
-	const goPrevious = () => withNavigating(() => machine.goPrevious());
-	const goBack = (steps = 1) => withNavigating(() => machine.goBack(steps));
-	const goTo = (stepId: StepId, opts?: GoToOptions) =>
-		withNavigating(() => machine.goTo(stepId, opts));
-	const goToStep = (stepId: StepId) => goTo(stepId, { skipValidation: true });
-
-	// `reset`/`restore` are fire-and-forget (`void`, React parity), but the
-	// machine's synchronous reset()/restore() can throw — a malformed snapshot
-	// raises WizardRestoreError, which the machine does NOT route through
-	// handleError. Terminating the chain here keeps a bad snapshot from becoming
-	// an unhandled rejection and surfaces it on `onError` instead.
-	const reportError = (error: unknown): void => {
-		callbacks.onError?.(
-			error instanceof Error ? error : new Error(String(error)),
-		);
-	};
-
-	const actions: WizardStoreActions<T> = {
-		updateData: (updater) => machine.updateData(updater),
-		setData: (data) => machine.setData(data),
-		// Direct call — preserves the Object.is no-op guard and changedFields=[field].
-		updateField: (field, value) => machine.updateField(field, value),
-		validate: async () => {
-			manager.setLoadingState({ isValidating: true });
-			try {
-				await machine.validate();
-			} finally {
-				manager.setLoadingState({ isValidating: false });
-			}
-		},
-		validateAll: async (opts) => {
-			manager.setLoadingState({ isValidating: true });
-			try {
-				return await machine.validateAll(opts);
-			} finally {
-				manager.setLoadingState({ isValidating: false });
-			}
-		},
-		canSubmit: () => machine.canSubmit(),
-		submit: async () => {
-			manager.setLoadingState({ isSubmitting: true });
-			try {
-				await machine.submit();
-			} finally {
-				manager.setLoadingState({ isSubmitting: false });
-			}
-		},
-		reset: (data?: T) => {
-			void manager.runReset(data ?? initialData).catch(reportError);
-		},
-		cancel: () => manager.runCancel(),
-		serialize: () => machine.serialize(),
-		restore: (serialized: WizardSerializedState<T>) => {
-			void manager.runRestore(serialized).catch(reportError);
-		},
-	};
+	// ---- actions (shared with every binding via @gooonzick/wizard-state) ----
+	// Loading flags are reference-counted by `manager.trackLoading()`, so a
+	// busy-rejected double click cannot clear the flag of the operation still in
+	// flight. `reset`/`restore` are fire-and-forget; their failures (e.g. a
+	// malformed snapshot raising WizardRestoreError) surface on `onError`.
+	const { goNext, goPrevious, goBack, goTo, goToStep, ...actions } =
+		createWizardActions(manager, (error: unknown): void => {
+			callbacks.onError?.(
+				error instanceof Error ? error : new Error(String(error)),
+			);
+		});
 
 	// ---- field stores ----
 	const fields = new Map<keyof T, Writable<T[keyof T]>>();

@@ -23,12 +23,19 @@ export type StepStatus =
  * - `enabledStepIds` follows the insertion order of `definition.steps`,
  *   filtered by `stepStatuses[id] !== "skipped"`. Steps with a function-based
  *   `enabled` guard are reflected as soon as their status is recomputed.
- *   **Recomputation for function (and async) `enabled` guards happens only at
- *   navigation time**, not on `updateData`/`setData` — a data change that
- *   would flip such a guard's result does not update `stepStatuses`/`skipped`
- *   (and therefore `enabledStepIds`/`percentage`) until the next navigation.
- *   Only static `boolean` `enabled` guards are recalculated synchronously on
- *   data changes.
+ *   **Recomputation for function (and async) `enabled` guards happens at
+ *   navigation time**: after the initial step is entered (construction and
+ *   `reset()`, asynchronously) and after every committed `goNext`/
+ *   `goPrevious`/`goTo`, folded into that navigation's state-change
+ *   notification. A guard that returns false marks its step "skipped" (never
+ *   the current step); a "skipped" step whose guard returns true again goes
+ *   back to "pristine". It does NOT happen on `updateData`/`setData` — a data
+ *   change that would flip such a guard's result does not update
+ *   `stepStatuses`/`skipped` (and therefore `enabledStepIds`/`percentage`)
+ *   until the next navigation. Only static `boolean` `enabled` guards are
+ *   recalculated synchronously on data changes.
+ * - On completion the final step is marked "completed", so a finished wizard
+ *   reports `percentage === 100`.
  * - `currentStepIndex` is `-1` when the current step is currently skipped.
  * - `percentage` is rounded to the nearest integer in `[0, 100]`.
  * - `isLastStep` is `true` only when the current step's forward path is

@@ -1,17 +1,14 @@
-import type {
-	GoToOptions,
-	StepId,
-	WizardData,
-	WizardSerializedState,
-} from "@gooonzick/wizard-core";
+import type { WizardData } from "@gooonzick/wizard-core";
 import { useCallback, useMemo, useSyncExternalStore } from "react";
-import type {
-	UseWizardActions,
-	UseWizardLoading,
-	UseWizardNavigation,
-	UseWizardReturn,
-	UseWizardState,
-	UseWizardValidation,
+import {
+	pickDataActions,
+	pickNavigationActions,
+	type UseWizardActions,
+	type UseWizardLoading,
+	type UseWizardNavigation,
+	type UseWizardReturn,
+	type UseWizardState,
+	type UseWizardValidation,
 } from "./use-wizard";
 import {
 	useWizardInternalContext,
@@ -66,7 +63,9 @@ export function useWizardData<T extends WizardData>(): UseWizardState<T> {
  * ```
  */
 export function useWizardNavigation(): UseWizardNavigation {
-	const { manager } = useWizardProviderContext();
+	// The provider's shared action set: navigation holds the reference-counted
+	// "isNavigating" flag, identical to useWizard's navigation methods.
+	const { manager, actions } = useWizardInternalContext();
 
 	const navigationSnapshot = useSyncExternalStore(
 		useCallback(
@@ -75,57 +74,6 @@ export function useWizardNavigation(): UseWizardNavigation {
 		),
 		useCallback(() => manager.getNavigationSnapshot(), [manager]),
 		useCallback(() => manager.getNavigationSnapshot(), [manager]),
-	);
-
-	// Navigation actions with loading state management
-	const goNext = useCallback(async () => {
-		manager.setLoadingState({ isNavigating: true });
-		try {
-			await manager.getMachine().goNext();
-		} finally {
-			manager.setLoadingState({ isNavigating: false });
-		}
-	}, [manager]);
-
-	const goPrevious = useCallback(async () => {
-		manager.setLoadingState({ isNavigating: true });
-		try {
-			await manager.getMachine().goPrevious();
-		} finally {
-			manager.setLoadingState({ isNavigating: false });
-		}
-	}, [manager]);
-
-	const goBack = useCallback(
-		async (steps = 1) => {
-			manager.setLoadingState({ isNavigating: true });
-			try {
-				await manager.getMachine().goBack(steps);
-			} finally {
-				manager.setLoadingState({ isNavigating: false });
-			}
-		},
-		[manager],
-	);
-
-	const goTo = useCallback(
-		async (stepId: StepId, options?: GoToOptions) => {
-			manager.setLoadingState({ isNavigating: true });
-			try {
-				await manager.getMachine().goTo(stepId, options);
-			} finally {
-				manager.setLoadingState({ isNavigating: false });
-			}
-		},
-		[manager],
-	);
-
-	/** @deprecated Use goTo instead */
-	const goToStep = useCallback(
-		async (stepId: StepId) => {
-			return goTo(stepId, { skipValidation: true });
-		},
-		[goTo],
 	);
 
 	return useMemo(
@@ -138,11 +86,7 @@ export function useWizardNavigation(): UseWizardNavigation {
 			visitedSteps: navigationSnapshot.visitedSteps,
 			availableSteps: navigationSnapshot.availableSteps,
 			stepHistory: navigationSnapshot.stepHistory,
-			goNext,
-			goPrevious,
-			goBack,
-			goTo,
-			goToStep,
+			...pickNavigationActions(actions),
 		}),
 		[
 			navigationSnapshot.canGoNext,
@@ -153,11 +97,7 @@ export function useWizardNavigation(): UseWizardNavigation {
 			navigationSnapshot.visitedSteps,
 			navigationSnapshot.availableSteps,
 			navigationSnapshot.stepHistory,
-			goNext,
-			goPrevious,
-			goBack,
-			goTo,
-			goToStep,
+			actions,
 		],
 	);
 }
@@ -237,119 +177,11 @@ export function useWizardLoading(): UseWizardLoading {
  * ```
  */
 export function useWizardActions<T extends WizardData>(): UseWizardActions<T> {
-	const { manager, initialData, reportError } = useWizardInternalContext<T>();
-
-	const updateData = useCallback(
-		(updater: (data: T) => T) => {
-			manager.getMachine().updateData(updater);
-		},
-		[manager],
-	);
-
-	const setData = useCallback(
-		(data: T) => {
-			manager.getMachine().setData(data);
-		},
-		[manager],
-	);
-
-	// Direct call — preserves the Object.is no-op guard and changedFields=[field].
-	const updateField = useCallback(
-		<K extends keyof T>(field: K, value: T[K]) => {
-			manager.getMachine().updateField(field, value);
-		},
-		[manager],
-	);
-
-	const validate = useCallback(async () => {
-		manager.setLoadingState({ isValidating: true });
-		try {
-			await manager.getMachine().validate();
-		} finally {
-			manager.setLoadingState({ isValidating: false });
-		}
-	}, [manager]);
-
-	const validateAll = useCallback(
-		async (options?: { updateStatuses?: boolean }) => {
-			manager.setLoadingState({ isValidating: true });
-			try {
-				return await manager.getMachine().validateAll(options);
-			} finally {
-				manager.setLoadingState({ isValidating: false });
-			}
-		},
-		[manager],
-	);
-
-	const canSubmit = useCallback(async (): Promise<boolean> => {
-		return manager.getMachine().canSubmit();
-	}, [manager]);
-
-	const submit = useCallback(async () => {
-		manager.setLoadingState({ isSubmitting: true });
-		try {
-			await manager.getMachine().submit();
-		} finally {
-			manager.setLoadingState({ isSubmitting: false });
-		}
-	}, [manager]);
-
-	// `reset`/`restore` are fire-and-forget (`void`), but the machine's synchronous
-	// reset()/restore() can throw — a malformed snapshot raises WizardRestoreError,
-	// which the machine does NOT route through handleError. Terminating the chain here
-	// keeps a bad snapshot from becoming an unhandled rejection and surfaces it on the
-	// provider's `onError` instead.
-	const reset = useCallback(
-		(data?: T) => {
-			void manager.runReset(data ?? initialData).catch(reportError);
-		},
-		[manager, initialData, reportError],
-	);
-
-	const cancel = useCallback(async () => {
-		await manager.runCancel();
-	}, [manager]);
-
-	const serialize = useCallback(() => {
-		return manager.getMachine().serialize();
-	}, [manager]);
-
-	const restore = useCallback(
-		(serializedState: WizardSerializedState<T>) => {
-			void manager.runRestore(serializedState).catch(reportError);
-		},
-		[manager, reportError],
-	);
-
-	return useMemo(
-		() => ({
-			updateData,
-			setData,
-			updateField,
-			validate,
-			validateAll,
-			canSubmit,
-			submit,
-			reset,
-			cancel,
-			serialize,
-			restore,
-		}),
-		[
-			updateData,
-			setData,
-			updateField,
-			validate,
-			validateAll,
-			canSubmit,
-			submit,
-			reset,
-			cancel,
-			serialize,
-			restore,
-		],
-	);
+	// Picked from the provider's single action set (one per manager), so the
+	// identities are stable and `reset`/`restore` failures reach the provider's
+	// current `onError`.
+	const { actions } = useWizardInternalContext<T>();
+	return useMemo(() => pickDataActions(actions), [actions]);
 }
 
 /**

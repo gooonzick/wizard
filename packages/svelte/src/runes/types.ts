@@ -112,11 +112,14 @@ export interface WizardStoreActions<T extends WizardData> {
 	}) => Promise<ValidationSummary>;
 	canSubmit: () => Promise<boolean>;
 	submit: () => Promise<void>;
-	/** Fire-and-forget (`void manager.runReset(...)`), mirroring React. */
+	/**
+	 * Fire-and-forget (`void manager.runReset(data)`). `reset(X)` makes X the
+	 * new reset baseline; `reset()` returns to the current baseline.
+	 */
 	reset: (data?: T) => void;
 	cancel: () => Promise<void>;
 	serialize: () => WizardSerializedState<T>;
-	/** Fire-and-forget (`void manager.runRestore(...)`), mirroring React. */
+	/** Fire-and-forget (`void manager.runRestore(...)`). */
 	restore: (state: WizardSerializedState<T>) => void;
 }
 

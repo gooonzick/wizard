@@ -1,26 +1,16 @@
 /// <reference types="svelte" />
 
-// NOTE: the machine/manager wiring below is intentionally duplicated from
-// ../internal/wiring.ts. `src/runes/**` must be self-contained because
-// `svelte-package` emits declarations with libRoot=src/runes; an import that
-// escapes libRoot yields dangling .d.ts references.
+// `src/runes/**` must stay self-contained: `svelte-package` emits declarations
+// with libRoot=src/runes, so a relative import escaping it yields dangling .d.ts
+// references. Shared wiring comes from the `@gooonzick/wizard-state` package.
 
-import type {
-	GoToOptions,
-	StepId,
-	WizardData,
-	WizardSerializedState,
-	WizardState,
-} from "@gooonzick/wizard-core";
-import { WizardMachine } from "@gooonzick/wizard-core";
-import { WizardStateManager } from "@gooonzick/wizard-state";
+import type { WizardData } from "@gooonzick/wizard-core";
+import {
+	createMachineAndManager,
+	createWizardActions,
+} from "@gooonzick/wizard-state";
 import { onDestroy } from "svelte";
-import type {
-	CreateWizardOptions,
-	Wizard,
-	WizardField,
-	WizardStoreActions,
-} from "./types";
+import type { CreateWizardOptions, Wizard, WizardField } from "./types";
 
 /**
  * Creates a rune-native wizard.
@@ -42,43 +32,13 @@ export function createWizard<T extends WizardData>(
 		...callbacks
 	} = options;
 
-	// Forward references. The machine fires onStateChange synchronously from its
-	// constructor (initializeFirstStep) BEFORE these are assigned — hence the guard.
-	let managerRef: WizardStateManager<T> | null = null;
-	let previousState: WizardState<T> | null = null;
-
-	const machine = new WizardMachine<T>(
+	const { machine, manager } = createMachineAndManager<T>({
 		definition,
 		context,
 		initialData,
-		{
-			onStateChange: (newState: WizardState<T>) => {
-				const oldState = previousState;
-				previousState = newState;
-				if (oldState && managerRef) {
-					managerRef.handleStateChange(newState, oldState);
-				}
-				callbacks.onStateChange?.(newState);
-			},
-			onStepEnter: (stepId: StepId, data: T) =>
-				callbacks.onStepEnter?.(stepId, data),
-			onStepLeave: (stepId: StepId, data: T) =>
-				callbacks.onStepLeave?.(stepId, data),
-			onComplete: (data: T) => callbacks.onComplete?.(data),
-			onCancel: async (data: T) => {
-				await callbacks.onCancel?.(data);
-			},
-			onReset: () => callbacks.onReset?.(),
-			onError: (error: Error) => callbacks.onError?.(error),
-			onDataChange: (prev: T, next: T, changedFields: (keyof T)[]) =>
-				callbacks.onDataChange?.(prev, next, changedFields),
-		},
+		getCallbacks: () => callbacks,
 		plugins,
-	);
-
-	const manager = new WizardStateManager(machine, definition.initialStepId);
-	managerRef = manager;
-	previousState = machine.snapshot;
+	});
 
 	// $state.raw, NOT $state: the manager returns frozen/cached snapshot objects.
 	// A deep $state proxy would (a) fight Object.freeze and (b) destroy the
@@ -103,72 +63,17 @@ export function createWizard<T extends WizardData>(
 		loadingSnapshot = manager.getLoadingSnapshot();
 	}, "loading");
 
-	const withNavigating = async (fn: () => Promise<void>): Promise<void> => {
-		manager.setLoadingState({ isNavigating: true });
-		try {
-			await fn();
-		} finally {
-			manager.setLoadingState({ isNavigating: false });
-		}
-	};
-
-	const goNext = () => withNavigating(() => machine.goNext());
-	const goPrevious = () => withNavigating(() => machine.goPrevious());
-	const goBack = (steps = 1) => withNavigating(() => machine.goBack(steps));
-	const goTo = (stepId: StepId, opts?: GoToOptions) =>
-		withNavigating(() => machine.goTo(stepId, opts));
-	const goToStep = (stepId: StepId) => goTo(stepId, { skipValidation: true });
-
-	// `reset`/`restore` are fire-and-forget (`void`, React parity), but the
-	// machine's synchronous reset()/restore() can throw — a malformed snapshot
-	// raises WizardRestoreError, which the machine does NOT route through
-	// handleError. Terminating the chain here keeps a bad snapshot from becoming
-	// an unhandled rejection and surfaces it on `onError` instead.
-	const reportError = (error: unknown): void => {
-		callbacks.onError?.(
-			error instanceof Error ? error : new Error(String(error)),
-		);
-	};
-
-	const actions: WizardStoreActions<T> = {
-		updateData: (updater) => machine.updateData(updater),
-		setData: (data) => machine.setData(data),
-		// Direct call — preserves the Object.is no-op guard and changedFields=[field].
-		updateField: (field, value) => machine.updateField(field, value),
-		validate: async () => {
-			manager.setLoadingState({ isValidating: true });
-			try {
-				await machine.validate();
-			} finally {
-				manager.setLoadingState({ isValidating: false });
-			}
-		},
-		validateAll: async (opts) => {
-			manager.setLoadingState({ isValidating: true });
-			try {
-				return await machine.validateAll(opts);
-			} finally {
-				manager.setLoadingState({ isValidating: false });
-			}
-		},
-		canSubmit: () => machine.canSubmit(),
-		submit: async () => {
-			manager.setLoadingState({ isSubmitting: true });
-			try {
-				await machine.submit();
-			} finally {
-				manager.setLoadingState({ isSubmitting: false });
-			}
-		},
-		reset: (data?: T) => {
-			void manager.runReset(data ?? initialData).catch(reportError);
-		},
-		cancel: () => manager.runCancel(),
-		serialize: () => machine.serialize(),
-		restore: (serialized: WizardSerializedState<T>) => {
-			void manager.runRestore(serialized).catch(reportError);
-		},
-	};
+	// Shared with every binding via @gooonzick/wizard-state. Loading flags are
+	// reference-counted by `manager.trackLoading()`, so a busy-rejected double
+	// click cannot clear the flag of the operation still in flight.
+	// `reset`/`restore` are fire-and-forget; their failures (e.g. a malformed
+	// snapshot raising WizardRestoreError) surface on `onError`.
+	const { goNext, goPrevious, goBack, goTo, goToStep, ...actions } =
+		createWizardActions(manager, (error: unknown): void => {
+			callbacks.onError?.(
+				error instanceof Error ? error : new Error(String(error)),
+			);
+		});
 
 	const fields = new Map<keyof T, unknown>();
 	const field = <K extends keyof T>(key: K): WizardField<T[K]> => {

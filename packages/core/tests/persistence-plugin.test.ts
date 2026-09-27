@@ -709,6 +709,104 @@ describe("createPersistencePlugin", () => {
 
 		expect(first.restore).not.toHaveBeenCalled();
 		expect(second.restore).toHaveBeenCalledTimes(1);
+		// The superseded (first) resolution settles nothing: `ready` reports the
+		// CURRENT init's outcome.
+		await expect(plugin.ready).resolves.toEqual({
+			status: "restored",
+			state: makeState(),
+		});
+	});
+
+	it("re-arms `ready` on a re-init after the previous attempt settled", async () => {
+		const adapter2Env = makeEnvelope();
+		const plugin2 = createPersistencePlugin<D>({
+			adapter: makeAdapter(adapter2Env),
+		});
+		plugin2.onInit?.(makeView());
+		const first = plugin2.ready;
+		await plugin2.destroy?.();
+		plugin2.onInit?.(makeView()); // StrictMode probe re-init
+		expect(plugin2.ready).not.toBe(first);
+		await expect(plugin2.ready).resolves.toEqual({
+			status: "restored",
+			state: adapter2Env.state,
+		});
+	});
+
+	it("a superseded init's late load neither settles `ready` nor releases write suppression", async () => {
+		const loads: Array<(v: PersistedWizardSnapshot<D> | null) => void> = [];
+		const adapter = {
+			load: vi.fn(
+				() =>
+					new Promise<PersistedWizardSnapshot<D> | null>((res) => {
+						loads.push(res);
+					}),
+			),
+			save: vi.fn((_snapshot: PersistedWizardSnapshot<D>): void => {}),
+			clear: vi.fn((): void => {}),
+		};
+		const plugin = createPersistencePlugin<D>({ adapter, debounceMs: 0 });
+		const first = makeView();
+		const second = makeView();
+		plugin.onInit?.(first);
+		plugin.onInit?.(second);
+
+		let settled = false;
+		void plugin.ready.then(() => {
+			settled = true;
+		});
+
+		dataChange(plugin);
+		loads[0](makeEnvelope()); // superseded load resolves first
+		await tick();
+		expect(settled).toBe(false);
+		expect(adapter.save).not.toHaveBeenCalled(); // still suppressed
+
+		loads[1](null);
+		await tick();
+		expect(adapter.save).toHaveBeenCalledTimes(1);
+		await expect(plugin.ready).resolves.toEqual({
+			status: "skipped",
+			reason: "empty",
+		});
+		expect(first.restore).not.toHaveBeenCalled();
+	});
+
+	it("a superseded init's late load rejection neither settles `ready` nor releases suppression", async () => {
+		const loads: Array<{
+			res: (v: PersistedWizardSnapshot<D> | null) => void;
+			rej: (e: unknown) => void;
+		}> = [];
+		const adapter = {
+			load: vi.fn(
+				() =>
+					new Promise<PersistedWizardSnapshot<D> | null>((res, rej) => {
+						loads.push({ res, rej });
+					}),
+			),
+			save: vi.fn((_snapshot: PersistedWizardSnapshot<D>): void => {}),
+			clear: vi.fn((): void => {}),
+		};
+		const plugin = createPersistencePlugin<D>({
+			adapter,
+			debounceMs: 0,
+			onRestoreError: vi.fn(),
+		});
+		plugin.onInit?.(makeView());
+		const second = makeView();
+		plugin.onInit?.(second);
+
+		dataChange(plugin);
+		loads[0].rej(new Error("old load failed"));
+		await tick();
+		expect(adapter.save).not.toHaveBeenCalled();
+
+		loads[1].res(makeEnvelope());
+		await tick();
+		await expect(plugin.ready).resolves.toEqual({
+			status: "skipped",
+			reason: "stale",
+		});
 	});
 
 	it("suppresses writes while an async load is in flight and drains after it settles", async () => {

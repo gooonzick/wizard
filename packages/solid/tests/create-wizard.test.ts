@@ -3,6 +3,7 @@ import { createWizard } from "../src/create-wizard";
 import type { CreateWizardOptions } from "../src/types";
 import { flush } from "./helpers/flush";
 import {
+	createAsyncTerminalDefinition,
 	createTestDefinition,
 	initialData,
 	type SignupData,
@@ -51,12 +52,25 @@ describe("createWizard", () => {
 		expect(wizard.isDestroyed).toBe(false);
 	});
 
-	it("C2: canGoNext is false initially and true after the async navigation compute", async () => {
-		const wizard = makeWizard();
-
-		expect(wizard.canGoNext).toBe(false);
+	it("C2: canGoNext is seeded synchronously, then updated by the async navigation compute", async () => {
+		// A plain linear first step: the sync seed is already final.
+		const linear = makeWizard();
+		expect(linear.canGoNext).toBe(true);
+		expect(linear.isLastStep).toBe(false);
 		await flush();
-		expect(wizard.canGoNext).toBe(true);
+		expect(linear.canGoNext).toBe(true);
+		expect(linear.isLastStep).toBe(false);
+
+		// An async resolver returning null: the sync seed cannot know that, so
+		// only the async compute turns the step into a terminal one.
+		const resolver = makeWizard({
+			definition: createAsyncTerminalDefinition(),
+		});
+		expect(resolver.canGoNext).toBe(true);
+		expect(resolver.isLastStep).toBe(false);
+		await flush();
+		expect(resolver.canGoNext).toBe(false);
+		expect(resolver.isLastStep).toBe(true);
 	});
 
 	it("C3: slice getters return the manager's cached snapshots", async () => {

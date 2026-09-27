@@ -1,4 +1,5 @@
 import { describe, expectTypeOf, test } from "vitest";
+import { createStep } from "../src/builders/create-step";
 import type {
 	SyncOrAsync,
 	ValidationResult,
@@ -53,5 +54,28 @@ describe("Transition Types", () => {
 	test("Resolver transition should accept async functions", () => {
 		type Resolver = Extract<StepTransition<unknown>, { type: "resolver" }>;
 		expectTypeOf<Resolver>().toHaveProperty("resolve");
+	});
+});
+
+describe("StepBuilder.required types", () => {
+	type Form = { email: string; name: string };
+
+	test("accepts a trailing RequiredFieldsOptions object (JSDoc example)", () => {
+		const step = createStep<Form>("contact");
+		expectTypeOf(step.required).toBeCallableWith("email", {
+			messages: { email: "Please enter your email" },
+		});
+		expectTypeOf(step.required).toBeCallableWith("email", "name");
+		// Compile-only usage mirroring the JSDoc example.
+		step.required("email", { messages: { email: "Please enter your email" } });
+		step.required("name", { defaultMessage: "{field} is mandatory" });
+	});
+
+	test("still rejects unknown field names and unknown message keys", () => {
+		const step = createStep<Form>("contact");
+		// @ts-expect-error - "nope" is not a key of Form
+		step.required("nope");
+		// @ts-expect-error - messages keys must be keys of Form
+		step.required("email", { messages: { nope: "x" } });
 	});
 });

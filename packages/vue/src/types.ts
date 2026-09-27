@@ -38,9 +38,10 @@ export interface UseWizardOptions<T extends WizardData> {
 	 * composable runs has no effect (the machine is created once). To reconfigure,
 	 * remount the component with a new `key`.
 	 *
-	 * Must be structured-cloneable and nested Vue reactivity is stripped: the
-	 * machine deep-clones via `structuredClone`, so pass plain serializable form
-	 * data (no functions, symbols, or class instances).
+	 * `ref()` / `reactive()` values are accepted: Vue reactivity (refs and
+	 * proxies, including nested ones) is stripped to plain data before the
+	 * machine deep-clones it via `structuredClone`. The unwrapped data must still
+	 * be structured-cloneable (no functions, symbols, or class instances).
 	 */
 	initialData: T;
 	/**
@@ -158,6 +159,11 @@ export type RestoreFn<T extends WizardData> = (
 
 /**
  * Actions slice - data mutations and validation
+ *
+ * Data-carrying actions (`setData`, `updateData`'s return value, `updateField`,
+ * `reset(data)`, `restore(state)`) accept Vue `ref()` / `reactive()` values:
+ * reactivity is stripped (deeply) before the data reaches the machine, so a
+ * form object held in `ref()` can be passed as `formRef.value`.
  */
 export interface UseWizardActions<T extends WizardData> {
 	updateData: UpdateDataFn<T>;

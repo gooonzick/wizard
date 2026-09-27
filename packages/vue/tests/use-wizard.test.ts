@@ -541,7 +541,7 @@ describe("useWizard", () => {
 		expect(onReset).toHaveBeenCalled();
 	});
 
-	it("restore() with a malformed snapshot calls onError instead of throwing", () => {
+	it("restore() with a malformed snapshot calls onError instead of throwing", async () => {
 		const definition = createLinearWizard<{ name: string }>({
 			id: "restore-error-test",
 			steps: [{ id: "step1", title: "Step 1" }],
@@ -560,6 +560,9 @@ describe("useWizard", () => {
 			} as unknown as WizardSerializedState<{ name: string }>),
 		).not.toThrow();
 
+		// createWizardActions routes the failure through manager.runRestore()'s
+		// rejection, so onError fires on the next microtask, not synchronously.
+		await Promise.resolve();
 		expect(onError).toHaveBeenCalledTimes(1);
 		expect(onError.mock.calls[0][0]).toBeInstanceOf(WizardRestoreError);
 		// The failed restore must leave the wizard untouched.

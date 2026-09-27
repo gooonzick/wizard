@@ -13,6 +13,7 @@ import type {
 	SubscriptionChannel,
 	SubscriptionListener,
 	ValidationState,
+	WizardStateManagerOptions,
 } from "./types";
 
 /**
@@ -55,13 +56,30 @@ export class WizardStateManager<T extends WizardData> {
 	// Set by destroy(): short-circuits notify/compute so no async callback can
 	// touch a torn-down manager.
 	private destroyed = false;
+	// The step the cached isLastStep/canGoNext belong to. Set on a sync seed
+	// (constructor / step change) and when an async compute commits. A
+	// same-step notify (data edit, validation, status change) keeps the cached
+	// values instead of re-seeding them, so an async-proven value is not
+	// knocked back to the conservative seed on every edit.
+	private navigationSeedStepId: StepId;
 
 	// Initial step ID for isFirstStep calculation
 	private initialStepId: StepId;
 
-	constructor(machine: WizardMachine<T>, initialStepId: StepId) {
+	private options: WizardStateManagerOptions;
+
+	// Last machine state seen, used as the `oldState` for
+	// handleMachineStateChange(). Seeded from the machine in the constructor.
+	private lastState: WizardState<T>;
+
+	constructor(
+		machine: WizardMachine<T>,
+		initialStepId: StepId,
+		options: WizardStateManagerOptions = {},
+	) {
 		this.machine = machine;
 		this.initialStepId = initialStepId;
+		this.options = options;
 
 		// Initialize subscriber map for each channel
 		this.subscribers = new Map([
@@ -82,6 +100,7 @@ export class WizardStateManager<T extends WizardData> {
 		// Initialize state cache
 		const snapshot = this.machine.snapshot;
 		this.snapshotCache = snapshot;
+		this.lastState = snapshot;
 		this.stateCache = {
 			currentStepId: snapshot.currentStepId,
 			currentStep: this.machine.currentStep,
@@ -97,17 +116,24 @@ export class WizardStateManager<T extends WizardData> {
 			validationErrors: snapshot.validationErrors,
 		};
 
-		// Initialize navigation cache with safe defaults
+		// Seed the navigation cache synchronously until the async recompute
+		// settles. isLastStep/canGoNext come from core's conservative
+		// `progress.isLastStep` (true only for a definitively terminal forward
+		// path; false when a next step exists or can't be resolved sync), so a
+		// UI labelling its primary button from this slice never flashes
+		// "Finish" on a non-last step. The async compute overrides with the
+		// authoritative values.
 		this.navigationCache = {
-			canGoNext: false,
+			canGoNext: !snapshot.progress.isLastStep,
 			canGoPrevious: false,
 			canGoBack: snapshot.canGoBack,
 			availableSteps: [],
 			isFirstStep: snapshot.currentStepId === this.initialStepId,
-			isLastStep: true,
+			isLastStep: snapshot.progress.isLastStep,
 			visitedSteps: [...this.machine.visited],
 			stepHistory: [...this.machine.history],
 		};
+		this.navigationSeedStepId = snapshot.currentStepId;
 
 		// Trigger async navigation computation
 		this.computeNavigationStateAsync();
@@ -216,12 +242,32 @@ export class WizardStateManager<T extends WizardData> {
 	}
 
 	/**
-	 * Update navigation cache with synchronous values only
+	 * Update navigation cache with synchronous values only.
+	 *
+	 * When the current step differs from the step the cached values belong to,
+	 * isLastStep/canGoNext are re-seeded from core's synchronous, conservative
+	 * `progress.isLastStep` so they track the NEW step in the same notify
+	 * (instead of carrying the previous step's values until the async
+	 * recompute resolves). On the same step (data edits, validation, status
+	 * changes) the previous values are kept and the async compute corrects
+	 * them if needed — re-seeding there would flicker an async-proven
+	 * `isLastStep: true` back to the conservative `false` on every edit.
+	 * canGoPrevious/availableSteps always keep their last computed values.
 	 */
 	private updateNavigationCacheSync(): void {
 		const snapshot = this.snapshotCache;
+		const reseed = snapshot.currentStepId !== this.navigationSeedStepId;
+		if (reseed) {
+			this.navigationSeedStepId = snapshot.currentStepId;
+		}
 		this.navigationCache = {
 			...this.navigationCache,
+			canGoNext: reseed
+				? !snapshot.progress.isLastStep
+				: this.navigationCache.canGoNext,
+			isLastStep: reseed
+				? snapshot.progress.isLastStep
+				: this.navigationCache.isLastStep,
 			canGoBack: snapshot.canGoBack,
 			isFirstStep: snapshot.currentStepId === this.initialStepId,
 			visitedSteps: [...this.machine.visited],
@@ -278,6 +324,9 @@ export class WizardStateManager<T extends WizardData> {
 		}
 		this.navigationDirty = false;
 
+		// The step this compute's next/previous resolution belongs to.
+		const computedForStepId = this.machine.snapshot.currentStepId;
+
 		this.navigationPromise = (async () => {
 			try {
 				const [nextStep, prevStep, available] = await Promise.all([
@@ -291,6 +340,14 @@ export class WizardStateManager<T extends WizardData> {
 				}
 
 				const machineSnapshot = this.machine.snapshot;
+
+				// The step changed while resolving: these values describe the
+				// previous step (e.g. a stale `isLastStep: true` after Back). Drop
+				// them and let the trailing recompute resolve the current step.
+				if (machineSnapshot.currentStepId !== computedForStepId) {
+					this.navigationDirty = true;
+					return;
+				}
 
 				const newNavigationState: NavigationState = {
 					canGoNext: !!nextStep,
@@ -310,12 +367,17 @@ export class WizardStateManager<T extends WizardData> {
 					!this.navigationStateEqual(this.navigationCache, newNavigationState)
 				) {
 					this.navigationCache = newNavigationState;
+					this.navigationSeedStepId = computedForStepId;
 
 					// Notify navigation subscribers that data is ready
 					this.notifySubscribersForChannel("navigation");
 				}
-			} catch {
-				// Swallow: a throwing user guard/resolver must not break the manager.
+			} catch (error) {
+				// A throwing user guard/resolver must not break the manager, but it
+				// must not vanish either: report it (unless torn down meanwhile).
+				if (!this.destroyed) {
+					this.reportError(error);
+				}
 			} finally {
 				this.navigationPromise = null;
 				// Trailing recompute (M2): a request arrived while we were computing.
@@ -325,6 +387,29 @@ export class WizardStateManager<T extends WizardData> {
 				}
 			}
 		})();
+	}
+
+	/**
+	 * Route an error the manager caught itself to `options.onError`, falling
+	 * back to console.error. Never throws: callers run inside a detached
+	 * promise, where a throw would become an unhandled rejection.
+	 */
+	private reportError(error: unknown): void {
+		const err = error instanceof Error ? error : new Error(String(error));
+		const { onError } = this.options;
+		if (!onError) {
+			console.error("[WizardStateManager] navigation computation failed:", err);
+			return;
+		}
+		try {
+			onError(err);
+		} catch (callbackError) {
+			console.error(
+				"[WizardStateManager] onError handler threw:",
+				callbackError,
+			);
+			console.error("[WizardStateManager] navigation computation failed:", err);
+		}
 	}
 
 	/**
@@ -589,11 +674,25 @@ export class WizardStateManager<T extends WizardData> {
 	}
 
 	/**
+	 * Entry point for the machine's `onStateChange` event: diffs `newState`
+	 * against the last state this manager saw and routes the change to the
+	 * affected channels. Bindings wire `events.onStateChange` straight to this
+	 * (see createMachineAndManager) instead of tracking the previous state.
+	 */
+	handleMachineStateChange(newState: WizardState<T>): void {
+		const previous = this.lastState;
+		this.lastState = newState;
+		this.handleStateChange(newState, previous);
+	}
+
+	/**
 	 * Handle state change from machine - determine affected channels
 	 * @param newState New wizard state
 	 * @param oldState Previous wizard state
 	 */
 	handleStateChange(newState: WizardState<T>, oldState: WizardState<T>): void {
+		// Keep lastState current for callers that still pass oldState themselves.
+		this.lastState = newState;
 		if (this.destroyed) return;
 		const affected: SubscriptionChannel[] = [];
 
@@ -620,9 +719,27 @@ export class WizardStateManager<T extends WizardData> {
 			affected.push("validation");
 		}
 
-		// Step status changes affect state
+		// Step status changes affect state; they also accompany history-only
+		// changes (clearHistory), so refresh navigation too.
 		if (newState.stepStatuses !== oldState.stepStatuses) {
-			affected.push("state");
+			affected.push("state", "navigation");
+		}
+
+		// History-only changes (clearHistory(), restore() onto the same step)
+		// leave data and currentStepId untouched, so check the navigation inputs
+		// directly against the navigation cache.
+		if (
+			newState.canGoBack !== oldState.canGoBack ||
+			!this.stepIdsEqual(
+				this.machine.history,
+				this.navigationCache.stepHistory,
+			) ||
+			!this.stepIdsEqual(
+				this.machine.visited,
+				this.navigationCache.visitedSteps,
+			)
+		) {
+			affected.push("navigation");
 		}
 
 		if (affected.length > 0) {

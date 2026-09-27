@@ -86,6 +86,9 @@ export function createAnalyticsPlugin<TData>(
 	let backtracks = 0;
 	const backtrackHistory: BacktrackEntry[] = [];
 	let awaitingInitTransition = false; // true from onInit until the first afterTransition
+	// Facade captured in onInit: destroy() consults snapshot.isCompleted so a
+	// completed wizard never reports a drop-off, even if teardown races onComplete.
+	let machineView: WizardMachineReadonly<TData> | null = null;
 
 	/** Lazily start a session if onInit never ran (defensive for direct-hook tests). */
 	function ensureStarted(at: number): void {
@@ -110,6 +113,7 @@ export function createAnalyticsPlugin<TData>(
 
 		onInit(machine: WizardMachineReadonly<TData>): void {
 			const at = now();
+			machineView = machine;
 			// Full re-seed: onInit MUST be idempotent. Under React StrictMode / concurrent
 			// rendering the SAME plugin instance is destroyed and re-onInit-ed, so clear ALL
 			// prior-session residue (mirrors onReset) — not just the scalar fields.
@@ -253,7 +257,9 @@ export function createAnalyticsPlugin<TData>(
 		destroy(): void {
 			const at = now();
 			ensureStarted(at);
-			if (completed) return; // completed wizards never drop off
+			// completed wizards never drop off (the machine's own flag is the
+			// belt-and-braces check in case onComplete has not reached us yet)
+			if (completed || machineView?.snapshot.isCompleted === true) return;
 			if (currentStepId === null) return;
 			const d = timerOpen ? at - activeSince : 0;
 			if (timerOpen) {

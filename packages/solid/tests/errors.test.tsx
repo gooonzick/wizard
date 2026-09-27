@@ -5,6 +5,7 @@ import { createWizard } from "../src/create-wizard";
 import type { CreateWizardOptions, Wizard } from "../src/types";
 import { flush } from "./helpers/flush";
 import {
+	createAsyncTerminalDefinition,
 	createTestDefinition,
 	initialData,
 	type SignupData,
@@ -110,23 +111,27 @@ describe("errors", () => {
 
 	it("E4: an effect throwing on the async navigation recompute goes to onError", async () => {
 		const onError = vi.fn();
-		const wizard = makeWizard({ onError });
-		// No flush before the effect: canGoNext starts false and only turns true
-		// once the manager's async navigation compute settles.
-		expect(wizard.canGoNext).toBe(false);
+		const wizard = makeWizard({
+			definition: createAsyncTerminalDefinition(),
+			onError,
+		});
+		// No flush before the effect: canGoNext is seeded true synchronously and
+		// only turns false once the async compute resolves the resolver to null.
+		expect(wizard.canGoNext).toBe(true);
 
 		createRoot((dispose) => {
 			disposers.push(dispose);
 			createEffect(() => {
-				if (wizard.canGoNext) {
+				if (!wizard.canGoNext) {
 					throw new Error("navigation boom");
 				}
 			});
 		});
+		expect(onError).not.toHaveBeenCalled();
 
 		await flush();
 
-		expect(wizard.canGoNext).toBe(true);
+		expect(wizard.canGoNext).toBe(false);
 		expect(onError).toHaveBeenCalledTimes(1);
 		expect(onError).toHaveBeenCalledWith(
 			expect.objectContaining({ message: "navigation boom" }),

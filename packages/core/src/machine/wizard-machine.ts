@@ -161,6 +161,18 @@ export class WizardMachine<T extends WizardData> {
 		keyof T,
 		Set<(newValue: T[keyof T], oldValue: T[keyof T]) => void>
 	>();
+	/**
+	 * True when at least one step has a function (sync or async) `enabled`
+	 * guard. Wizards without one never pay for the async guard refresh (no
+	 * extra microtask in initializeFirstStep / navigateToStep).
+	 */
+	private hasFunctionGuards: boolean;
+	/**
+	 * Bumped by every `refreshGuardStatuses()` call; only the latest refresh
+	 * may write, so a slow earlier refresh (e.g. the constructor's) can never
+	 * overwrite the result of a later navigation's refresh.
+	 */
+	private guardRefreshSeq = 0;
 
 	/**
 	 * @param plugins Optional plugins to register at construction time.
@@ -178,6 +190,9 @@ export class WizardMachine<T extends WizardData> {
 		this.definition = definition;
 		this.context = context;
 		this.events = events || {};
+		this.hasFunctionGuards = Object.values(definition.steps).some(
+			(step) => typeof step.enabled === "function",
+		);
 
 		if (!definition.steps[definition.initialStepId]) {
 			throw new WizardConfigurationError(
@@ -283,9 +298,23 @@ export class WizardMachine<T extends WizardData> {
 			}
 			this.events.onStepEnter?.(this.definition.initialStepId, this.state.data);
 			this.debug(`Entered initial step: ${this.definition.initialStepId}`);
+			// Recompute "skipped" for function `enabled` guards against the initial
+			// data (constructor and reset re-entry). Folded into the notify below.
+			let guardRefresh: { error: unknown } | undefined;
+			if (this.hasFunctionGuards) {
+				guardRefresh = await this.refreshGuardStatuses(
+					() => this.generation !== gen,
+				);
+				if (this.generation !== gen) {
+					return;
+				}
+			}
 			// FIX 7: emit a state change after the awaited onEnter so async onEnter
 			// side effects reach subscribers (harmless when there are none yet).
 			this.notifyStateChange();
+			if (guardRefresh) {
+				this.handleError(guardRefresh.error, "transition");
+			}
 		} catch (error) {
 			this.handleError(error, "lifecycle");
 		}
@@ -294,7 +323,9 @@ export class WizardMachine<T extends WizardData> {
 	/**
 	 * Builds the initial stepStatuses map.
 	 * All steps start as "pristine", except the active step ("active")
-	 * and steps with a static `enabled: false` ("skipped").
+	 * and steps with a static `enabled: false` ("skipped"). Function `enabled`
+	 * guards are applied asynchronously right after, by `initializeFirstStep()`
+	 * → `refreshGuardStatuses()`.
 	 * @param activeStepId The step to mark as "active" (defaults to initialStepId)
 	 */
 	private initializeStepStatuses(
@@ -410,9 +441,20 @@ export class WizardMachine<T extends WizardData> {
 
 	/**
 	 * Restores a previously serialized wizard runtime state.
+	 *
+	 * Like `reset()`, a successful restore SUPERSEDES any in-flight async work:
+	 * it bumps the abort generation, so a pending transition (e.g. `goNext()`
+	 * awaiting `onLeave`), a pending `validate()`, and the constructor's /
+	 * `reset()`'s pending initial-step `onEnter` resume as silent no-ops instead
+	 * of committing over (or emitting against) the restored state. An invalid
+	 * payload throws `WizardRestoreError` BEFORE the bump, leaving in-flight work
+	 * untouched.
 	 */
 	restore(serializedState: WizardSerializedState<T>): void {
 		this.assertRestorableState(serializedState);
+
+		// Supersede in-flight transitions / initial-step entry (mirrors reset()).
+		this.generation++;
 
 		this.stepHistory = [...serializedState.history];
 		this.visitedSteps = new Set([
@@ -447,14 +489,24 @@ export class WizardMachine<T extends WizardData> {
 	}
 
 	/**
-	 * Updates wizard data
+	 * Updates wizard data.
+	 *
+	 * The updater may return a new object or mutate `data` in place and return
+	 * the same reference. In the latter case the machine commits a SHALLOW COPY,
+	 * so the committed `state.data` always has a new reference whenever the
+	 * updater ran — reference-based subscribers (e.g. `newState.data !==
+	 * oldState.data`) always observe the change.
 	 */
 	updateData(updater: (data: T) => T): void {
 		// WIZ-010: shallow-copy the current top-level keys BEFORE running the
 		// updater. This survives an in-place-mutating updater (which would leave
 		// prevRef === newData) so the shallow diff is still correct.
-		const prevSnapshot = { ...this.state.data };
-		const newData = updater(this.state.data);
+		const prevRef = this.state.data;
+		const prevSnapshot = { ...prevRef };
+		const returned = updater(prevRef);
+		// In-place updater: commit a fresh reference so identity-based change
+		// detection downstream still fires.
+		const newData = returned === prevRef ? { ...returned } : returned;
 		const newStatuses = this.recalculateSkippedStatuses();
 		this.state = {
 			...this.state,
@@ -499,8 +551,10 @@ export class WizardMachine<T extends WizardData> {
 		// FIX M-d: clone the caller's input (matching the constructor/reset/
 		// serialize contract) so a later external mutation of `data` cannot
 		// silently mutate `state.data` while bypassing notifyStateChange.
-		// `updateData`'s updater-return is a separate, documented in/out
-		// contract and is intentionally left as-is.
+		// `updateData`'s updater-return is a separate in/out contract: it is NOT
+		// deep-cloned, but an in-place updater that returns the same reference is
+		// committed as a shallow copy so the committed data always gets a new
+		// reference (see updateData).
 		const cloned = this.cloneData(data);
 		this.state = {
 			...this.state,
@@ -617,10 +671,19 @@ export class WizardMachine<T extends WizardData> {
 				return result;
 			}
 
+			// A passing validation clears a stale "error" status on the current
+			// step (set by a failed goNext/goTo/submit). Folded into the SAME state
+			// write so validate() still emits exactly one onStateChange.
+			const currentId = this.state.currentStepId;
+			const clearError =
+				result.valid && this.state.stepStatuses[currentId] === "error";
 			this.state = {
 				...this.state,
 				isValid: result.valid,
 				validationErrors: result.errors,
+				stepStatuses: clearError
+					? { ...this.state.stepStatuses, [currentId]: "active" }
+					: this.state.stepStatuses,
 			};
 
 			this.events.onValidation?.(result);
@@ -733,9 +796,19 @@ export class WizardMachine<T extends WizardData> {
 	}
 
 	/**
-	 * Gets the resolved previous step ID (public accessor)
+	 * Gets the step `goPrevious()` would navigate to (public accessor).
+	 *
+	 * History-first, exactly like `goPrevious()`: when the navigation history
+	 * holds more than one entry, returns the nearest earlier history entry whose
+	 * `enabled` guard currently evaluates to true, or `null` when none of them is
+	 * enabled. Only when the history holds just the current step does it fall
+	 * back to resolving the step's `previous` transition.
 	 */
 	async getPreviousStepId(): Promise<StepId | null> {
+		if (this.stepHistory.length > 1) {
+			const target = await this.resolveHistoryPreviousTarget();
+			return target ? target.stepId : null;
+		}
 		return this.resolvePreviousStep();
 	}
 
@@ -772,7 +845,16 @@ export class WizardMachine<T extends WizardData> {
 
 			// Validate before submit (validate() is generation-guarded per F6)
 			const validationResult = await this.validate();
+			// A reset()/cancel()/restore() during the awaited validator supersedes
+			// this submit: do not write "error", report, or run the (now wrong)
+			// step's onSubmit against the fresh state.
+			if (this.isTransitionStale()) {
+				return;
+			}
 			if (!validationResult.valid) {
+				// Mark the errored step and broadcast it (same as goNext).
+				this.setStepStatusInternal(this.state.currentStepId, "error");
+				this.notifyStateChange();
 				const err = new WizardValidationError(validationResult.errors || {});
 				// Report the validation failure exactly once, with phase "validation"
 				// (unless validate() already reported a thrown validator error). The
@@ -825,6 +907,11 @@ export class WizardMachine<T extends WizardData> {
 
 			// Validate current step
 			const validationResult = await this.validate();
+			// A reset()/cancel()/restore() during the awaited validator supersedes
+			// this transition: currentStep is no longer the step that was validated.
+			if (this.isTransitionStale()) {
+				return;
+			}
 			if (!validationResult.valid) {
 				this.setStepStatusInternal(this.state.currentStepId, "error");
 				// FIX F1: broadcast the errored step. setStepStatusInternal does not
@@ -882,23 +969,38 @@ export class WizardMachine<T extends WizardData> {
 
 	/**
 	 * Goes to previous step.
-	 * Uses navigation history stack when available (pops the current step),
-	 * falls back to the previous transition resolver when history is empty.
+	 * Uses the navigation history stack when it holds more than the current
+	 * step: the target is the nearest earlier history entry whose `enabled`
+	 * guard currently evaluates to true (disabled entries in between are popped
+	 * too). Throws `WizardNavigationError` (reason `"disabled"`) when none of the
+	 * earlier entries is enabled. Falls back to the `previous` transition
+	 * resolver only when the history holds just the current step.
 	 */
 	async goPrevious(): Promise<void> {
 		return this.withTransition(async () => {
 			// History-first: if we have history entries beyond the current step, pop back
 			if (this.stepHistory.length > 1) {
-				// Target is the entry below the current step. Do NOT pop yet —
-				// navigateToStep pops only after beforeTransition passes.
-				const previousStepId = this.stepHistory[this.stepHistory.length - 2];
+				// Compute the target without mutating the stack. navigateToStep pops
+				// only after beforeTransition passes.
+				const target = await this.resolveHistoryPreviousTarget();
+				// A reset()/cancel()/restore() during guard evaluation supersedes this.
+				if (this.isTransitionStale()) {
+					return;
+				}
+				if (!target) {
+					throw new WizardNavigationError(
+						"No previous step available",
+						undefined,
+						"disabled",
+					);
+				}
 
-				await this.navigateToStep(previousStepId, "previous", {
+				await this.navigateToStep(target.stepId, "previous", {
 					pushToHistory: false,
-					popHistory: 1,
+					popHistory: target.pop,
 				});
 				this.debug(
-					`Navigated to previous step (from history): ${previousStepId}`,
+					`Navigated to previous step (from history): ${target.stepId}`,
 				);
 				return;
 			}
@@ -1012,7 +1114,15 @@ export class WizardMachine<T extends WizardData> {
 			// Validate current step before leaving (unless skipped)
 			if (!skipValidation) {
 				const validationResult = await this.validate();
+				// A reset()/cancel()/restore() during the awaited validator
+				// supersedes this transition.
+				if (this.isTransitionStale()) {
+					return;
+				}
 				if (!validationResult.valid) {
+					// Mark the errored step and broadcast it (same as goNext).
+					this.setStepStatusInternal(this.state.currentStepId, "error");
+					this.notifyStateChange();
 					const err = new WizardValidationError(validationResult.errors || {});
 					// If validate() already reported a thrown validator error, do not
 					// re-report; otherwise this is the single reporter for the failure.
@@ -1030,6 +1140,10 @@ export class WizardMachine<T extends WizardData> {
 					this.state.data,
 					this.context,
 				);
+				// A reset()/cancel()/restore() during the awaited guard supersedes this.
+				if (this.isTransitionStale()) {
+					return;
+				}
 
 				if (!isEnabled) {
 					throw new WizardNavigationError(
@@ -1121,6 +1235,40 @@ export class WizardMachine<T extends WizardData> {
 	}
 
 	/**
+	 * History-based "previous" target shared by `goPrevious()` and
+	 * `getPreviousStepId()`. Walks the history from the entry just below the
+	 * current step down to index 0 and returns the first entry whose `enabled`
+	 * guard evaluates to true (with the current data/context), plus how many
+	 * entries must be popped to land on it. Returns `null` when no earlier entry
+	 * is enabled (or the history holds only the current step). Does NOT mutate
+	 * the history.
+	 */
+	private async resolveHistoryPreviousTarget(): Promise<{
+		stepId: StepId;
+		pop: number;
+	} | null> {
+		// Snapshot so a concurrent history change cannot shift indices mid-walk.
+		const history = [...this.stepHistory];
+		const lastIndex = history.length - 1;
+		for (let i = lastIndex - 1; i >= 0; i--) {
+			const stepId = history[i];
+			const step = this.definition.steps[stepId];
+			if (!step) {
+				continue;
+			}
+			const isEnabled = await evaluateGuard(
+				step.enabled,
+				this.state.data,
+				this.context,
+			);
+			if (isEnabled) {
+				return { stepId, pop: lastIndex - i };
+			}
+		}
+		return null;
+	}
+
+	/**
 	 * Navigates to a specific step
 	 * @param stepId Target step ID
 	 * @param options.pushToHistory Whether to push the target step onto the history stack (default: true).
@@ -1197,11 +1345,14 @@ export class WizardMachine<T extends WizardData> {
 		// beforeTransition veto / stale checks above) so a vetoed transition
 		// never leaves stepStatuses mutated. Per direction:
 		//   next     -> the step we are leaving is "completed"
-		//   goTo     -> the step we are leaving is "visited"
-		//   previous -> the step we are leaving is "visited"
+		//   goTo     -> the step we are leaving is "visited", unless it is
+		//               already "completed" (kept, so progress never regresses)
+		//   previous -> same as goTo
+		// Keeping "completed" on departure is symmetric with FIX 3 below, which
+		// preserves "completed" on the target step.
 		if (type === "next") {
 			this.setStepStatusInternal(fromStepId, "completed");
-		} else {
+		} else if (this.state.stepStatuses[fromStepId] !== "completed") {
 			// "goTo" and "previous"
 			this.setStepStatusInternal(fromStepId, "visited");
 		}
@@ -1250,11 +1401,93 @@ export class WizardMachine<T extends WizardData> {
 			this.events.onStepEnter?.(stepId, this.state.data);
 		}
 
+		// Recompute "skipped" for function `enabled` guards against the data the
+		// wizard navigated with. Runs regardless of skipLifecycle; its single
+		// state write is covered by the notify below (one committed snapshot).
+		let guardRefresh: { error: unknown } | undefined;
+		if (this.hasFunctionGuards) {
+			guardRefresh = await this.refreshGuardStatuses(() =>
+				this.isTransitionStale(),
+			);
+			if (this.isTransitionStale()) {
+				return;
+			}
+		}
+
 		this.notifyStateChange();
 
 		// WIZ-007: afterTransition fires ONLY after the committed notifyStateChange
 		// (not on any stale early-return above). Isolated per-plugin.
 		await this.pluginHost.dispatchAfterTransition(event);
+
+		// A throwing guard during the refresh never fails navigation; it is
+		// reported once, AFTER afterTransition, so plugins that track the current
+		// step (analytics resyncs on "transition" errors) are already in sync.
+		if (guardRefresh) {
+			this.handleError(guardRefresh.error, "transition");
+		}
+	}
+
+	/**
+	 * Re-evaluates every step's `enabled` guard (function guards — sync or
+	 * async — via `evaluateGuard`; static booleans as-is) against the current
+	 * data/context and applies the result in ONE state write, without
+	 * notifying (the caller's `notifyStateChange()` covers it):
+	 *
+	 * - guard false → "skipped" (never for the current step);
+	 * - guard true and currently "skipped" → "pristine";
+	 * - otherwise the status is left untouched. Steps with no `enabled` guard
+	 *   are never touched (a manual `setStepStatus(id, "skipped")` survives).
+	 *
+	 * A guard that throws/rejects leaves its step's status unchanged; the first
+	 * such error is RETURNED (never thrown) so the caller can report it once at
+	 * a safe point. Nothing is written (and no error returned) when `isStale()`
+	 * turns true during the await or a later refresh has started meanwhile.
+	 */
+	private async refreshGuardStatuses(
+		isStale: () => boolean,
+	): Promise<{ error: unknown } | undefined> {
+		const seq = ++this.guardRefreshSeq;
+		const data = this.state.data;
+		const guarded = Object.entries(this.definition.steps).filter(
+			([, step]) => step.enabled !== undefined,
+		);
+		const results = await Promise.allSettled(
+			guarded.map(([, step]) =>
+				evaluateGuard(step.enabled, data, this.context),
+			),
+		);
+		if (isStale() || seq !== this.guardRefreshSeq) {
+			return undefined;
+		}
+
+		let guardError: { error: unknown } | undefined;
+		// Merge against the statuses / current step AT WRITE TIME.
+		const current = this.state.stepStatuses;
+		const currentStepId = this.state.currentStepId;
+		let updated: Record<StepId, StepStatus> | undefined;
+		guarded.forEach(([stepId], index) => {
+			const result = results[index];
+			if (result.status === "rejected") {
+				guardError ??= { error: result.reason };
+				return;
+			}
+			if (stepId === currentStepId) {
+				return;
+			}
+			const status = current[stepId];
+			if (!result.value && status !== "skipped") {
+				updated ??= { ...current };
+				updated[stepId] = "skipped";
+			} else if (result.value && status === "skipped") {
+				updated ??= { ...current };
+				updated[stepId] = "pristine";
+			}
+		});
+		if (updated) {
+			this.state = { ...this.state, stepStatuses: updated };
+		}
+		return guardError;
 	}
 
 	/**
@@ -1360,27 +1593,55 @@ export class WizardMachine<T extends WizardData> {
 	}
 
 	/**
-	 * Completes the wizard (called internally when reaching end)
+	 * Completes the wizard (called internally when reaching end).
+	 *
+	 * `definition.onComplete` runs FIRST (it observes `isCompleted === false`);
+	 * `isCompleted` is committed only after it resolves. A throw propagates with
+	 * `isCompleted` still false (the caller reports it), so the user can retry
+	 * `submit()` / `goNext()`. A reset()/cancel()/restore() during the awaited
+	 * hook supersedes the completion: no state write, no `onComplete` event and
+	 * no plugin `onComplete`.
+	 *
+	 * Once committed, the order is:
+	 * 1. ONE state write: `isCompleted: true` + the current (final) step marked
+	 *    "completed" (so a finished wizard reports `progress.percentage === 100`);
+	 * 2. `notifyStateChange()`;
+	 * 3. every plugin's `onComplete`, invoked synchronously in registration
+	 *    order (async plugin work is not awaited);
+	 * 4. `events.onComplete`.
+	 * Plugins therefore learn about completion before user code can tear the
+	 * wizard down (e.g. an app that unmounts / `destroy()`s inside
+	 * `events.onComplete`), so analytics never reports a completed wizard as a
+	 * drop-off.
 	 */
 	private async complete(): Promise<void> {
 		if (this.state.isCompleted) {
 			return;
 		}
 
-		this.state = {
-			...this.state,
-			isCompleted: true,
-		};
-
 		if (this.definition.onComplete) {
 			await this.definition.onComplete(this.state.data, this.context);
 		}
-		this.events.onComplete?.(this.state.data);
+		if (this.isTransitionStale()) {
+			return;
+		}
+
+		this.state = {
+			...this.state,
+			isCompleted: true,
+			stepStatuses: {
+				...this.state.stepStatuses,
+				[this.state.currentStepId]: "completed",
+			},
+		};
 		this.debug("Wizard completed");
 		this.notifyStateChange();
 
-		// WIZ-007: dispatch plugin onComplete (isolated), after definition/events.
+		// WIZ-007: plugin onComplete (isolated) is invoked synchronously for every
+		// plugin BEFORE events.onComplete, so a teardown inside events.onComplete
+		// (destroy() → destroyAll) cannot pre-empt it.
 		void this.pluginHost.dispatchComplete(this.state.data as never);
+		this.events.onComplete?.(this.state.data);
 	}
 
 	/**
@@ -1552,9 +1813,13 @@ export class WizardMachine<T extends WizardData> {
 	 * DOCUMENT (M-c): this method only inspects `typeof step.enabled ===
 	 * "boolean"`. It is intentionally inert for *function* (and async) `enabled`
 	 * guards — evaluating those here would require running arbitrary, possibly
-	 * async, user code synchronously inside `updateData`/`setData`. Practical
-	 * effect: a data change that would flip the result of a function guard does
-	 * NOT update `stepStatuses`/`skipped` (and therefore does not affect
+	 * async, user code synchronously inside `updateData`/`setData`. Function
+	 * guards are instead recomputed by `refreshGuardStatuses()`, which runs after
+	 * the initial step is entered (construction and `reset()`) and after every
+	 * committed navigation (`goNext`/`goPrevious`/`goTo`), before that
+	 * navigation's state-change notification. Practical effect: a data change
+	 * that would flip the result of a function guard does NOT update
+	 * `stepStatuses`/`skipped` (and therefore does not affect
 	 * `WizardProgress.enabledStepIds`/`percentage`) until the next navigation
 	 * re-evaluates the guard. Do not attempt synchronous evaluation of function
 	 * guards here.

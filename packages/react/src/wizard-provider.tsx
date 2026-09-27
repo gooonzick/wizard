@@ -6,8 +6,12 @@ import type {
 	WizardPlugin,
 	WizardState,
 } from "@gooonzick/wizard-core";
-import { WizardMachine } from "@gooonzick/wizard-core";
-import { WizardStateManager } from "@gooonzick/wizard-state";
+import {
+	createMachineAndManager,
+	createWizardActions,
+	type WizardBindingActions,
+	type WizardStateManager,
+} from "@gooonzick/wizard-state";
 import {
 	createContext,
 	type ReactNode,
@@ -21,7 +25,10 @@ import {
 } from "react";
 
 /**
- * Context for granular hooks - holds the WizardStateManager for fine-grained subscriptions
+ * Context for granular hooks - holds the WizardStateManager for fine-grained subscriptions.
+ *
+ * `initialData` is the prop captured at mount. It is kept for compatibility only:
+ * `reset()` no longer reads it (the machine owns the reset baseline).
  */
 interface WizardProviderContextValue<T extends WizardData> {
 	manager: WizardStateManager<T>;
@@ -29,11 +36,11 @@ interface WizardProviderContextValue<T extends WizardData> {
 }
 
 /**
- * The shape actually stored in the context. `reportError` forwards an error to this
- * provider's `onError` callback and is used by the granular `useWizardActions` hook's
- * `reset`/`restore` to report a synchronous machine throw (e.g. `WizardRestoreError`,
- * raised before `WizardMachine`'s internal `handleError` routing runs) that would
- * otherwise become an unhandled promise rejection via `manager.runReset`/`runRestore`.
+ * The shape actually stored in the context. `actions` is the provider's single
+ * action set (built once per manager by `createWizardActions`), shared by the
+ * granular `useWizardNavigation` / `useWizardActions` hooks so every consumer
+ * gets the same stable identities and the same reference-counted loading flags.
+ * Its `reset`/`restore` report failures to this provider's current `onError`.
  *
  * Deliberately kept OFF `WizardProviderContextValue` — that is the return type of the
  * exported `useWizardProviderContext()`, so widening it would widen the package's public
@@ -42,7 +49,7 @@ interface WizardProviderContextValue<T extends WizardData> {
  */
 interface WizardProviderInternalContextValue<T extends WizardData>
 	extends WizardProviderContextValue<T> {
-	reportError: (error: unknown) => void;
+	actions: WizardBindingActions<T>;
 }
 
 // biome-ignore lint/suspicious/noExplicitAny: skip
@@ -138,74 +145,13 @@ export function WizardProvider<T extends WizardData>({
 	const definitionRef = useRef(definition);
 	const pluginsRef = useRef(plugins);
 
-	// Track previous state for change detection
-	const previousStateRef = useRef<WizardState<T> | null>(null);
-
 	// Reads `callbacksRef.current` at call time (never a snapshot), so it cannot go
-	// stale despite the empty dependency array — same contract as the `events.onError`
-	// closure below.
+	// stale despite the empty dependency array — same contract as the
+	// `getCallbacks` reader passed to createMachineAndManager below.
 	const reportError = useCallback((error: unknown) => {
 		callbacksRef.current.onError?.(
 			error instanceof Error ? error : new Error(String(error)),
 		);
-	}, []);
-
-	// Holds the live manager. The events closure (created once per manager) reads
-	// `managerRef.current` so it can always reach the current manager without
-	// re-creating the closure.
-	const managerRef = useRef<WizardStateManager<T> | null>(null);
-
-	// Factory: build a fresh manager re-applying the same plugins/definition.
-	const createManager = useCallback((): WizardStateManager<T> => {
-		const events = {
-			onStateChange: (newState: WizardState<T>) => {
-				const oldState = previousStateRef.current;
-				previousStateRef.current = newState;
-
-				// Notify subscribers via channel-based system
-				if (oldState && managerRef.current) {
-					managerRef.current.handleStateChange(newState, oldState);
-				}
-
-				callbacksRef.current.onStateChange?.(newState);
-			},
-			onStepEnter: (stepId: StepId, data: T) => {
-				callbacksRef.current.onStepEnter?.(stepId, data);
-			},
-			onStepLeave: (stepId: StepId, data: T) => {
-				callbacksRef.current.onStepLeave?.(stepId, data);
-			},
-			onComplete: (data: T) => {
-				callbacksRef.current.onComplete?.(data);
-			},
-			onCancel: async (data: T) => {
-				await callbacksRef.current.onCancel?.(data);
-			},
-			onReset: () => {
-				callbacksRef.current.onReset?.();
-			},
-			onError: (error: Error) => {
-				callbacksRef.current.onError?.(error);
-			},
-			onDataChange: (prev: T, next: T, changedFields: (keyof T)[]) => {
-				callbacksRef.current.onDataChange?.(prev, next, changedFields);
-			},
-		};
-
-		const machine = new WizardMachine(
-			definitionRef.current,
-			contextRef.current,
-			initialDataRef.current,
-			events,
-			pluginsRef.current,
-		);
-
-		const newManager = new WizardStateManager(
-			machine,
-			definitionRef.current.initialStepId,
-		);
-		previousStateRef.current = machine.snapshot;
-		return newManager;
 	}, []);
 
 	// Ref-guarded lazy creation. useRef persists across StrictMode's double
@@ -213,10 +159,17 @@ export function WizardProvider<T extends WizardData>({
 	// side-effecting `new WizardMachine(...)` (plugin onInit) runs exactly once
 	// per live manager. Never construct in a useState initializer (double-invoked)
 	// or unconditionally in render.
+	const managerRef = useRef<WizardStateManager<T> | null>(null);
 	if (managerRef.current === null || managerRef.current.isDestroyed) {
 		// isDestroyed is only true after the StrictMode mount->unmount->remount
 		// probe tore the previous manager down; recreate re-applies the plugins.
-		managerRef.current = createManager();
+		managerRef.current = createMachineAndManager<T>({
+			definition: definitionRef.current,
+			context: contextRef.current,
+			initialData: initialDataRef.current,
+			getCallbacks: () => callbacksRef.current,
+			plugins: pluginsRef.current,
+		}).manager;
 	}
 	// `useState` holds the identity so a recreate triggers a re-render + resubscribe.
 	const [, forceRerender] = useState(0);
@@ -247,15 +200,21 @@ export function WizardProvider<T extends WizardData>({
 		};
 	}, [manager]);
 
+	// One action set per manager, shared by every granular hook.
+	const actions = useMemo(
+		() => createWizardActions(manager, reportError),
+		[manager, reportError],
+	);
+
 	// Create a stable context value, keyed on `manager` so consumers rebind
 	// after a StrictMode-driven recreate.
 	const contextValue = useMemo(
 		() => ({
 			manager,
 			initialData: initialDataRef.current,
-			reportError,
+			actions,
 		}),
-		[manager, reportError],
+		[manager, actions],
 	);
 
 	return (
@@ -276,7 +235,7 @@ export function useWizardProviderContext<
 }
 
 /**
- * Same context, widened with the provider-owned `reportError`. Package-internal: it is
+ * Same context, widened with the provider-owned `actions`. Package-internal: it is
  * NOT re-exported from `src/index.ts`, so the public surface stays
  * `useWizardProviderContext()`'s narrower `WizardProviderContextValue`.
  * @throws {Error} if used outside of WizardProvider

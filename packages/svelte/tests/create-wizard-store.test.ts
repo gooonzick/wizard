@@ -36,16 +36,17 @@ describe("createWizardStore", () => {
 		unsubscribe();
 	});
 
-	it("S2: initial value carries the documented navigation-cache quirk", () => {
+	it("S2: initial navigation flags are seeded synchronously from progress", () => {
 		const wizard = makeStore();
 		const value = get(wizard);
 
 		expect(value.currentStepId).toBe("personal");
 		expect(value.data).toEqual(initialData);
 		expect(value.isFirstStep).toBe(true);
-		// Documented quirk (§9.3): the manager seeds a pessimistic navigation cache.
-		expect(value.canGoNext).toBe(false);
-		expect(value.isLastStep).toBe(true);
+		// isLastStep/canGoNext are seeded from snapshot.progress.isLastStep before
+		// any async resolution: a non-last first step can go next immediately.
+		expect(value.canGoNext).toBe(true);
+		expect(value.isLastStep).toBe(false);
 	});
 
 	it("S3: navigation flags settle after a flush", async () => {

@@ -40,12 +40,14 @@ describe("createWizard (runes)", () => {
 		expect(wizard.stepHistory).toEqual(["personal", "plan"]);
 	});
 
-	it("R2: canGoNext is false initially and true after a flush", async () => {
+	it("R2: canGoNext/isLastStep are seeded synchronously and stay stable after a flush", async () => {
 		const wizard = makeWizard();
 
-		expect(wizard.canGoNext).toBe(false);
+		expect(wizard.canGoNext).toBe(true);
+		expect(wizard.isLastStep).toBe(false);
 		await flush();
 		expect(wizard.canGoNext).toBe(true);
+		expect(wizard.isLastStep).toBe(false);
 	});
 
 	it("R3: field() get/set, no-op guard and reference stability", () => {

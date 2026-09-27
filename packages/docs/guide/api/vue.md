@@ -36,6 +36,15 @@ interface UseWizardOptions<T> {
 }
 ```
 
+**Reactive inputs.** `initialData` may be a `reactive()` object or a `ref()`'s value. The machine deep-clones data with `structuredClone`, which rejects Vue proxies, so `useWizard` strips Vue reactivity (refs and proxies, including nested ones) to plain data first. The same unwrapping applies to `actions.setData(data)`, `actions.reset(data)`, `actions.restore(state)`, `actions.updateField(field, value)` and the value returned by the `actions.updateData` updater. Plain data is passed through by reference, so `updateField`'s `Object.is` no-op check is unchanged. After unwrapping, the data must still be structured-cloneable (no functions, symbols or class instances).
+
+```ts
+const form = ref({ name: "", email: "" });
+const wizard = useWizard({ definition, initialData: form.value });
+// later: load a draft kept in reactive state
+wizard.actions.reset(form.value);
+```
+
 ### UseWizardReturn&lt;T&gt;
 
 The composable returns an organized object with five slices. All state values are `ComputedRef`.
@@ -103,6 +112,10 @@ interface UseWizardActions<T> {
   restore(state: WizardSerializedState<T>): void;
 }
 ```
+
+**Loading flags** mirror the shared `WizardStateManager` (the same manager every binding uses). Flags are reference-counted: a flag stays `true` until the last tracked operation holding it settles. So when a double-clicked Next is rejected as busy, `isNavigating` stays `true` until the first navigation finishes. `reset()`, `restore()` and `cancel()` clear all flags.
+
+**`reset(data?)`** passes `data` to the machine with Vue reactivity stripped (see **Reactive inputs** above). `reset(X)` makes `X` the new reset baseline, so a later `reset()` returns to `X`. `reset()` and `restore()` do not throw. A failure, such as a `WizardRestoreError` from a malformed snapshot, is sent to `onError` on the next microtask, or logged with `console.error` when there is no `onError`.
 
 ## useWizardField Composable
 
