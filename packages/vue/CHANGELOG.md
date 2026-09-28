@@ -1,5 +1,13 @@
 # @gooonzick/wizard-vue
 
+## 1.11.2
+
+### Patch Changes
+
+- 1d0b820: Docs: fix README snippets whose Next button was disabled on `!canGoNext`, which made the last step impossible to finish. The buttons now disable only while navigating and read "Finish" on the last step (`goNext()` completes the wizard there). The Vue granular-composable snippet also no longer reads `.value` on auto-unwrapped template refs.
+  - @gooonzick/wizard-core@1.11.2
+  - @gooonzick/wizard-state@1.11.2
+
 ## 1.11.1
 
 ### Patch Changes

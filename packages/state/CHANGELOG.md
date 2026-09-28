@@ -1,5 +1,11 @@
 # @gooonzick/wizard-state
 
+## 1.11.2
+
+### Patch Changes
+
+- @gooonzick/wizard-core@1.11.2
+
 ## 1.11.1
 
 ### Patch Changes

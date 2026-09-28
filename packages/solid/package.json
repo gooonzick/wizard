@@ -1,6 +1,6 @@
 {
 	"name": "@gooonzick/wizard-solid",
-	"version": "1.11.1",
+	"version": "1.11.2",
 	"description": "Solid.js integration for the WizardForm framework",
 	"type": "module",
 	"sideEffects": false,
