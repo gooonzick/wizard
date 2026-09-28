@@ -97,8 +97,9 @@ export function SignupForm() {
       </button>
       <button
         onClick={() => navigation.goNext()}
-        disabled={!navigation.canGoNext || loading.isNavigating}
+        disabled={loading.isNavigating}
       >
+        {/* On the last step goNext() completes the wizard; canGoNext is false there. */}
         {navigation.isLastStep ? "Complete" : "Next"}
       </button>
     </div>
@@ -275,6 +276,7 @@ import {
   WizardProvider,
   useWizardData,
   useWizardNavigation,
+  useWizardLoading,
   useWizardActions,
 } from "@gooonzick/wizard-react";
 
@@ -291,7 +293,10 @@ function MyWizardForm() {
   const { data, currentStepId } = useWizardData();
 
   // Only re-renders when navigation state changes
-  const { canGoNext, goNext } = useWizardNavigation();
+  const { isLastStep, goNext } = useWizardNavigation();
+
+  // Only re-renders when loading flags change
+  const { isNavigating } = useWizardLoading();
 
   // Always stable - doesn't cause re-renders
   const { updateField } = useWizardActions();
@@ -302,8 +307,9 @@ function MyWizardForm() {
         value={data.name}
         onChange={(e) => updateField("name", e.target.value)}
       />
-      <button onClick={() => goNext()} disabled={!canGoNext}>
-        Next
+      {/* On the last step goNext() completes the wizard; canGoNext is false there. */}
+      <button onClick={() => goNext()} disabled={isNavigating}>
+        {isLastStep ? "Finish" : "Next"}
       </button>
     </div>
   );
@@ -360,8 +366,9 @@ function MyWizard() {
       </button>
       <button
         onClick={() => navigation.goNext()}
-        disabled={!navigation.canGoNext || loading.isNavigating}
+        disabled={loading.isNavigating}
       >
+        {/* On the last step goNext() completes the wizard; canGoNext is false there. */}
         {navigation.isLastStep ? "Submit" : "Next"}
       </button>
     </>
@@ -525,12 +532,16 @@ const handleNext = () => {
 ### 4. Handle Loading States
 
 ```tsx
-// ✅ Good - disable while loading
+// ✅ Good - disable while loading (not on !canGoNext: goNext() finishes the last step)
 <button
   onClick={() => navigation.goNext()}
-  disabled={loading.isNavigating || !navigation.canGoNext}
+  disabled={loading.isNavigating}
 >
-  {loading.isNavigating ? "Loading..." : "Next"}
+  {loading.isNavigating
+    ? "Loading..."
+    : navigation.isLastStep
+      ? "Finish"
+      : "Next"}
 </button>
 
 // ❌ Bad - no feedback to user

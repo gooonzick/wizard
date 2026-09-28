@@ -96,8 +96,9 @@ export function SignupForm() {
       </button>
       <button
         onClick={() => navigation.goNext()}
-        disabled={!navigation.canGoNext || loading.isNavigating}
+        disabled={loading.isNavigating}
       >
+        {/* On the last step goNext() completes the wizard; canGoNext is false there. */}
         {navigation.isLastStep ? "Complete" : "Next"}
       </button>
     </div>
@@ -533,9 +534,13 @@ export function StepActions() {
 
       <button
         onClick={() => navigation.goNext()}
-        disabled={!navigation.canGoNext || loading.isValidating}
+        disabled={loading.isNavigating}
       >
-        {loading.isValidating ? "Validating..." : "Next"}
+        {loading.isValidating
+          ? "Validating..."
+          : navigation.isLastStep
+            ? "Finish"
+            : "Next"}
       </button>
 
       {loading.isSubmitting && <p>Submitting...</p>}
@@ -653,10 +658,13 @@ function MyWizardForm() {
   const { data, currentStepId } = useWizardData();
 
   // Only subscribes to navigation changes
-  const { canGoNext, goNext } = useWizardNavigation();
+  const { isLastStep, goNext } = useWizardNavigation();
 
   // Only subscribes to validation changes
   const { isValid, validationErrors } = useWizardValidation();
+
+  // Only subscribes to loading flags
+  const { isNavigating } = useWizardLoading();
 
   // Actions don't cause re-renders
   const { updateField } = useWizardActions();
@@ -674,8 +682,9 @@ function MyWizardForm() {
         <p className="error">{Object.values(validationErrors).join(", ")}</p>
       )}
 
-      <button onClick={() => goNext()} disabled={!canGoNext}>
-        Next
+      {/* On the last step goNext() completes the wizard; canGoNext is false there. */}
+      <button onClick={() => goNext()} disabled={isNavigating}>
+        {isLastStep ? "Finish" : "Next"}
       </button>
     </div>
   );

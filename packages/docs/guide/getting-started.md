@@ -136,8 +136,9 @@ export function MyForm() {
         </button>
         <button
           onClick={() => navigation.goNext()}
-          disabled={!navigation.canGoNext || loading.isNavigating}
+          disabled={loading.isNavigating}
         >
+          {/* On the last step goNext() completes the wizard; canGoNext is false there. */}
           {navigation.isLastStep ? "Complete" : "Next"}
         </button>
       </div>

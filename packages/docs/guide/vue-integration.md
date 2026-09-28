@@ -99,8 +99,9 @@ const email = useWizardField(wizard, "email");
     </button>
     <button
       @click="navigation.goNext()"
-      :disabled="!navigation.canGoNext.value || loading.isNavigating.value"
+      :disabled="loading.isNavigating.value"
     >
+      <!-- On the last step goNext() completes the wizard; canGoNext is false there. -->
       {{ navigation.isLastStep.value ? "Complete" : "Next" }}
     </button>
   </div>
@@ -570,9 +571,15 @@ const { navigation, loading } = useWizard({ definition, initialData });
 
     <button
       @click="navigation.goNext()"
-      :disabled="!navigation.canGoNext.value || loading.isValidating.value"
+      :disabled="loading.isNavigating.value"
     >
-      {{ loading.isValidating.value ? "Validating..." : "Next" }}
+      {{
+        loading.isValidating.value
+          ? "Validating..."
+          : navigation.isLastStep.value
+            ? "Finish"
+            : "Next"
+      }}
     </button>
 
     <p v-if="loading.isSubmitting.value">Submitting...</p>
@@ -694,10 +701,13 @@ import {
 const { data, currentStepId } = useWizardData();
 
 // Only subscribes to navigation changes
-const { canGoNext, goNext } = useWizardNavigation();
+const { isLastStep, goNext } = useWizardNavigation();
 
 // Only subscribes to validation changes
 const { isValid, validationErrors } = useWizardValidation();
+
+// Only subscribes to loading flags
+const { isNavigating } = useWizardLoading();
 
 // Actions don't cause re-renders
 const { updateField } = useWizardActions();
@@ -708,16 +718,20 @@ const name = useWizardField<{ name: string }, "name">("name");
 
 <template>
   <div>
+    <!-- Top-level refs are auto-unwrapped in the template: no .value here -->
     <input
-      v-if="currentStepId.value === 'personal'"
+      v-if="currentStepId === 'personal'"
       v-model="name"
     />
 
-    <div v-if="!isValid.value && validationErrors.value" class="error">
-      <p>{{ Object.values(validationErrors.value).join(", ") }}</p>
+    <div v-if="!isValid && validationErrors" class="error">
+      <p>{{ Object.values(validationErrors).join(", ") }}</p>
     </div>
 
-    <button @click="goNext" :disabled="!canGoNext.value">Next</button>
+    <!-- On the last step goNext() completes the wizard; canGoNext is false there. -->
+    <button @click="goNext()" :disabled="isNavigating">
+      {{ isLastStep ? "Finish" : "Next" }}
+    </button>
   </div>
 </template>
 ```

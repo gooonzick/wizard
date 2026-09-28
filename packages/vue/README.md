@@ -46,7 +46,7 @@ const definition = createLinearWizard<FormData>({
   ],
 });
 
-const { state, navigation, actions } = useWizard({
+const { state, navigation, loading, actions } = useWizard({
   definition,
   initialData: { name: "", email: "", age: 0 },
 });
@@ -91,8 +91,12 @@ const { state, navigation, actions } = useWizard({
       Previous
     </button>
 
-    <button @click="navigation.goNext" :disabled="!navigation.canGoNext.value">
-      Next
+    <!-- On the last step goNext() completes the wizard; canGoNext is false there. -->
+    <button
+      @click="navigation.goNext()"
+      :disabled="loading.isNavigating.value"
+    >
+      {{ navigation.isLastStep.value ? "Finish" : "Next" }}
     </button>
   </div>
 </template>
@@ -148,18 +152,22 @@ const { updateField } = useWizardActions();
 ```vue
 <!-- WizardNavigation.vue -->
 <script setup lang="ts">
-import { useWizardNavigation } from "@gooonzick/wizard-vue";
+import { useWizardLoading, useWizardNavigation } from "@gooonzick/wizard-vue";
 
-const { canGoNext, canGoPrevious, goNext, goPrevious, goTo } =
-  useWizardNavigation();
+const { canGoPrevious, isLastStep, goNext, goPrevious } = useWizardNavigation();
+const { isNavigating } = useWizardLoading();
 </script>
 
 <template>
+  <!-- Top-level refs are auto-unwrapped in the template: no .value here -->
   <div>
-    <button @click="goPrevious" :disabled="!canGoPrevious.value">
+    <button @click="goPrevious()" :disabled="!canGoPrevious || isNavigating">
       Previous
     </button>
-    <button @click="goNext" :disabled="!canGoNext.value">Next</button>
+    <!-- On the last step goNext() completes the wizard; canGoNext is false there. -->
+    <button @click="goNext()" :disabled="isNavigating">
+      {{ isLastStep ? "Finish" : "Next" }}
+    </button>
   </div>
 </template>
 ```
