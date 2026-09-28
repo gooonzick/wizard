@@ -162,8 +162,9 @@ instead and it will not be woken by unrelated notifies:
   const { navigation, loading } = wizard;
 </script>
 
-<button onclick={wizard.goNext} disabled={!$navigation.canGoNext || $loading.isNavigating}>
-  Next
+<!-- On the last step goNext() completes the wizard. canGoNext is false there, so don't disable on it. -->
+<button onclick={wizard.goNext} disabled={$loading.isNavigating}>
+  {$navigation.isLastStep ? "Finish" : "Next"}
 </button>
 ```
 
