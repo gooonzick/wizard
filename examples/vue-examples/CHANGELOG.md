@@ -1,5 +1,12 @@
 # @gooonzick/wizard-vue-examples
 
+## 0.0.16
+
+### Patch Changes
+
+- @gooonzick/wizard-vue@1.11.1
+- @gooonzick/wizard-core@1.11.1
+
 ## 0.0.15
 
 ### Patch Changes

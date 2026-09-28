@@ -1,5 +1,12 @@
 # @gooonzick/wizard-state
 
+## 1.11.1
+
+### Patch Changes
+
+- da188a9: Docs: update the READMEs to the 1.11.0 navigation behaviour. `canGoNext`/`isLastStep` are now seeded synchronously (no "optimistically wrong first snapshot"), and the Svelte/Solid Quick Starts no longer disable Next on `!canGoNext`, which made the last step impossible to finish.
+  - @gooonzick/wizard-core@1.11.1
+
 ## 1.11.0
 
 ### Minor Changes

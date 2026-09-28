@@ -1,6 +1,6 @@
 {
 	"name": "@gooonzick/wizard-svelte",
-	"version": "1.11.0",
+	"version": "1.11.1",
 	"description": "Svelte integration for the WizardForm framework (stores + Svelte 5 runes)",
 	"type": "module",
 	"sideEffects": false,
