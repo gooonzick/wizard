@@ -73,9 +73,10 @@ export function Signup() {
 			<button
 				type="button"
 				onClick={() => void wizard.goNext().catch(() => {})}
-				disabled={!wizard.canGoNext || wizard.isNavigating}
+				disabled={wizard.isNavigating}
 			>
-				Next
+				{/* On the last step goNext() completes the wizard; canGoNext is false there. */}
+				{wizard.progress.isLastStep ? "Finish" : "Next"}
 			</button>
 		</form>
 	);
@@ -90,7 +91,7 @@ export function Signup() {
 
 ## Things to know
 
-- `canGoNext` / `canGoPrevious` / `isLastStep` / `availableSteps` are computed asynchronously (guards and resolvers may be async). Until the first computation settles, `canGoNext` and `canGoPrevious` are `false`, `isLastStep` is `true` and `availableSteps` is empty.
+- `canGoNext` and `isLastStep` are seeded synchronously from `progress.isLastStep` (on creation and on every step change), so they are correct on first render for synchronous graphs; a step whose `next` is an async resolver starts as "not last" until the async computation settles. `canGoPrevious` and `availableSteps` come only from that async computation: right after creation `canGoPrevious` is `false` and `availableSteps` is empty.
 - `canGoNext` means "a next step exists", not "the current step is valid" — validation runs inside `goNext()`.
 - Loading flags (`isNavigating`, `isValidating`, `isSubmitting`) are reference-counted: a flag stays `true` while any operation that set it is still in flight, so a double-clicked Next rejected as busy, or an overlapping `validate()`, no longer clears another operation's flag.
 - `goNext()`, `goPrevious()`, `goTo()`, `submit()` and `cancel()` reject on failure (for example an invalid step) in addition to reporting to `onError` — `await` them in a `try`, or `.catch(() => {})` when the UI already renders `validationErrors`. `validate()` **resolves** and exposes the result via `isValid` / `validationErrors`, even on an invalid step — it rejects only if the operation was already aborted (via an `AbortSignal` passed in context) before the call; a `reset()`/`cancel()` while it is in flight does not reject it, it just supersedes the result. `validateAll()` also **resolves** with a `ValidationSummary` even when steps are invalid (a throwing step validator counts as invalid) — it rejects if the wizard was already aborted, or if a step's `enabled` guard throws. Unlike `validate()`, it has no supersede protection: a `reset()`/`cancel()` fired while it's running does not cancel it, and with `updateStatuses: true` its step statuses are still written into the (now post-reset) state.
