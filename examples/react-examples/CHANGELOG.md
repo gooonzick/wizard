@@ -1,5 +1,12 @@
 # @gooonzick/wizard-react-example
 
+## 0.0.17
+
+### Patch Changes
+
+- @gooonzick/wizard-react@1.11.1
+- @gooonzick/wizard-core@1.11.1
+
 ## 0.0.16
 
 ### Patch Changes

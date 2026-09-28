@@ -1,5 +1,13 @@
 # @gooonzick/wizard-vue
 
+## 1.11.1
+
+### Patch Changes
+
+- Updated dependencies [da188a9]
+  - @gooonzick/wizard-state@1.11.1
+  - @gooonzick/wizard-core@1.11.1
+
 ## 1.11.0
 
 ### Minor Changes
