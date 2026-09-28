@@ -1,5 +1,12 @@
 # @gooonzick/wizard-solid-example
 
+## 0.0.4
+
+### Patch Changes
+
+- @gooonzick/wizard-core@1.11.2
+- @gooonzick/wizard-solid@1.11.2
+
 ## 0.0.3
 
 ### Patch Changes

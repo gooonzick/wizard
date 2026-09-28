@@ -1,5 +1,12 @@
 # @gooonzick/wizard-svelte-example
 
+## 0.0.6
+
+### Patch Changes
+
+- @gooonzick/wizard-core@1.11.2
+- @gooonzick/wizard-svelte@1.11.2
+
 ## 0.0.5
 
 ### Patch Changes
