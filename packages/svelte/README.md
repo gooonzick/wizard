@@ -84,8 +84,9 @@ Svelte 5 compiler in your build. Importing it under Svelte 4 will not work.
 {/if}
 
 <button onclick={wizard.goPrevious} disabled={!$wizard.canGoPrevious}>Back</button>
-<button onclick={wizard.goNext} disabled={!$wizard.canGoNext || $wizard.isNavigating}>
-  Next
+<!-- On the last step goNext() completes the wizard. canGoNext is false there, so don't disable on it. -->
+<button onclick={wizard.goNext} disabled={$wizard.isNavigating}>
+  {$wizard.progress.isLastStep ? "Finish" : "Next"}
 </button>
 ```
 
@@ -108,7 +109,9 @@ Svelte 4 users write `on:click={wizard.goNext}` instead of `onclick=`.
 
 <h2>{wizard.currentStep.meta?.title}</h2>
 <input bind:value={name.value} />
-<button onclick={wizard.goNext} disabled={!wizard.canGoNext}>Next</button>
+<button onclick={wizard.goNext} disabled={wizard.isNavigating}>
+  {wizard.progress.isLastStep ? "Finish" : "Next"}
+</button>
 ```
 
 Both layers expose the **same flat key set**, the same slices, the same `actions`, and the
@@ -215,14 +218,16 @@ Because the snapshots are `$state.raw`, `wizard.data` is **not** deeply reactive
 
 ## Things to know
 
-### The first navigation snapshot is optimistically wrong
+### Navigation flags: a synchronous seed, then the async result
 
-`WizardStateManager` seeds its navigation cache with
-`{ canGoNext: false, canGoPrevious: false, isLastStep: true, availableSteps: [] }`; the
-real values land one microtask later, once `getNextStepId()` / `getPreviousStepId()` /
-`getAvailableSteps()` resolve. A `<button disabled={!$wizard.canGoNext}>` therefore flashes
-disabled on first paint. This is identical in React and Vue. In tests, `await` a macrotask
-(`new Promise((r) => setTimeout(r, 0))`) before asserting navigation flags.
+`canGoNext` and `isLastStep` are seeded synchronously from core's `progress.isLastStep` (on
+creation and on every step change), so they are correct on first paint for synchronous graphs.
+The seed is conservative: a step whose `next` is an async resolver starts as "not last". The
+authoritative values land one microtask later, once `getNextStepId()` / `getPreviousStepId()` /
+`getAvailableSteps()` resolve; until then `canGoPrevious` is `false` and `availableSteps` is
+empty on the first snapshot. This is identical in React, Vue and Solid. In tests, `await` a
+macrotask (`new Promise((r) => setTimeout(r, 0))`) before asserting `canGoPrevious` or
+`availableSteps`.
 
 ### `updateField` is a no-op on `Object.is` equality
 

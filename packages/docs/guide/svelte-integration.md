@@ -83,8 +83,9 @@ object *is* a store (it has `subscribe`), so `$wizard` works in templates.
 {/if}
 
 <button onclick={wizard.goPrevious} disabled={!$wizard.canGoPrevious}>Back</button>
-<button onclick={wizard.goNext} disabled={!$wizard.canGoNext || $wizard.isNavigating}>
-  Next
+<!-- On the last step goNext() completes the wizard. canGoNext is false there, so don't disable on it. -->
+<button onclick={wizard.goNext} disabled={$wizard.isNavigating}>
+  {$wizard.progress.isLastStep ? "Finish" : "Next"}
 </button>
 ```
 
@@ -111,7 +112,9 @@ Svelte 4 users write `on:click={wizard.goNext}` instead of `onclick=`.
 <input bind:value={name.value} />
 
 <button onclick={wizard.goPrevious} disabled={!wizard.canGoPrevious}>Back</button>
-<button onclick={wizard.goNext} disabled={!wizard.canGoNext}>Next</button>
+<button onclick={wizard.goNext} disabled={wizard.isNavigating}>
+  {wizard.progress.isLastStep ? "Finish" : "Next"}
+</button>
 ```
 
 Every flat key is a getter over a `$state.raw` snapshot, so plain reads are reactive in
@@ -414,22 +417,30 @@ contract.
 
 ## Behaviours worth knowing
 
-### The first navigation snapshot is optimistically wrong
+### Navigation flags: a synchronous seed, then the async result
 
-`WizardStateManager` seeds its navigation cache with
-`{ canGoNext: false, canGoPrevious: false, isLastStep: true, availableSteps: [] }`. The real
-values only land after `getNextStepId()` / `getPreviousStepId()` / `getAvailableSteps()`
-resolve, one microtask later. So `<button disabled={!$wizard.canGoNext}>` flashes disabled on
-first paint. This is identical in React and Vue and is not a Svelte-specific bug.
+`canGoNext` and `isLastStep` are correct on first paint for synchronous graphs.
+`WizardStateManager` seeds them from core's `progress.isLastStep` when the wizard is created,
+and re-seeds them whenever the current step changes. The seed is conservative: `isLastStep`
+is `true` only when the forward path is definitely terminal, so a step whose `next` is an
+async resolver (or leads through an async guard) starts as "not last" until the async result
+arrives.
 
-In tests, await a macrotask before asserting navigation flags:
+The authoritative values land once `getNextStepId()` / `getPreviousStepId()` /
+`getAvailableSteps()` resolve, one microtask later. Until then `canGoPrevious` is `false` and
+`availableSteps` is empty on the first snapshot; after a step change they keep their previous
+values. The behaviour is identical in React, Vue and Solid.
+
+In tests, await a macrotask before asserting `canGoPrevious`, `availableSteps`, or anything
+only an async resolver can decide:
 
 ```typescript
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 const wizard = createWizardStore({ definition, initialData });
+expect(get(wizard).canGoNext).toBe(true); // seeded synchronously
 await flush();
-expect(get(wizard).canGoNext).toBe(true);
+expect(get(wizard).availableSteps.length).toBeGreaterThan(0);
 ```
 
 ### `updateField` is a no-op on equal values

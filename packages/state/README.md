@@ -191,7 +191,7 @@ const history = manager.getStepHistory();
 
 - **Cached Snapshots** - All snapshot getters return the same reference until the underlying data actually changes, enabling `useSyncExternalStore` stability
 - **Channel-Based Subscriptions** - Listeners only receive notifications for the specific channels they care about, reducing unnecessary React renders
-- **Async Navigation** - Navigation capabilities are computed asynchronously in the background to avoid blocking renders
+- **Async Navigation** - Navigation capabilities are computed asynchronously in the background to avoid blocking renders. `canGoNext` / `isLastStep` are seeded synchronously from the machine's `progress.isLastStep` (on creation and on every step change), so the first render is already correct for synchronous graphs
 
 ## See Also
 
