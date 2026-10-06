@@ -128,6 +128,8 @@ export interface UseWizardLoading {
 	isValidating: boolean;
 	isSubmitting: boolean;
 	isNavigating: boolean;
+	/** A lazy step implementation is loading (WIZ-013). */
+	isLoadingStep: boolean;
 }
 
 /**
@@ -174,6 +176,8 @@ export interface UseWizardActions<T extends WizardData> {
 	cancel: CancelFn;
 	serialize: SerializeFn<T>;
 	restore: RestoreFn<T>;
+	/** Loads a lazy step's implementation ahead of navigation (WIZ-013). */
+	preloadStep: (stepId: StepId) => Promise<void>;
 }
 
 /**
@@ -223,6 +227,7 @@ export function pickDataActions<T extends WizardData>(
 		cancel: actions.cancel,
 		serialize: actions.serialize,
 		restore: actions.restore,
+		preloadStep: actions.preloadStep,
 	};
 }
 
@@ -433,11 +438,13 @@ export function useWizard<T extends WizardData>(
 			isValidating: loadingSnapshot.isValidating,
 			isSubmitting: loadingSnapshot.isSubmitting,
 			isNavigating: loadingSnapshot.isNavigating,
+			isLoadingStep: loadingSnapshot.isLoadingStep,
 		}),
 		[
 			loadingSnapshot.isValidating,
 			loadingSnapshot.isSubmitting,
 			loadingSnapshot.isNavigating,
+			loadingSnapshot.isLoadingStep,
 		],
 	);
 
