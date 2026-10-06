@@ -198,6 +198,8 @@ export class WizardMachine<T extends WizardData> {
 	 * overwrite the result of a later navigation's refresh.
 	 */
 	private guardRefreshSeq = 0;
+	/** WIZ-013: true when at least one step has a `load` (fast path otherwise). */
+	private hasLazySteps: boolean;
 	/** WIZ-013: in-flight lazy loads; concurrent requests share one promise. */
 	private stepLoads = new Map<StepId, Promise<WizardStepDefinition<T>>>();
 	/** WIZ-013: merged definitions of successfully loaded lazy steps. */
@@ -236,6 +238,9 @@ export class WizardMachine<T extends WizardData> {
 		this.events = events || {};
 		this.hasFunctionGuards = Object.values(definition.steps).some(
 			(step) => typeof step.enabled === "function",
+		);
+		this.hasLazySteps = Object.values(definition.steps).some(
+			(step) => step.load !== undefined,
 		);
 
 		if (!definition.steps[definition.initialStepId]) {
@@ -351,19 +356,15 @@ export class WizardMachine<T extends WizardData> {
 		// to lazy initial steps, so non-lazy wizards keep their exact behaviour.
 		const wasLazy = this.needsLoad(initialStepId);
 		let entered = true;
-		if (wasLazy) {
-			try {
-				await this.ensureStepsLoaded([initialStepId]);
-			} catch (error) {
-				if (left()) {
-					return;
-				}
-				this.reportLoadError(error);
+		const prep = this.prepareSteps([initialStepId], [], left);
+		if (isPromiseLike(prep)) {
+			const prepared = await prep;
+			if (prepared.status === "stale") {
+				return;
+			}
+			if (prepared.status === "failed") {
 				entered = false;
 				this.pendingInitialEntryGen = gen;
-			}
-			if (left()) {
-				return;
 			}
 		}
 
@@ -1965,22 +1966,6 @@ export class WizardMachine<T extends WizardData> {
 	}
 
 	/**
-	 * WIZ-013: loads every not-yet-loaded step in `stepIds` as a FOREGROUND
-	 * load (reflected in `isLoadingStep`). Callers must only await this when
-	 * `stepIds.some((id) => this.needsLoad(id))`, so non-lazy wizards never get
-	 * an extra microtask.
-	 */
-	private async ensureStepsLoaded(stepIds: StepId[]): Promise<void> {
-		const pending = [...new Set(stepIds)].filter((id) => this.needsLoad(id));
-		if (pending.length === 0) {
-			return;
-		}
-		await this.trackForegroundLoad(
-			Promise.all(pending.map((id) => this.loadStep(id))),
-		);
-	}
-
-	/**
 	 * WIZ-013: reference-counts foreground loads of the current generation.
 	 * 0 → 1 sets `isLoadingStep: true`, 1 → 0 sets it back to false (one
 	 * `onStateChange` each). Loads that started before a reset()/cancel()/
@@ -2029,18 +2014,12 @@ export class WizardMachine<T extends WizardData> {
 	 * WIZ-013: reports a load failure with phase "load", at most once per
 	 * error instance (all callers awaiting one failed attempt share it).
 	 */
-	private reportLoadError(error: unknown): void {
-		if (error instanceof Error) {
-			if (this.reportedLoadErrors.has(error)) {
-				return;
-			}
-			this.reportedLoadErrors.add(error);
+	private reportLoadError(error: WizardStepLoadError): void {
+		if (this.reportedLoadErrors.has(error)) {
+			return;
 		}
-		this.handleError(
-			error,
-			"load",
-			error instanceof WizardStepLoadError ? error.stepId : undefined,
-		);
+		this.reportedLoadErrors.add(error);
+		this.handleError(error, "load", error.stepId);
 	}
 
 	private isReportedLoadError(error: unknown): boolean {
@@ -2069,6 +2048,9 @@ export class WizardMachine<T extends WizardData> {
 		optional: StepId[],
 		isStale: () => boolean,
 	): PrepareResult | Promise<PrepareResult> {
+		if (!this.hasLazySteps) {
+			return PREPARE_READY;
+		}
 		const ids =
 			optional.length === 0
 				? required
