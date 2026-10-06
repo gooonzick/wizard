@@ -5,6 +5,7 @@ import AnalyticsExample from "./wizard-example/analytics-example.vue";
 import DataChangeExample from "./wizard-example/data-change-example.vue";
 import FieldBindingExample from "./wizard-example/field-binding-example.vue";
 import HistoryExample from "./wizard-example/history-example.vue";
+import LazyStepsExample from "./wizard-example/lazy-steps-example.vue";
 import PersistencePluginExample from "./wizard-example/persistence-plugin-example.vue";
 import PluginsExample from "./wizard-example/plugins-example.vue";
 import ProviderExample from "./wizard-example/provider-example.vue";
@@ -22,7 +23,8 @@ type Approach =
 	| "persistence-plugin"
 	| "plugins"
 	| "analytics"
-	| "data-change";
+	| "data-change"
+	| "lazy-steps";
 
 const approaches: Approach[] = [
 	"use-wizard",
@@ -35,6 +37,7 @@ const approaches: Approach[] = [
 	"plugins",
 	"analytics",
 	"data-change",
+	"lazy-steps",
 ];
 
 const approach = ref<Approach>("use-wizard");
@@ -73,6 +76,7 @@ watch(approach, (newVal) => {
 			<PluginsExample v-else-if="approach === 'plugins'" />
 			<AnalyticsExample v-else-if="approach === 'analytics'" />
 			<DataChangeExample v-else-if="approach === 'data-change'" />
+			<LazyStepsExample v-else-if="approach === 'lazy-steps'" />
 		</div>
 	</div>
 </template>

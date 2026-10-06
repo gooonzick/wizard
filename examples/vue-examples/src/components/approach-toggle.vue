@@ -12,7 +12,8 @@ type Approach =
 	| "persistence-plugin"
 	| "plugins"
 	| "analytics"
-	| "data-change";
+	| "data-change"
+	| "lazy-steps";
 
 interface Props {
 	modelValue: Approach;
@@ -89,6 +90,12 @@ defineEmits<
 			@click="$emit('update:modelValue', 'data-change')"
 		>
 			Data Change
+		</Button>
+		<Button
+			:variant="modelValue === 'lazy-steps' ? 'default' : 'outline'"
+			@click="$emit('update:modelValue', 'lazy-steps')"
+		>
+			Lazy Steps
 		</Button>
 	</div>
 </template>
