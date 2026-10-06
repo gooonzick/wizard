@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+	WizardAbortError,
 	WizardNavigationError,
 	WizardStepLoadError,
 	WizardValidationError,
@@ -11,6 +12,7 @@ import {
 	type WizardState,
 } from "../src/machine/wizard-machine";
 import type { WizardPlugin } from "../src/plugins/types";
+import type { WizardContext } from "../src/types/base";
 import type { WizardDefinition } from "../src/types/definition";
 import type {
 	LazyStepImplementation,
@@ -80,13 +82,14 @@ function createMachine(
 	definition: WizardDefinition<Data>,
 	events: WizardEvents<Data> = {},
 	plugins?: WizardPlugin<Data>[],
+	context: WizardContext = {},
 ) {
 	const states: Array<
 		Pick<WizardState<Data>, "currentStepId" | "isLoadingStep">
 	> = [];
 	const machine = new WizardMachine<Data>(
 		definition,
-		{},
+		context,
 		initialData,
 		{
 			...events,
@@ -1193,6 +1196,39 @@ describe("WIZ-013 lazy steps — drift during a pending load", () => {
 			{ currentStepId: "summary", isLoadingStep: false },
 			{ currentStepId: "summary", isLoadingStep: false },
 		]);
+	});
+
+	it("an abort during the load does not reject a validate() that re-targets the new current step", async () => {
+		const documentsValidate = vi.fn(() => ({ valid: true }));
+		const loader = controlledLoader({ validate: documentsValidate });
+		const summaryValidate = vi.fn(() => ({ valid: true }));
+		const def = lazyDefinition(loader.load, {});
+		def.steps.summary.validate = summaryValidate;
+		const controller = new AbortController();
+		const { machine } = createMachine(def, {}, undefined, {
+			signal: controller.signal,
+		});
+		await machine.goTo("documents", {
+			skipValidation: true,
+			skipLifecycle: true,
+		});
+
+		const v = machine.validate();
+		await flush();
+		await machine.goTo("summary", {
+			skipValidation: true,
+			skipLifecycle: true,
+		});
+		controller.abort();
+
+		loader.resolve();
+		await expect(v).resolves.toEqual({ valid: true });
+		expect(documentsValidate).not.toHaveBeenCalled();
+		expect(summaryValidate).toHaveBeenCalledTimes(1);
+
+		// The abort signal is still checked on entry to a fresh public call.
+		await expect(machine.validate()).rejects.toThrow(WizardAbortError);
+		expect(summaryValidate).toHaveBeenCalledTimes(1);
 	});
 
 	it("validate() still returns the superseded result when reset() lands during the load", async () => {

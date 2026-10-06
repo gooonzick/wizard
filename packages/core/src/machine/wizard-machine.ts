@@ -758,9 +758,29 @@ export class WizardMachine<T extends WizardData> {
 	 * A lazy current step (WIZ-013) is loaded first. If the user moves to
 	 * another step while that load is pending, the step they left is not
 	 * validated: the result is the validation of the NEW current step.
+	 *
+	 * Like every public method, the abort signal is checked only on entry: an
+	 * abort while this call is in flight (e.g. during the load) does not
+	 * reject it.
 	 */
-	async validate(): Promise<ValidationResult> {
-		this.checkAborted();
+	validate(): Promise<ValidationResult> {
+		// Not `async`: an aborted signal still surfaces as a rejected promise,
+		// without adding a microtask to the non-aborted path.
+		try {
+			this.checkAborted();
+		} catch (error) {
+			return Promise.reject(error);
+		}
+		return this.runValidation();
+	}
+
+	/**
+	 * Body of `validate()` without the abort check, so a re-target after a
+	 * drift during the load and the internal callers (goNext/goTo/submit,
+	 * which check the signal on their own entry) never re-check it mid-flight.
+	 * Owns all per-call state: the dedupe flag, the generation and the step id.
+	 */
+	private async runValidation(): Promise<ValidationResult> {
 		// Reset the per-call dedupe flag; set only when this call self-reports a
 		// thrown validator error below.
 		this.validateAlreadyReported = false;
@@ -785,7 +805,7 @@ export class WizardMachine<T extends WizardData> {
 			const prepared = await prep;
 			if (prepared.status === "stale") {
 				if (!superseded()) {
-					return this.validate();
+					return this.runValidation();
 				}
 				return {
 					valid: false,
@@ -1065,7 +1085,7 @@ export class WizardMachine<T extends WizardData> {
 			}
 
 			// Validate before submit (validate() is generation-guarded per F6)
-			const validationResult = await this.validate();
+			const validationResult = await this.runValidation();
 			// A reset()/cancel()/restore() during the awaited validator supersedes
 			// this submit: do not write "error", report, or run the (now wrong)
 			// step's onSubmit against the fresh state.
@@ -1150,7 +1170,7 @@ export class WizardMachine<T extends WizardData> {
 			}
 
 			// Validate current step
-			const validationResult = await this.validate();
+			const validationResult = await this.runValidation();
 			// A reset()/cancel()/restore() during the awaited validator supersedes
 			// this transition: currentStep is no longer the step that was validated.
 			if (this.isTransitionStale()) {
@@ -1373,7 +1393,7 @@ export class WizardMachine<T extends WizardData> {
 						throw prepared.error;
 					}
 				}
-				const validationResult = await this.validate();
+				const validationResult = await this.runValidation();
 				// A reset()/cancel()/restore() during the awaited validator
 				// supersedes this transition.
 				if (this.isTransitionStale()) {
