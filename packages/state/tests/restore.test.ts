@@ -65,6 +65,7 @@ describe("WizardStateManager.runRestore", () => {
 			isValidating: false,
 			isSubmitting: false,
 			isNavigating: false,
+			isLoadingStep: false,
 		});
 	});
 
@@ -131,6 +132,7 @@ describe("WizardStateManager.runRestore", () => {
 			isValidating: false,
 			isSubmitting: false,
 			isNavigating: false,
+			isLoadingStep: false,
 		});
 	});
 

@@ -12,6 +12,7 @@ import type {
 	StateSnapshot,
 	SubscriptionChannel,
 	SubscriptionListener,
+	TrackedLoadingFlag,
 	ValidationState,
 	WizardStateManagerOptions,
 } from "./types";
@@ -36,7 +37,7 @@ export class WizardStateManager<T extends WizardData> {
 	private loadingCache: LoadingState;
 	// Per-flag reference counts for trackLoading(): a flag stays true while any
 	// tracked operation holding it is in flight.
-	private loadingCounts: Record<keyof LoadingState, number> = {
+	private loadingCounts: Record<TrackedLoadingFlag, number> = {
 		isValidating: 0,
 		isSubmitting: 0,
 		isNavigating: 0,
@@ -90,15 +91,18 @@ export class WizardStateManager<T extends WizardData> {
 			["all", new Set()],
 		]);
 
-		// Initialize loading state (UI concern, not from machine)
+		// Initialize state cache
+		const snapshot = this.machine.snapshot;
+
+		// Loading flags: the three UI flags start off; isLoadingStep mirrors the
+		// machine, which may already be loading a lazy initial step (WIZ-013).
 		this.loadingCache = {
 			isValidating: false,
 			isSubmitting: false,
 			isNavigating: false,
+			isLoadingStep: snapshot.isLoadingStep,
 		};
 
-		// Initialize state cache
-		const snapshot = this.machine.snapshot;
 		this.snapshotCache = snapshot;
 		this.lastState = snapshot;
 		this.stateCache = {
@@ -509,7 +513,7 @@ export class WizardStateManager<T extends WizardData> {
 	 * nothing when they later settle.
 	 */
 	async trackLoading<R>(
-		flag: keyof LoadingState,
+		flag: TrackedLoadingFlag,
 		fn: () => Promise<R>,
 	): Promise<R> {
 		const epoch = this.loadingEpoch;
@@ -530,7 +534,7 @@ export class WizardStateManager<T extends WizardData> {
 	/**
 	 * Set a single loading flag, notifying "loading" only on an actual change.
 	 */
-	private setLoadingFlag(flag: keyof LoadingState, value: boolean): void {
+	private setLoadingFlag(flag: TrackedLoadingFlag, value: boolean): void {
 		if (this.loadingCache[flag] === value) return;
 		this.setLoadingState({ [flag]: value });
 	}
@@ -740,6 +744,21 @@ export class WizardStateManager<T extends WizardData> {
 			)
 		) {
 			affected.push("navigation");
+		}
+
+		// WIZ-013: isLoadingStep is owned by the machine. Mirror it into the
+		// loading cache; when a lazy step finished loading in place (initial
+		// step, after restore()) machine.currentStep changed identity, so the
+		// state slice must pick up the merged definition too.
+		if (newState.isLoadingStep !== oldState.isLoadingStep) {
+			this.loadingCache = {
+				...this.loadingCache,
+				isLoadingStep: newState.isLoadingStep,
+			};
+			affected.push("loading");
+			if (this.machine.currentStep !== this.stateCache.currentStep) {
+				affected.push("state");
+			}
 		}
 
 		if (affected.length > 0) {

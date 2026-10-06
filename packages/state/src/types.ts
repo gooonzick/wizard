@@ -39,13 +39,23 @@ export interface ValidationState {
 }
 
 /**
- * Loading state slice (UI concerns managed by state manager, not core machine)
+ * Loading flags. `isValidating` / `isSubmitting` / `isNavigating` are UI flags
+ * owned by the manager; `isLoadingStep` mirrors the machine.
  */
 export interface LoadingState {
 	isValidating: boolean;
 	isSubmitting: boolean;
 	isNavigating: boolean;
+	/**
+	 * WIZ-013: a lazy step implementation is loading. Mirrors
+	 * `machine.snapshot.isLoadingStep` (owned by the machine, not by
+	 * `trackLoading()`).
+	 */
+	isLoadingStep: boolean;
 }
+
+/** Loading flags owned by the manager's reference-counted `trackLoading()`. */
+export type TrackedLoadingFlag = Exclude<keyof LoadingState, "isLoadingStep">;
 
 /**
  * State snapshot interface for wizard state

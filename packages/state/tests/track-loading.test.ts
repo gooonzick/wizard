@@ -107,6 +107,7 @@ describe("WizardStateManager.trackLoading", () => {
 			isNavigating: true,
 			isValidating: false,
 			isSubmitting: false,
+			isLoadingStep: false,
 		});
 
 		nav.resolve();
