@@ -196,6 +196,58 @@ describe("WIZ-013 lazy steps — plumbing", () => {
 		expect(lazy.whenCalls).toBe(eager.whenCalls);
 	});
 
+	it("preloadStep of the CURRENT step emits one onStateChange once its definition is replaced", async () => {
+		const validate = vi.fn(() => ({ valid: true }));
+		const { machine, states } = createMachine(
+			lazyDefinition(vi.fn(async () => ({ validate }))),
+			{
+				onStateChange: () => {
+					seen.push(machine.currentStep.validate);
+				},
+			},
+		);
+		const seen: unknown[] = [];
+		await machine.goTo("documents", {
+			skipValidation: true,
+			skipLifecycle: true,
+		});
+		states.length = 0;
+		seen.length = 0;
+
+		await machine.preloadStep("documents");
+		expect(states).toEqual([
+			{ currentStepId: "documents", isLoadingStep: false },
+		]);
+		expect(seen).toEqual([validate]);
+
+		// Already loaded: nothing to replace, no emission.
+		await machine.preloadStep("documents");
+		expect(states).toHaveLength(1);
+	});
+
+	it("preloadStep of the current step joining a foreground load adds no extra emission", async () => {
+		const loader = controlledLoader({ validate: () => ({ valid: true }) });
+		const { machine, states } = createMachine(lazyDefinition(loader.load));
+		await machine.goTo("documents", {
+			skipValidation: true,
+			skipLifecycle: true,
+		});
+		states.length = 0;
+
+		const v = machine.validate();
+		const pre = machine.preloadStep("documents");
+		await flush();
+		loader.resolve();
+		await Promise.all([v, pre]);
+		await flush();
+		expect(loader.load).toHaveBeenCalledTimes(1);
+		expect(states.map((s) => s.isLoadingStep)).toEqual([
+			true,
+			false,
+			false, // validate()
+		]);
+	});
+
 	it("preloadStep rejects for an unknown step id", async () => {
 		const { machine } = createMachine(lazyDefinition(vi.fn(async () => ({}))));
 		const error = await machine.preloadStep("nope").catch((e) => e);
@@ -858,6 +910,32 @@ describe("WIZ-013 lazy steps — validateAll", () => {
 		expect(onError).not.toHaveBeenCalled();
 		expect(pluginError).not.toHaveBeenCalled();
 		expect(states.length).toBe(before); // no emission, no isLoadingStep flip
+	});
+
+	it("emits exactly one onStateChange when it loaded the CURRENT step (with or without a status write)", async () => {
+		for (const updateStatuses of [false, true]) {
+			const validate = vi.fn(() => ({
+				valid: false,
+				errors: { passport: "required" },
+			}));
+			const { machine, states } = createMachine(
+				lazyDefinition(vi.fn(async () => ({ validate }))),
+			);
+			await machine.goTo("documents", {
+				skipValidation: true,
+				skipLifecycle: true,
+			});
+			states.length = 0;
+
+			await machine.validateAll({ updateStatuses });
+			expect(states).toEqual([
+				{ currentStepId: "documents", isLoadingStep: false },
+			]);
+			expect(machine.currentStep.validate).toBe(validate);
+			expect(machine.snapshot.stepStatuses.documents).toBe(
+				updateStatuses ? "error" : "active",
+			);
+		}
 	});
 });
 

@@ -214,6 +214,8 @@ export class WizardMachine<T extends WizardData> {
 	/** WIZ-013: pending foreground loads of generation `foregroundLoadsGen`. */
 	private foregroundLoads = 0;
 	private foregroundLoadsGen = -1;
+	/** WIZ-013: step ids of those foreground loads (reference-counted). */
+	private foregroundLoadIds = new Map<StepId, number>();
 	/** WIZ-013: load errors already reported (each failed attempt reports once). */
 	private reportedLoadErrors = new WeakSet<Error>();
 	/**
@@ -857,6 +859,9 @@ export class WizardMachine<T extends WizardData> {
 	 *
 	 * Lazy steps (WIZ-013) are loaded in the background (no `isLoadingStep`,
 	 * no `onError`); a failed load marks that step invalid with `errors._error`.
+	 * Without a status write it emits one onStateChange only when it loaded the
+	 * current step (so bindings pick up the new `currentStep` definition); with
+	 * a status write, that write's single emission covers it.
 	 */
 	async validateAll(options?: {
 		updateStatuses?: boolean;
@@ -884,6 +889,7 @@ export class WizardMachine<T extends WizardData> {
 			([stepId, step]) => this.needsLoad(stepId) && step.enabled !== false,
 		);
 		const loadErrors = new Map<StepId, ValidationResult>();
+		let loadedCurrentStepId: StepId | undefined;
 		let enabledIds: Set<StepId> | undefined;
 		if (hasUnloaded) {
 			enabledIds = new Set();
@@ -902,6 +908,8 @@ export class WizardMachine<T extends WizardData> {
 				for (const [index, result] of settled.entries()) {
 					if (result.status === "rejected") {
 						loadErrors.set(toLoad[index], toErrorResult(result.reason));
+					} else if (toLoad[index] === this.state.currentStepId) {
+						loadedCurrentStepId = toLoad[index];
 					}
 				}
 			}
@@ -945,6 +953,13 @@ export class WizardMachine<T extends WizardData> {
 			}
 			this.state = { ...this.state, stepStatuses: nextStatuses };
 			this.notifyStateChange(); // exactly one emit
+		} else if (
+			loadedCurrentStepId !== undefined &&
+			this.generation === gen &&
+			this.shouldNotifyBackgroundLoad(loadedCurrentStepId)
+		) {
+			// WIZ-013: the current step's definition was replaced by the load.
+			this.notifyStateChange();
 		}
 
 		return {
@@ -1451,6 +1466,11 @@ export class WizardMachine<T extends WizardData> {
 	 * `isLoadingStep` and never reports through `onError`: a failure rejects
 	 * the returned promise with `WizardStepLoadError` and the next attempt
 	 * retries. Resolves immediately for steps without `load` or already loaded.
+	 *
+	 * When the loaded step is the CURRENT step, emits one `onStateChange` so
+	 * bindings pick up the new `currentStep` definition (skipped when a
+	 * foreground load of that step is in flight — its `isLoadingStep` flip
+	 * emits instead — or after `destroy()`).
 	 */
 	async preloadStep(stepId: StepId): Promise<void> {
 		if (!this.isKnownStepId(stepId)) {
@@ -1464,6 +1484,9 @@ export class WizardMachine<T extends WizardData> {
 			return;
 		}
 		await this.loadStep(stepId);
+		if (this.shouldNotifyBackgroundLoad(stepId)) {
+			this.notifyStateChange();
+		}
 	}
 
 	/**
@@ -2009,7 +2032,10 @@ export class WizardMachine<T extends WizardData> {
 	 * settle after destroy() never touch the flag, and a load started after
 	 * destroy() never sets it.
 	 */
-	private async trackForegroundLoad<R>(work: Promise<R>): Promise<R> {
+	private async trackForegroundLoad<R>(
+		work: Promise<R>,
+		stepIds: StepId[],
+	): Promise<R> {
 		if (this.isDestroyed) {
 			return work;
 		}
@@ -2017,8 +2043,12 @@ export class WizardMachine<T extends WizardData> {
 		if (this.foregroundLoadsGen !== gen) {
 			this.foregroundLoadsGen = gen;
 			this.foregroundLoads = 0;
+			this.foregroundLoadIds.clear();
 		}
 		this.foregroundLoads += 1;
+		for (const id of stepIds) {
+			this.foregroundLoadIds.set(id, (this.foregroundLoadIds.get(id) ?? 0) + 1);
+		}
 		if (this.foregroundLoads === 1) {
 			this.setLoadingStep(true);
 		}
@@ -2030,12 +2060,38 @@ export class WizardMachine<T extends WizardData> {
 				this.generation === gen &&
 				!this.isDestroyed
 			) {
+				for (const id of stepIds) {
+					const count = (this.foregroundLoadIds.get(id) ?? 1) - 1;
+					if (count === 0) {
+						this.foregroundLoadIds.delete(id);
+					} else {
+						this.foregroundLoadIds.set(id, count);
+					}
+				}
 				this.foregroundLoads -= 1;
 				if (this.foregroundLoads === 0) {
 					this.setLoadingStep(false);
 				}
 			}
 		}
+	}
+
+	/**
+	 * WIZ-013: after a BACKGROUND load (preloadStep / validateAll) of `stepId`
+	 * succeeded: true when it replaced the definition of the active step and
+	 * no other emission is guaranteed to follow — the machine is live, the
+	 * step is still current, and no foreground load of it is in flight in this
+	 * generation (that load's `isLoadingStep: false` flip emits instead).
+	 */
+	private shouldNotifyBackgroundLoad(stepId: StepId): boolean {
+		return (
+			!this.isDestroyed &&
+			stepId === this.state.currentStepId &&
+			!(
+				this.foregroundLoadsGen === this.generation &&
+				this.foregroundLoadIds.has(stepId)
+			)
+		);
 	}
 
 	private setLoadingStep(value: boolean): void {
@@ -2109,6 +2165,7 @@ export class WizardMachine<T extends WizardData> {
 		if (toLoad.length > 0) {
 			const settled = await this.trackForegroundLoad(
 				Promise.allSettled(toLoad.map((id) => this.loadStep(id))),
+				toLoad,
 			);
 			if (isStale()) {
 				return { status: "stale" };
