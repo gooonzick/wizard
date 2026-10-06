@@ -754,18 +754,21 @@ export class WizardStateManager<T extends WizardData> {
 		}
 
 		// WIZ-013: isLoadingStep is owned by the machine. Mirror it into the
-		// loading cache; when a lazy step finished loading in place (initial
-		// step, after restore()) machine.currentStep changed identity, so the
-		// state slice must pick up the merged definition too.
+		// loading cache.
 		if (newState.isLoadingStep !== oldState.isLoadingStep) {
 			this.loadingCache = {
 				...this.loadingCache,
 				isLoadingStep: newState.isLoadingStep,
 			};
 			affected.push("loading");
-			if (this.machine.currentStep !== this.stateCache.currentStep) {
-				affected.push("state");
-			}
+		}
+
+		// WIZ-013: a lazy step finished loading in place (initial step, after
+		// restore(), or a background preloadStep()/validateAll() of the current
+		// step) and machine.currentStep changed identity without any other
+		// state change, so the state slice must pick up the merged definition.
+		if (this.machine.currentStep !== this.stateCache.currentStep) {
+			affected.push("state");
 		}
 
 		if (affected.length > 0) {

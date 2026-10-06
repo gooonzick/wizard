@@ -84,6 +84,44 @@ describe("WizardStateManager — isLoadingStep (WIZ-013)", () => {
 		expect(manager.getStateSnapshot().currentStep.onEnter).toBe(onEnter);
 	});
 
+	it("refreshes currentStep when a background preload replaces the current definition", async () => {
+		const onEnter = vi.fn();
+		const load = vi
+			.fn()
+			.mockRejectedValueOnce(new Error("offline"))
+			.mockResolvedValueOnce({ onEnter }) as unknown as StepLoader<Data>;
+		const definition: WizardDefinition<Data> = {
+			id: "state-lazy-bg",
+			initialStepId: "a",
+			steps: { a: { id: "a", load } },
+		};
+		let manager!: WizardStateManager<Data>;
+		const machine = new WizardMachine<Data>(
+			definition,
+			{},
+			{ name: "" },
+			{
+				onError: () => {},
+				onStateChange: (s) =>
+					manager?.handleStateChange(s, manager.getSnapshot()),
+			},
+		);
+		manager = new WizardStateManager<Data>(machine, "a");
+		await flush();
+		// The initial load failed: the current step is still the skeleton.
+		const skeleton = manager.getStateSnapshot().currentStep;
+		expect(skeleton.onEnter).toBeUndefined();
+		const onState = vi.fn();
+		manager.subscribe(onState, "state");
+
+		await machine.preloadStep("a");
+
+		expect(onState).toHaveBeenCalled();
+		const merged = manager.getStateSnapshot().currentStep;
+		expect(merged).not.toBe(skeleton);
+		expect(merged.onEnter).toBe(onEnter);
+	});
+
 	it("is untouched by trackLoading and forceLoadingOff paths", async () => {
 		const { machine, manager } = setup();
 		await flush();

@@ -64,7 +64,11 @@ describe("history-only changes refresh the navigation channel", () => {
 			machine,
 			definition.initialStepId,
 		);
+		const lastSeen = manager.getSnapshot();
 		await machine.goNext();
+		// Bring the state slice (cached currentStep) up to the machine without
+		// touching the navigation cache.
+		manager.notifySubscribers(["state"]);
 
 		const navListener = vi.fn();
 		const stateListener = vi.fn();
@@ -73,7 +77,7 @@ describe("history-only changes refresh the navigation channel", () => {
 
 		// Same data / step / statuses / canGoBack as the manager's last state:
 		// only the machine's history and visited arrays moved.
-		manager.handleMachineStateChange({ ...manager.getSnapshot() });
+		manager.handleMachineStateChange({ ...lastSeen });
 
 		expect(navListener).toHaveBeenCalledTimes(1);
 		expect(stateListener).not.toHaveBeenCalled();
