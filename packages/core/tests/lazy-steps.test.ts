@@ -55,6 +55,17 @@ function controlledLoader(impl: LazyStepImplementation<Data> = {}) {
 	};
 }
 
+/** A hook whose every call parks on a fresh deferred the test releases. */
+function parkingHook() {
+	const calls: Array<ReturnType<typeof deferred<void>>> = [];
+	const fn = vi.fn(() => {
+		const d = deferred<void>();
+		calls.push(d);
+		return d.promise;
+	});
+	return { fn, release: (i = calls.length - 1) => calls[i].resolve() };
+}
+
 /** account -> documents (lazy) -> summary */
 function lazyDefinition(
 	load: StepLoader<Data>,
@@ -1552,17 +1563,6 @@ describe("WIZ-013 lazy steps — goBack and plugin veto", () => {
 });
 
 describe("WIZ-013 lazy steps — composed hooks stop when superseded", () => {
-	/** A hook whose every call parks on a fresh deferred the test releases. */
-	function parkingHook() {
-		const calls: Array<ReturnType<typeof deferred<void>>> = [];
-		const fn = vi.fn(() => {
-			const d = deferred();
-			calls.push(d);
-			return d.promise;
-		});
-		return { fn, release: (i = calls.length - 1) => calls[i].resolve() };
-	}
-
 	function lazyStartDefinition(
 		load: StepLoader<Data>,
 		start: Partial<WizardStepDefinition<Data>> = {},
@@ -1742,5 +1742,138 @@ describe("WIZ-013 lazy steps — composed hooks stop when superseded", () => {
 		await machine.goNext();
 		expect(order).toEqual(["skeleton", "loaded"]);
 		expect(machine.snapshot.currentStepId).toBe("summary");
+	});
+});
+
+describe("WIZ-013 lazy steps — concurrent operations wait for the initial-entry replay", () => {
+	/** start (lazy; first load fails, then the implementation loads) -> end */
+	function setup(plugins?: WizardPlugin<Data>[]) {
+		const onEnter = parkingHook();
+		const validate = vi.fn(() => ({ valid: true }));
+		const onSubmit = vi.fn();
+		const onLeave = vi.fn();
+		const load = vi
+			.fn<StepLoader<Data>>()
+			.mockRejectedValueOnce(new Error("offline"))
+			.mockResolvedValue({ onEnter: onEnter.fn, validate, onSubmit, onLeave });
+		const onStepEnter = vi.fn();
+		const onStepLeave = vi.fn();
+		const { machine } = createMachine(
+			{
+				id: "replay",
+				initialStepId: "start",
+				steps: {
+					start: { id: "start", load, next: { type: "static", to: "end" } },
+					end: { id: "end" },
+				},
+			},
+			{ onStepEnter, onStepLeave },
+			plugins,
+		);
+		return {
+			machine,
+			load,
+			onEnter,
+			validate,
+			onSubmit,
+			onLeave,
+			onStepEnter,
+			onStepLeave,
+		};
+	}
+
+	it("goNext() started during a validate()-driven replay waits for onEnter, then validates, submits, leaves and navigates", async () => {
+		const t = setup();
+		await flush();
+
+		const v = t.machine.validate();
+		await flush();
+		expect(t.onEnter.fn).toHaveBeenCalledTimes(1);
+
+		const n = t.machine.goNext();
+		await flush();
+		expect(t.validate).not.toHaveBeenCalled();
+		expect(t.onSubmit).not.toHaveBeenCalled();
+		expect(t.onLeave).not.toHaveBeenCalled();
+		expect(t.onStepLeave).not.toHaveBeenCalled();
+		expect(t.machine.snapshot.currentStepId).toBe("start");
+
+		t.onEnter.release();
+		await expect(v).resolves.toMatchObject({ valid: true });
+		await expect(n).resolves.toBeUndefined();
+
+		expect(t.onEnter.fn).toHaveBeenCalledTimes(1);
+		expect(t.load).toHaveBeenCalledTimes(2);
+		expect(t.validate).toHaveBeenCalledTimes(2);
+		expect(t.onSubmit).toHaveBeenCalledTimes(1);
+		expect(t.onLeave).toHaveBeenCalledTimes(1);
+		expect(t.onStepEnter.mock.calls.map((c) => c[0])).toEqual(["start", "end"]);
+		expect(t.onStepLeave).toHaveBeenCalledWith("start", initialData);
+		expect(t.machine.snapshot.currentStepId).toBe("end");
+		expect(t.onStepEnter.mock.invocationCallOrder[0]).toBeLessThan(
+			t.validate.mock.invocationCallOrder[0],
+		);
+	});
+
+	it("goTo(x, { skipValidation }) started during the replay waits for it, then runs the loaded onLeave", async () => {
+		const t = setup();
+		await flush();
+
+		const v = t.machine.validate();
+		await flush();
+		const g = t.machine.goTo("end", { skipValidation: true });
+		await flush();
+		expect(t.onLeave).not.toHaveBeenCalled();
+		expect(t.onStepLeave).not.toHaveBeenCalled();
+		expect(t.machine.snapshot.currentStepId).toBe("start");
+
+		t.onEnter.release();
+		await v;
+		await expect(g).resolves.toBeUndefined();
+
+		expect(t.onEnter.fn).toHaveBeenCalledTimes(1);
+		expect(t.onLeave).toHaveBeenCalledTimes(1);
+		expect(t.onStepLeave).toHaveBeenCalledWith("start", initialData);
+		expect(t.onStepEnter.mock.calls.map((c) => c[0])).toEqual(["start", "end"]);
+		expect(t.machine.snapshot.currentStepId).toBe("end");
+	});
+
+	it("a second validate() during the replay waits for it and does not replay again", async () => {
+		const t = setup();
+		await flush();
+
+		const v1 = t.machine.validate();
+		await flush();
+		const v2 = t.machine.validate();
+		await flush();
+		expect(t.validate).not.toHaveBeenCalled();
+
+		t.onEnter.release();
+		await Promise.all([v1, v2]);
+		expect(t.onEnter.fn).toHaveBeenCalledTimes(1);
+		expect(t.onStepEnter).toHaveBeenCalledTimes(1);
+		expect(t.validate).toHaveBeenCalledTimes(2);
+	});
+
+	it("operations of a new generation do not wait for a superseded replay", async () => {
+		const t = setup();
+		await flush();
+
+		void t.machine.validate();
+		await flush();
+		expect(t.onEnter.fn).toHaveBeenCalledTimes(1);
+
+		t.machine.reset();
+		await flush();
+		// reset() re-enters the (now loaded) initial step; release that entry.
+		expect(t.onEnter.fn).toHaveBeenCalledTimes(2);
+		t.onEnter.release(1);
+		await flush();
+
+		// The superseded replay (call 0) is still parked.
+		await t.machine.goNext();
+		expect(t.machine.snapshot.currentStepId).toBe("end");
+		t.onEnter.release(0);
+		await flush();
 	});
 });

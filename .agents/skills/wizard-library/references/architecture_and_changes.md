@@ -103,6 +103,10 @@ Invariants:
   runs its `onLeave` (skeleton or loaded) / `events.onStepLeave` — lifecycle hooks of a step
   run only if it was entered. beforeTransition / afterTransition, history, statuses and the
   target load / entry are unchanged; the commit drops the marker.
+  An in-flight replay is published as `initialEntryReplay` (`{ gen, promise }`, set before
+  `onEnter` runs, cleared when it settles): any `prepareSteps` whose ids include the initial
+  step and `navigateToStep` (right before `onLeave`) await that same promise in its generation
+  instead of proceeding or replaying again; the sync fast path checks it synchronously.
   The same skip applies while the initial step's FIRST load is still in flight
   (`initialLoadInFlightGen`, set synchronously in `initializeFirstStep` for a lazy initial
   step, cleared when that load settles): `navigateToStep` checks EITHER marker

@@ -250,6 +250,18 @@ export class WizardMachine<T extends WizardData> {
 	 * skips the entry when the wizard left it during the load.
 	 */
 	private initialLoadInFlightGen: number | undefined;
+	/**
+	 * WIZ-013: the initial step's entry replay (see `replayInitialEntry`) while
+	 * it is in flight, with the generation that started it. Operations of that
+	 * generation that use the initial step (validation's / navigation's
+	 * `prepareSteps`, and `navigateToStep` right before `onLeave`) await this
+	 * same promise instead of proceeding while `onEnter` runs — and never start
+	 * a second replay. Cleared when the replay settles; a new generation never
+	 * awaits an older replay.
+	 */
+	private initialEntryReplay:
+		| { readonly gen: number; promise: Promise<void> }
+		| undefined;
 	/** WIZ-013: staleness check for loads inside a transition / submit. */
 	private readonly transitionAborted = (): boolean =>
 		this.isTransitionStale() || this.isDestroyed;
@@ -1700,19 +1712,33 @@ export class WizardMachine<T extends WizardData> {
 			return;
 		}
 
-		// Call onLeave for current step (re-checked here: a concurrent validate()
-		// may have replayed a pending initial entry during the awaits above).
-		if (!skipLifecycle && !this.isLeavingUnenteredInitialStep()) {
-			if (currentStep.onLeave) {
-				await this.runLifecycleHook(currentStep, "onLeave", () =>
-					this.isTransitionStale(),
-				);
+		if (!skipLifecycle) {
+			// WIZ-013: a concurrent validate() may have started replaying the
+			// initial step's entry during the awaits above: the step is left only
+			// once its onEnter has finished.
+			const replay = this.inFlightInitialEntryReplay([
+				this.state.currentStepId,
+			]);
+			if (replay) {
+				await replay;
+				if (this.isTransitionStale()) {
+					return;
+				}
 			}
-			// FIX 2: a reset()/cancel() during onLeave supersedes this transition.
-			if (this.isTransitionStale()) {
-				return;
+			// Call onLeave for current step (re-checked here: a concurrent
+			// validate() may have replayed a pending initial entry meanwhile).
+			if (!this.isLeavingUnenteredInitialStep()) {
+				if (currentStep.onLeave) {
+					await this.runLifecycleHook(currentStep, "onLeave", () =>
+						this.isTransitionStale(),
+					);
+				}
+				// FIX 2: a reset()/cancel() during onLeave supersedes this transition.
+				if (this.isTransitionStale()) {
+					return;
+				}
+				this.events.onStepLeave?.(currentStep.id, this.state.data);
 			}
-			this.events.onStepLeave?.(currentStep.id, this.state.data);
 		}
 
 		// Update history stack (commit AFTER the veto/stale checks above).
@@ -2229,6 +2255,7 @@ export class WizardMachine<T extends WizardData> {
 		const toLoad = ids.filter((id) => this.needsLoad(id));
 		if (
 			toLoad.length === 0 &&
+			!this.inFlightInitialEntryReplay(ids) &&
 			!(replayPendingEntry && this.isInitialEntryPending(ids))
 		) {
 			return PREPARE_READY;
@@ -2276,8 +2303,14 @@ export class WizardMachine<T extends WizardData> {
 				return { status: "failed", error: failure };
 			}
 		}
-		if (replayPendingEntry && this.isInitialEntryPending(ids)) {
-			await this.replayInitialEntry(isStale);
+		// Start the pending initial-step entry replay (opt-in), or wait for one
+		// already in flight (started by another operation) before using the step.
+		const replay =
+			replayPendingEntry && this.isInitialEntryPending(ids)
+				? this.replayInitialEntry()
+				: this.inFlightInitialEntryReplay(ids);
+		if (replay) {
+			await replay;
 			if (isStale()) {
 				return { status: "stale" };
 			}
@@ -2326,35 +2359,72 @@ export class WizardMachine<T extends WizardData> {
 	}
 
 	/**
+	 * WIZ-013: the in-flight initial-entry replay of the current generation, or
+	 * `undefined` (also when `ids` is given and does not include the initial
+	 * step). Synchronous.
+	 */
+	private inFlightInitialEntryReplay(
+		ids?: StepId[],
+	): Promise<void> | undefined {
+		const replay = this.initialEntryReplay;
+		if (
+			replay === undefined ||
+			replay.gen !== this.generation ||
+			(ids !== undefined && !ids.includes(this.definition.initialStepId))
+		) {
+			return undefined;
+		}
+		return replay.promise;
+	}
+
+	/**
 	 * WIZ-013: runs the initial step's skipped entry (loaded `onEnter`, then
 	 * `events.onStepEnter`) at most once. A throwing `onEnter` is reported
 	 * (phase "lifecycle") and skips `onStepEnter`; the caller's operation
-	 * continues either way. Nothing more runs when superseded or when the
-	 * wizard left the initial step during `onEnter`.
+	 * continues either way. Nothing more runs when superseded (new generation
+	 * or destroyed) or when the wizard left the initial step during `onEnter`.
+	 * The replay is published as `initialEntryReplay` (synchronously, before
+	 * `onEnter` runs) so concurrent operations wait for it.
 	 */
-	private async replayInitialEntry(isStale: () => boolean): Promise<void> {
+	private replayInitialEntry(): Promise<void> {
 		this.pendingInitialEntryGen = undefined;
+		const replay = { gen: this.generation, promise: Promise.resolve() };
+		this.initialEntryReplay = replay;
+		replay.promise = this.runInitialEntryReplay(replay);
+		return replay.promise;
+	}
+
+	private async runInitialEntryReplay(replay: {
+		readonly gen: number;
+	}): Promise<void> {
+		const isStale = () => this.generation !== replay.gen || this.isDestroyed;
 		const initialStepId = this.definition.initialStepId;
 		const step = this.resolvedStep(initialStepId);
 		try {
-			if (step.onEnter) {
-				await this.runLifecycleHook(
-					step,
-					"onEnter",
-					() => isStale() || this.state.currentStepId !== initialStepId,
-				);
+			try {
+				if (step.onEnter) {
+					await this.runLifecycleHook(
+						step,
+						"onEnter",
+						() => isStale() || this.state.currentStepId !== initialStepId,
+					);
+				}
+			} catch (error) {
+				if (!isStale()) {
+					this.handleError(error, "lifecycle");
+				}
+				return;
 			}
-		} catch (error) {
-			if (!isStale()) {
-				this.handleError(error, "lifecycle");
+			if (isStale() || this.state.currentStepId !== initialStepId) {
+				return;
 			}
-			return;
+			this.events.onStepEnter?.(initialStepId, this.state.data);
+			this.debug(`Entered initial step: ${initialStepId}`);
+		} finally {
+			if (this.initialEntryReplay === replay) {
+				this.initialEntryReplay = undefined;
+			}
 		}
-		if (isStale() || this.state.currentStepId !== initialStepId) {
-			return;
-		}
-		this.events.onStepEnter?.(initialStepId, this.state.data);
-		this.debug(`Entered initial step: ${initialStepId}`);
 	}
 
 	/**
