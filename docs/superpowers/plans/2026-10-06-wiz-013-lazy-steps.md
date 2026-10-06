@@ -175,8 +175,10 @@ In `packages/core/src/index.ts`: add `WizardStepLoadError` to the `./errors` exp
 
 - [ ] **Step 4: Run test + typecheck**
 
-Run: `cd packages/core && npx vitest run tests/lazy-steps-module.test.ts && npx tsc --noEmit -p tsconfig.json`
-Expected: PASS; no type errors. (If `tsc -p` is not the package's pattern, use `pnpm --filter @gooonzick/wizard-core typecheck`.)
+First update the existing compile-time test `packages/core/tests/plugins.test.ts` ("ErrorContext phase is a fixed union", ~line 53): add `| "load"` to the expected union.
+
+Run: `cd packages/core && npx vitest run tests/lazy-steps-module.test.ts && cd ../.. && pnpm --filter @gooonzick/wizard-core typecheck`
+Expected: PASS; no type errors. (Do not use `npx tsc -p` directly — the composite project reference reports TS6305 when `dist` is stale.)
 
 - [ ] **Step 5: Commit**
 
@@ -362,7 +364,7 @@ export function mergeLazyImplementation<T>(
 	for (const key of LAZY_KEYS) {
 		const hook = impl[key];
 		if (hook !== undefined) {
-			(merged as Record<string, unknown>)[key] = hook;
+			(merged as unknown as Record<string, unknown>)[key] = hook;
 		}
 	}
 	return merged;
@@ -417,11 +419,11 @@ git commit -m "feat(core): add lazy step loader module (WIZ-013)"
 
 - [ ] **Step 1: Write the failing tests**
 
-Append to `packages/core/tests/builders.test.ts` (add `createStep` / `createWizard` imports if missing — check the file's existing imports first):
+Append to `packages/core/tests/builders.test.ts` (the file imports `describe, expect, test` from vitest — use `test`, not `it`; add `createStep` / `createWizard` imports if missing):
 
 ```ts
 describe("StepBuilder.lazy (WIZ-013)", () => {
-	it("sets the step's load function", () => {
+	test("sets the step's load function", () => {
 		const loader = async () => ({ onEnter: () => {} });
 		const step = createStep<{ name: string }>("heavy")
 			.next("done")
@@ -431,7 +433,7 @@ describe("StepBuilder.lazy (WIZ-013)", () => {
 		expect(step.next).toEqual({ type: "static", to: "done" });
 	});
 
-	it("is chainable from createWizard().step()", () => {
+	test("is chainable from createWizard().step()", () => {
 		const loader = async () => ({});
 		const def = createWizard<{ name: string }>("w")
 			.initialStep("a")
@@ -475,8 +477,8 @@ describe("WIZ-013 lazy step types", () => {
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `cd packages/core && npx vitest run tests/builders.test.ts tests/types.test.ts --typecheck`
-Expected: FAIL — `lazy` does not exist on `StepBuilder`.
+Run: `cd packages/core && npx vitest run tests/builders.test.ts`
+Expected: FAIL — `lazy` is not a function.
 
 - [ ] **Step 3: Implement**
 
@@ -497,8 +499,8 @@ In `packages/core/src/builders/create-step.ts`, add `StepLoader` to the `../type
 
 - [ ] **Step 4: Run tests**
 
-Run: `cd packages/core && npx vitest run tests/builders.test.ts tests/types.test.ts --typecheck`
-Expected: PASS. If the core vitest config does not run type tests with `--typecheck`, run `pnpm --filter @gooonzick/wizard-core typecheck` instead to verify the `expectTypeOf` assertions compile (they are compile-time checks).
+Run: `cd packages/core && npx vitest run tests/builders.test.ts tests/types.test.ts && cd ../.. && pnpm --filter @gooonzick/wizard-core typecheck`
+Expected: PASS. The `expectTypeOf` assertions in `types.test.ts` are only verified by the `typecheck` command (vitest `--typecheck` only covers `*.test-d.ts`).
 
 - [ ] **Step 5: Commit**
 
@@ -1084,6 +1086,32 @@ describe("WIZ-013 lazy steps — navigation", () => {
 		}
 	});
 
+	it("regression: non-lazy wizards gain no await — goNext() then a synchronous reset() still supersedes validation", async () => {
+		const onValidation = vi.fn();
+		const def: WizardDefinition<Data> = {
+			id: "eager",
+			initialStepId: "a",
+			steps: {
+				a: {
+					id: "a",
+					validate: (d) =>
+						d.name ? { valid: true } : { valid: false, errors: { name: "req" } },
+					next: { type: "static", to: "b" },
+				},
+				b: { id: "b" },
+			},
+		};
+		const { machine } = createMachine(def, { onValidation });
+		await flush();
+
+		const p = machine.goNext().catch(() => {});
+		machine.reset();
+		await p;
+		await flush();
+		expect(onValidation).not.toHaveBeenCalled();
+		expect(machine.snapshot.validationErrors).toBeUndefined();
+	});
+
 	it("submit() on a lazy last step runs the LOADED onSubmit", async () => {
 		const onSubmit = vi.fn();
 		const def = lazyDefinition(vi.fn(async () => ({})));
@@ -1127,16 +1155,9 @@ Expected: FAIL — loaded `onEnter` not called, no `isLoadingStep` flips, failur
 		}
 		return !(this.isTransitionStale() || this.isDestroyed);
 	}
-
-	/** WIZ-013: loads the current step before validate()/onSubmit when needed. */
-	private async loadCurrentForTransition(): Promise<boolean> {
-		const currentId = this.state.currentStepId;
-		if (!this.needsLoad(currentId)) {
-			return true;
-		}
-		return this.loadForTransition([currentId]);
-	}
 ```
+
+**Important:** every call site checks `needsLoad` **synchronously** before awaiting. Never wrap the check in an async helper — an unconditional `await` would delay `validate()` by a microtask for non-lazy wizards, and a synchronous `reset()` right after `goNext()` would then no longer supersede the validation (it would write `validationErrors` onto the fresh state).
 
 3b. `navigateToStep()`: replace the two lines at the top
 
@@ -1170,16 +1191,18 @@ with
 
 ```ts
 			// WIZ-013: a load failure is not a validation failure — load first.
-			if (!(await this.loadCurrentForTransition())) {
+			// The needsLoad check is synchronous so non-lazy wizards add no await.
+			const loadId = this.state.currentStepId;
+			if (this.needsLoad(loadId) && !(await this.loadForTransition([loadId]))) {
 				return;
 			}
 ```
 
-3d. `goTo()`: inside `if (!skipValidation) {`, before `const validationResult = await this.validate();`, insert the same three-line block.
+3d. `goTo()`: inside `if (!skipValidation) {`, before `const validationResult = await this.validate();`, insert the same block.
 
 3e. `submit()`:
 - Delete `const step = this.currentStep;` (line ~844).
-- Before `const validationResult = await this.validate();` insert the same `loadCurrentForTransition` block.
+- Before `const validationResult = await this.validate();` insert the same block.
 - Immediately before `// Execute step's submit handler`, add `const step = this.currentStep;` (re-read after the load).
 - In the `catch`, change the condition to skip already-reported load errors:
 
@@ -1825,7 +1848,7 @@ function setup(initialLazy = false) {
 }
 ```
 
-> Before writing the remaining tests, open `packages/state/src/wiring.ts` and `packages/state/tests/wiring.test.ts` and copy how they connect `machine.onStateChange` to `manager` (the `previous`/`lastState` bookkeeping at `manager.ts:~680`). Prefer `createMachineAndManager({ definition, context: {}, initialData, getCallbacks: () => ({}) })` from `../src/wiring` over hand-wiring if it returns `{ machine, manager }` — it is the production path. Replace the hand-wired `setup()` above accordingly.
+Keep this hand-wired `setup()` as written (verified to work against the planned implementation).
 
 ```ts
 describe("WizardStateManager — isLoadingStep (WIZ-013)", () => {
@@ -1970,8 +1993,8 @@ Update the `LoadingState` doc comment ("UI concerns managed by state manager, no
 
 - [ ] **Step 4: Run tests**
 
-Run: `pnpm turbo run test --filter=@gooonzick/wizard-state && pnpm --filter @gooonzick/wizard-state typecheck`
-Expected: PASS. Existing tests that build `LoadingState` literals or expect `getLoadingSnapshot()` `toEqual({ isValidating, isSubmitting, isNavigating })` need `isLoadingStep: false` added.
+Run: `pnpm turbo run test --filter=@gooonzick/wizard-state && pnpm --filter @gooonzick/wizard-state typecheck` (keep this order: the turbo run builds the dependencies' `dist` that `typecheck` reads).
+Expected: PASS after adding `isLoadingStep: false` to the expected loading objects in these existing tests: `tests/restore.test.ts` ("restores machine state and updates manager caches", "surfaces the rejection as an Error and clears loading via finally") and `tests/track-loading.test.ts` ("counts flags independently").
 
 - [ ] **Step 5: Commit**
 
@@ -2247,7 +2270,7 @@ Expected: FAIL.
 - [ ] **Step 4: Run tests**
 
 Run: `pnpm turbo run test --filter=@gooonzick/wizard-svelte && pnpm --filter @gooonzick/wizard-svelte typecheck`
-Expected: PASS.
+Expected: PASS after updating existing tests that hardcode loading objects / key lists: `tests/actions.test.ts` A11, `tests/channels.test.ts` C1 and C4 (add `isLoadingStep: false`), `tests/loading-and-reset.test.ts` L4 (store + runes: add `"preloadStep"` to the expected action keys), `tests/runes/create-wizard.test.ts` R6 (add `"isLoadingStep"` to the flat-key list).
 
 - [ ] **Step 5: Commit**
 
@@ -2328,7 +2351,7 @@ Expected: FAIL.
 - [ ] **Step 4: Run tests**
 
 Run: `pnpm turbo run test --filter=@gooonzick/wizard-solid && pnpm --filter @gooonzick/wizard-solid typecheck`
-Expected: PASS.
+Expected: PASS after updating `tests/actions.test.ts` A9 (expected action keys / loading object: add `preloadStep` / `isLoadingStep: false`).
 
 - [ ] **Step 5: Commit + full verification**
 
@@ -2569,10 +2592,12 @@ function LazyStepsWizard({ onRecreate }: { onRecreate: () => void }) {
 					<Button
 						onClick={next}
 						// Prefetch the lazy step while the user is about to click.
-						onMouseEnter={() =>
-							state.currentStepId === "account" &&
-							void actions.preloadStep("documents").catch(() => {})
-						}
+						// Skipped while a failure is armed: a silent preload would consume it.
+						onMouseEnter={() => {
+							if (state.currentStepId === "account" && !failureArmed) {
+								void actions.preloadStep("documents").catch(() => {});
+							}
+						}}
 						disabled={loading.isNavigating}
 					>
 						{loading.isLoadingStep ? "Loading…" : "Next"}
@@ -2694,7 +2719,8 @@ function next() {
 }
 
 function prefetch() {
-	if (state.currentStepId.value === "account") {
+	// Skipped while a failure is armed: a silent preload would consume it.
+	if (state.currentStepId.value === "account" && !failureArmed.value) {
 		void actions.preloadStep("documents").catch(() => {});
 	}
 }
@@ -2883,7 +2909,8 @@ git commit -m "docs(examples): Vue lazy steps demo (WIZ-013)"
 	}
 
 	function prefetch() {
-		if (wizard.currentStepId === "account") {
+		// Skipped while a failure is armed: a silent preload would consume it.
+		if (wizard.currentStepId === "account" && !failureArmed) {
 			void wizard.actions.preloadStep("documents").catch(() => {});
 		}
 	}
@@ -3022,7 +3049,8 @@ function LazyStepsWizard(props: { onRecreate: () => void }) {
 		void wizard.goNext().catch(() => {});
 	};
 	const prefetch = () => {
-		if (wizard.currentStepId === "account") {
+		// Skipped while a failure is armed: a silent preload would consume it.
+		if (wizard.currentStepId === "account" && !failureArmed()) {
 			void wizard.actions.preloadStep("documents").catch(() => {});
 		}
 	};
@@ -3193,7 +3221,7 @@ Declaratively, set `load: () => import("./steps/documents")` on the step definit
 
 **Prefetching.** `machine.preloadStep("documents")` (or `actions.preloadStep` in a binding) starts the load without navigating — e.g. on hover of “Next”. It does not set `isLoadingStep`.
 
-**Errors.** A failed load rejects the navigation / `submit()` with `WizardStepLoadError` (`stepId`, original error as `cause`), is reported once through `onError` and plugin `onError` with `phase: "load"`, and leaves the wizard on the current step. Failed loads are not cached — the next attempt retries. `validate()` resolves `{ valid: false, errors: { general: "Failed to load step" } }`; `validateAll()` marks the step invalid with `errors._error`.
+**Errors.** A failed load rejects the navigation / `submit()` with `WizardStepLoadError` (`stepId`, original error as `cause`), is reported once through `onError` and plugin `onError` with `phase: "load"`, and leaves the wizard on the current step. Failed loads are not cached — the next attempt retries. (After `destroy()` the flag is left as-is; a destroyed wizard is not read.) `validate()` resolves `{ valid: false, errors: { general: "Failed to load step" } }`; `validateAll()` marks the step invalid with `errors._error`.
 ````
 
 - [ ] **Step 2: Other doc touch-points** (both trees):
