@@ -486,6 +486,41 @@ describe("WIZ-013 lazy steps — navigation", () => {
 		expect(states.some((s) => s.isLoadingStep)).toBe(false);
 	});
 
+	it("canSubmit() on an unloaded lazy last step loads in the background: no isLoadingStep, no onError, false on failure", async () => {
+		const def = lazyDefinition(vi.fn(async () => ({})));
+		def.steps.summary.load = vi
+			.fn<StepLoader<Data>>()
+			.mockRejectedValue(new Error("down"));
+		const onError = vi.fn();
+		const { machine, states } = createMachine(def, { onError });
+		await machine.goTo("summary", {
+			skipValidation: true,
+			skipLifecycle: true,
+		});
+		states.length = 0;
+
+		await expect(machine.canSubmit()).resolves.toBe(false);
+		expect(def.steps.summary.load).toHaveBeenCalledTimes(1);
+		expect(states.some((s) => s.isLoadingStep)).toBe(false);
+		expect(onError).not.toHaveBeenCalled();
+	});
+
+	it("canSubmit() returns true once a valid lazy last step loads in the background", async () => {
+		const validate = vi.fn(() => ({ valid: true }));
+		const def = lazyDefinition(vi.fn(async () => ({})));
+		def.steps.summary.load = vi.fn(async () => ({ validate }));
+		const { machine, states } = createMachine(def);
+		await machine.goTo("summary", {
+			skipValidation: true,
+			skipLifecycle: true,
+		});
+		states.length = 0;
+
+		await expect(machine.canSubmit()).resolves.toBe(true);
+		expect(validate).toHaveBeenCalledTimes(1);
+		expect(states.some((s) => s.isLoadingStep)).toBe(false);
+	});
+
 	it("submit() on a lazy last step runs the LOADED onSubmit", async () => {
 		const onSubmit = vi.fn();
 		const def = lazyDefinition(vi.fn(async () => ({})));

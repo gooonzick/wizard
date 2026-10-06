@@ -940,11 +940,23 @@ export class WizardMachine<T extends WizardData> {
 	}
 
 	/**
-	 * Checks if the wizard can be submitted (validates and checks if last step)
+	 * Checks if the wizard can be submitted (validates and checks if last step).
+	 *
+	 * A lazy current step (WIZ-013) is loaded in the background first — like
+	 * `preloadStep()`: no `isLoadingStep` flip and no `onError`. A failed load
+	 * resolves to `false` (unreported); the next call retries.
 	 */
 	async canSubmit(): Promise<boolean> {
 		if (this.state.isCompleted) {
 			return false;
+		}
+		const currentStepId = this.state.currentStepId;
+		if (this.needsLoad(currentStepId)) {
+			try {
+				await this.loadStep(currentStepId);
+			} catch {
+				return false;
+			}
 		}
 		const validation = await this.validate();
 		const nextStep = await this.resolveNextStep();
