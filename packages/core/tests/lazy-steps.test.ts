@@ -988,7 +988,7 @@ describe("WIZ-013 lazy steps — drift during a pending load", () => {
 		});
 	}
 
-	it("validate() does not validate or write for a step the user left during the load", async () => {
+	it("validate() re-targets the new current step when the user left during the load", async () => {
 		const documentsValidate = vi.fn(() => ({ valid: true }));
 		const loader = controlledLoader({ validate: documentsValidate });
 		const summaryValidate = vi.fn(() => ({
@@ -1015,22 +1015,50 @@ describe("WIZ-013 lazy steps — drift during a pending load", () => {
 		const before = machine.snapshot;
 		const count = states.length;
 
+		expect(before.isValid).toBe(true);
+
+		loader.resolve();
+		const expected = { valid: false, errors: { name: "required" } };
+		await expect(v).resolves.toEqual(expected);
+		await flush();
+		// The step the user left is not validated; the new current step is.
+		expect(documentsValidate).not.toHaveBeenCalled();
+		expect(summaryValidate).toHaveBeenCalledTimes(1);
+		expect(onValidation).toHaveBeenCalledTimes(1);
+		expect(onValidation).toHaveBeenCalledWith(expected);
+		expect(onError).not.toHaveBeenCalled();
+		expect(machine.snapshot.currentStepId).toBe("summary");
+		expect(machine.snapshot.isValid).toBe(false);
+		expect(machine.snapshot.validationErrors).toEqual({ name: "required" });
+		// The foreground-load flag clears, then the re-targeted validation emits.
+		expect(states.slice(count)).toEqual([
+			{ currentStepId: "summary", isLoadingStep: false },
+			{ currentStepId: "summary", isLoadingStep: false },
+		]);
+	});
+
+	it("validate() still returns the superseded result when reset() lands during the load", async () => {
+		const documentsValidate = vi.fn(() => ({ valid: true }));
+		const loader = controlledLoader({ validate: documentsValidate });
+		const onValidation = vi.fn();
+		const { machine } = createMachine(lazyDefinition(loader.load), {
+			onValidation,
+		});
+		await machine.goTo("documents", {
+			skipValidation: true,
+			skipLifecycle: true,
+		});
+
+		const v = machine.validate();
+		await flush();
+		machine.reset();
 		loader.resolve();
 		await expect(v).resolves.toEqual({
 			valid: false,
 			errors: { general: "Validation error occurred" },
 		});
-		await flush();
 		expect(documentsValidate).not.toHaveBeenCalled();
-		expect(summaryValidate).not.toHaveBeenCalled();
 		expect(onValidation).not.toHaveBeenCalled();
-		expect(onError).not.toHaveBeenCalled();
-		expect(machine.snapshot.isValid).toBe(before.isValid);
-		expect(machine.snapshot.validationErrors).toBe(before.validationErrors);
-		// Only the foreground-load flag clears.
-		expect(states.slice(count)).toEqual([
-			{ currentStepId: "summary", isLoadingStep: false },
-		]);
 	});
 
 	it("the initial step is not entered after the user left it during its load", async () => {

@@ -735,7 +735,11 @@ export class WizardMachine<T extends WizardData> {
 	}
 
 	/**
-	 * Validates current step
+	 * Validates current step.
+	 *
+	 * A lazy current step (WIZ-013) is loaded first. If the user moves to
+	 * another step while that load is pending, the step they left is not
+	 * validated: the result is the validation of the NEW current step.
 	 */
 	async validate(): Promise<ValidationResult> {
 		this.checkAborted();
@@ -748,20 +752,23 @@ export class WizardMachine<T extends WizardData> {
 		// WIZ-013: load a lazy current step before validating it. A failure is
 		// reported once (phase "load") and yields an invalid result WITHOUT a
 		// state write or onValidation — mirroring the thrown-validator path.
-		// Superseded (reset/cancel/restore, destroy, or the user navigated away
-		// during the load) → the generic superseded result, no write or report.
+		// Superseded (reset/cancel/restore or destroy during the load) → the
+		// generic superseded result, no write or report. If the user moved to
+		// another step during the load, the step they left is neither validated
+		// nor reported; the NEW current step is validated instead.
 		const currentStepId = this.state.currentStepId;
+		const superseded = () => this.generation !== gen || this.isDestroyed;
 		const prep = this.prepareSteps(
 			[currentStepId],
 			[],
-			() =>
-				this.generation !== gen ||
-				this.isDestroyed ||
-				this.state.currentStepId !== currentStepId,
+			() => superseded() || this.state.currentStepId !== currentStepId,
 		);
 		if (isPromiseLike(prep)) {
 			const prepared = await prep;
 			if (prepared.status === "stale") {
+				if (!superseded()) {
+					return this.validate();
+				}
 				return {
 					valid: false,
 					errors: { general: "Validation error occurred" },
