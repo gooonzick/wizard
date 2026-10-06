@@ -80,7 +80,8 @@ Invariants:
 - Load points: navigating into/out of a step (current AND target, before `beforeTransition`,
   `onLeave` and any state write, so a failed load never half-commits), `validate()`,
   `submit()`, the initial step, and `validateAll()` (enabled lazy steps only, background).
-  `goTo(id, { skipLifecycle: true })` does not load.
+  `goTo(id, { skipLifecycle: true })` does not load the target; the current step is still
+  loaded for validation unless `skipValidation` is also set.
 - Cache: per machine; concurrent callers share one `import()`; success is cached for the
   machine's lifetime and survives `reset()` / `cancel()` / `restore()`; failure evicts, the
   next request retries.

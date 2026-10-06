@@ -704,7 +704,7 @@ function MyWizardForm() {
 | `useWizardData<T>()`    | Current step, data, isCompleted          | Form inputs, step content |
 | `useWizardNavigation()` | canGoNext, goNext, goBack, etc.          | Navigation buttons        |
 | `useWizardValidation()` | isValid, validationErrors                | Error display             |
-| `useWizardLoading()`    | isValidating, isSubmitting, isNavigating | Loading indicators        |
+| `useWizardLoading()`    | isValidating, isSubmitting, isNavigating, isLoadingStep | Loading indicators        |
 | `useWizardActions<T>()` | updateField, validateAll, submit, reset, cancel, serialize, restore | Form handlers             |
 
 ### When to Use Granular Hooks

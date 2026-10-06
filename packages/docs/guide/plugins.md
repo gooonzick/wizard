@@ -220,11 +220,11 @@ A throwing `onStateChange` subscriber (the machine-level event, or a framework b
 
 | Phase | Origin |
 |---|---|
-| `"validation"` | A step validator threw |
-| `"transition"` | A failure during navigation (resolver, guard, `beforeTransition`, `onLeave` / `onEnter`) — the default phase |
-| `"lifecycle"` | An `onComplete` / `onReset` / `destroy` handler (plugin or event) or the initial step's `onEnter` threw |
-| `"submit"` | `onSubmit` threw inside `submit()` |
-| `"data"` | An `onDataChange` handler threw |
+| `"validation"` | A step validator threw, or returned an invalid result during `goNext()` / `goTo()` / `submit()` |
+| `"transition"` | The default for navigation: a resolver, guard or `beforeTransition` failure, an `onLeave` / `onEnter` throw, a plugin `afterTransition` throw, guard / progress resolution errors, and an `onSubmit` (or `definition.onComplete` / `events.onComplete`) throw inside `goNext()` |
+| `"lifecycle"` | A plugin `onInit` / `onComplete` / `onReset` / `destroy` failure, an error from `cancel()` handlers (`definition.onCancel` / `events.onCancel`), or the initial step's `onEnter` |
+| `"submit"` | `onSubmit` (or a completion handler) threw inside `submit()` — only `submit()` uses this phase; the same throw inside `goNext()` is `"transition"` |
+| `"data"` | An `onDataChange` handler or a `watchField` callback threw (plugin `onDataChange` too) |
 | `"state"` | An `onStateChange` subscriber threw |
 | `"load"` | A lazy step failed to load (WIZ-013) |
 
