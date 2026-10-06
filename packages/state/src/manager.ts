@@ -510,7 +510,8 @@ export class WizardStateManager<T extends WizardData> {
 	 *
 	 * runReset()/runRestore()/runCancel() force every flag off and discard all
 	 * outstanding references; operations in flight at that moment release
-	 * nothing when they later settle.
+	 * nothing when they later settle. `isLoadingStep` is machine-owned and is
+	 * not touched by these (the machine resets it itself).
 	 */
 	async trackLoading<R>(
 		flag: TrackedLoadingFlag,
@@ -556,6 +557,9 @@ export class WizardStateManager<T extends WizardData> {
 	 * Force every loading flag off (always notifies, as before) and discard all
 	 * trackLoading() references so aborted in-flight operations cannot drive a
 	 * counter negative or clear a newer operation's flag when they settle.
+	 *
+	 * `isLoadingStep` is machine-owned and is not touched here (the machine
+	 * resets it itself).
 	 */
 	private forceLoadingOff(): void {
 		this.discardLoadingRefs();
@@ -606,6 +610,7 @@ export class WizardStateManager<T extends WizardData> {
 	 *
 	 * Sets the loading flags + notifies "loading", calls the machine's
 	 * synchronous reset(), then clears the loading flags + notifies "loading".
+	 * (`isLoadingStep` is machine-owned and is not touched by this.)
 	 *
 	 * The state/navigation/validation channels are notified automatically via the
 	 * machine's onStateChange auto-routing (handleStateChange), so this method
@@ -627,6 +632,7 @@ export class WizardStateManager<T extends WizardData> {
 	 * (which always resets, then rejects if a cancel handler threw), then clears
 	 * the loading flags + notifies "loading". Rejections from the machine
 	 * propagate to the caller.
+	 * (`isLoadingStep` is machine-owned and is not touched by this.)
 	 *
 	 * The state/navigation/validation channels are notified automatically via the
 	 * machine's onStateChange auto-routing.
@@ -649,6 +655,7 @@ export class WizardStateManager<T extends WizardData> {
 	 *
 	 * Sets the loading flags + notifies "loading", calls the machine's
 	 * synchronous restore(), then clears the loading flags + notifies "loading".
+	 * (`isLoadingStep` is machine-owned and is not touched by this.)
 	 *
 	 * The state/navigation/validation channels are notified automatically via the
 	 * machine's onStateChange auto-routing (restore emits sync + async-validate

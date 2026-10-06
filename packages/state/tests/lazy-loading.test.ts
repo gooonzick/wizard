@@ -58,10 +58,12 @@ describe("WizardStateManager — isLoadingStep (WIZ-013)", () => {
 		await flush();
 		expect(manager.getLoadingSnapshot().isLoadingStep).toBe(true);
 		expect(onLoading).toHaveBeenCalled();
+		const callsWhileLoading = onLoading.mock.calls.length;
 
 		gate.resolve({});
 		await p;
 		expect(manager.getLoadingSnapshot().isLoadingStep).toBe(false);
+		expect(onLoading.mock.calls.length).toBeGreaterThan(callsWhileLoading);
 	});
 
 	it("is seeded from the snapshot when the initial step is lazy", () => {
@@ -72,9 +74,12 @@ describe("WizardStateManager — isLoadingStep (WIZ-013)", () => {
 	it("refreshes currentStep in the state slice when a step finishes loading in place", async () => {
 		const { manager, gate } = setup(true);
 		const onEnter = vi.fn();
+		const onState = vi.fn();
+		manager.subscribe(onState, "state");
 		const skeleton = manager.getStateSnapshot().currentStep;
 		gate.resolve({ onEnter });
 		await flush();
+		expect(onState).toHaveBeenCalled();
 		expect(manager.getStateSnapshot().currentStep).not.toBe(skeleton);
 		expect(manager.getStateSnapshot().currentStep.onEnter).toBe(onEnter);
 	});
