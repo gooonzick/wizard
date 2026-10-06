@@ -336,6 +336,63 @@ describe("WIZ-013 lazy steps — navigation", () => {
 		expect(machine.snapshot.currentStepId).toBe("account");
 	});
 
+	it("leaving an unloaded current step whose load fails is not blocked: reported once, skeleton onLeave runs", async () => {
+		const load = vi.fn<StepLoader<Data>>().mockRejectedValue(new Error("down"));
+		const skeletonLeave = vi.fn();
+		const onError = vi.fn();
+		const onStepLeave = vi.fn();
+		const pluginError = vi.fn();
+		const { machine } = createMachine(
+			lazyDefinition(load, { onLeave: skeletonLeave }),
+			{ onError, onStepLeave },
+			[{ name: "spy", onError: pluginError }],
+		);
+		await flush();
+		machine.restore(documentsSnapshot);
+		await flush(); // restore's validate() load fails and is reported
+		onError.mockClear();
+		pluginError.mockClear();
+
+		await machine.goPrevious();
+
+		expect(machine.snapshot.currentStepId).toBe("account");
+		expect(load).toHaveBeenCalledTimes(2);
+		expect(onError).toHaveBeenCalledTimes(1);
+		expect(onError.mock.calls[0][0]).toBeInstanceOf(WizardStepLoadError);
+		expect(onError.mock.calls[0][0].stepId).toBe("documents");
+		expect(pluginError).toHaveBeenCalledTimes(1);
+		expect(pluginError.mock.calls[0][1]).toMatchObject({
+			phase: "load",
+			stepId: "documents",
+		});
+		expect(skeletonLeave).toHaveBeenCalledTimes(1);
+		expect(onStepLeave).toHaveBeenCalledWith("documents", initialData);
+		expect(machine.snapshot.isLoadingStep).toBe(false);
+	});
+
+	it("a failing TARGET load still blocks even when the current step's load fails too", async () => {
+		const load = vi.fn<StepLoader<Data>>().mockRejectedValue(new Error("down"));
+		const def = lazyDefinition(load);
+		const summaryLoad = vi
+			.fn<StepLoader<Data>>()
+			.mockRejectedValue(new Error("summary down"));
+		def.steps.summary.load = summaryLoad;
+		const onStepLeave = vi.fn();
+		const { machine } = createMachine(def, { onStepLeave });
+		await machine.goTo("documents", {
+			skipValidation: true,
+			skipLifecycle: true,
+		});
+
+		const error = await machine
+			.goTo("summary", { skipValidation: true })
+			.catch((e) => e);
+		expect(error).toBeInstanceOf(WizardStepLoadError);
+		expect(error.stepId).toBe("summary");
+		expect(onStepLeave).not.toHaveBeenCalled();
+		expect(machine.snapshot.currentStepId).toBe("documents");
+	});
+
 	it("current-step load failure: goNext/goTo/submit reject with WizardStepLoadError, step not marked 'error'", async () => {
 		const load = vi.fn<StepLoader<Data>>().mockRejectedValue(new Error("down"));
 		const onError = vi.fn();

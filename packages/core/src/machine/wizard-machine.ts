@@ -128,6 +128,24 @@ type SyncResolution =
 	| { kind: "terminal" }
 	| { kind: "unknown" };
 
+/**
+ * WIZ-013: outcome of preparing (loading) the lazy steps an operation needs.
+ * - `ready`: everything required is loaded; the operation may continue.
+ * - `stale`: the operation was superseded during the load; return silently.
+ * - `failed`: a required load failed (already reported, phase "load").
+ */
+type PrepareResult =
+	| { status: "ready" }
+	| { status: "stale" }
+	| { status: "failed"; error: WizardStepLoadError };
+
+/** Shared synchronous `ready` result: the no-load fast path allocates nothing. */
+const PREPARE_READY: PrepareResult = Object.freeze({ status: "ready" });
+
+function isPromiseLike<V>(value: V | Promise<V>): value is Promise<V> {
+	return value instanceof Promise;
+}
+
 export class WizardMachine<T extends WizardData> {
 	private definition: WizardDefinition<T>;
 	private context: WizardContext;
@@ -1469,16 +1487,23 @@ export class WizardMachine<T extends WizardData> {
 			skipLifecycle = false,
 			popHistory = 0,
 		} = options ?? {};
-		// WIZ-013: load the current (for onLeave) and target (for onEnter)
-		// implementations BEFORE beforeTransition / onLeave / any state write, so
-		// a failed load leaves the machine exactly where it was.
+		// WIZ-013: load the target (for onEnter) and the current step (for its
+		// optional onLeave) BEFORE beforeTransition / onLeave / any state write.
+		// Only a TARGET failure blocks (the machine stays exactly where it was);
+		// a current-step failure is reported and the skeleton's onLeave is used,
+		// so a broken chunk never traps the user on its step.
 		if (!skipLifecycle) {
-			const ids = [this.state.currentStepId, stepId];
-			if (
-				ids.some((id) => this.needsLoad(id)) &&
-				!(await this.loadForTransition(ids))
-			) {
+			const prep = this.prepareSteps(
+				[stepId],
+				[this.state.currentStepId],
+				() => this.isTransitionStale() || this.isDestroyed,
+			);
+			const result = isPromiseLike(prep) ? await prep : prep;
+			if (result.status === "stale") {
 				return;
+			}
+			if (result.status === "failed") {
+				throw result.error;
 			}
 		}
 		const currentStep = this.currentStep;
@@ -1980,6 +2005,62 @@ export class WizardMachine<T extends WizardData> {
 
 	private isReportedLoadError(error: unknown): boolean {
 		return error instanceof Error && this.reportedLoadErrors.has(error);
+	}
+
+	/**
+	 * WIZ-013: prepares the lazy steps an operation needs. Returns the shared
+	 * synchronous `PREPARE_READY` when nothing needs loading, so callers that
+	 * only `await` a returned promise add no microtask for non-lazy wizards.
+	 *
+	 * Otherwise every unloaded id is loaded as ONE foreground load (one
+	 * `isLoadingStep` flip), then:
+	 * - `isStale()` → `stale` (nothing is reported);
+	 * - each failed load is reported once (phase "load"); a failed `required`
+	 *   id → `failed` with its error, failed `optional` ids are ignored (the
+	 *   skeleton's hooks are used).
+	 */
+	private prepareSteps(
+		required: StepId[],
+		optional: StepId[],
+		isStale: () => boolean,
+	): PrepareResult | Promise<PrepareResult> {
+		const requiredSet = new Set(required);
+		const ids = [...new Set([...required, ...optional])].filter((id) =>
+			this.needsLoad(id),
+		);
+		if (ids.length === 0) {
+			return PREPARE_READY;
+		}
+		return this.loadPreparedSteps(ids, requiredSet, isStale);
+	}
+
+	private async loadPreparedSteps(
+		ids: StepId[],
+		required: Set<StepId>,
+		isStale: () => boolean,
+	): Promise<PrepareResult> {
+		const settled = await this.trackForegroundLoad(
+			Promise.allSettled(ids.map((id) => this.loadStep(id))),
+		);
+		if (isStale()) {
+			return { status: "stale" };
+		}
+		let failure: WizardStepLoadError | undefined;
+		for (const [index, result] of settled.entries()) {
+			if (result.status === "fulfilled") {
+				continue;
+			}
+			const stepId = ids[index];
+			const error =
+				result.reason instanceof WizardStepLoadError
+					? result.reason
+					: new WizardStepLoadError(stepId, { cause: result.reason });
+			this.reportLoadError(error);
+			if (required.has(stepId)) {
+				failure ??= error;
+			}
+		}
+		return failure ? { status: "failed", error: failure } : PREPARE_READY;
 	}
 
 	/**
