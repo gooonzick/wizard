@@ -168,7 +168,9 @@ machine.snapshot.isLoadingStep; // true while the current/target step loads
 machine.preloadStep("documents").catch(() => {}); // prefetch, e.g. on hover of "Next"
 ```
 
-A failed load rejects the operation with `WizardStepLoadError`, is reported with `ErrorContext.phase === "load"`, leaves the wizard on its current step and is retried by the next attempt. See the [Lazy Steps guide](../../docs/defining-wizards.md#lazy-steps).
+A hook defined on both the skeleton and the loaded implementation is composed, not replaced (`validate` via `combineValidators`, both must pass; `onEnter` / `onLeave` / `onSubmit` run the skeleton's first), so `.required("passport").lazy(...)` keeps its required check.
+
+A failed load rejects the operation with `WizardStepLoadError` (message `Failed to load step "<id>": <cause message>`, native `cause`), is reported with `ErrorContext.phase === "load"`, leaves the wizard on its current step and is retried by the next attempt. Leaving a step whose own chunk failed is not blocked (its `onLeave` falls back to the skeleton's); only a failing target load blocks. `machine.preloadStep()` rejects, bindings' `actions.preloadStep()` never does. See the [Lazy Steps guide](../../docs/defining-wizards.md#lazy-steps).
 
 ### Three Transition Types
 

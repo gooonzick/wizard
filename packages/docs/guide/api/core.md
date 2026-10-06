@@ -89,7 +89,7 @@ type StepLoader<T> = () => Promise<
 
 - The loader may resolve to the implementation or to a module namespace; an object `default` export wins over named exports.
 - Every loaded hook must be a function — a non-function `validate` / `onEnter` / `onLeave` / `onSubmit` is a load error (`WizardStepLoadError`, `TypeError` cause).
-- A loaded hook overrides a same-named hook on the skeleton; a loaded key that is `undefined` keeps the skeleton's hook. The merged definition does not keep `load`.
+- A hook defined on both the skeleton and the loaded implementation is **composed**, not replaced: `validate` becomes `combineValidators(skeleton, loaded)` (both must pass, errors merged); `onEnter` / `onLeave` / `onSubmit` run the skeleton's hook first, then the loaded one. A hook only one side defines is used as-is (a loaded key that is `undefined` keeps the skeleton's hook), so `.required("x").lazy(...)` keeps its required check. The merged definition does not keep `load`.
 - A successful load is cached for the lifetime of the machine; a failed load is not cached and is retried by the next attempt.
 
 See [Lazy Steps](../defining-wizards.md#lazy-steps) for when loads happen.
@@ -475,10 +475,15 @@ class WizardMachine<T> {
   /**
    * Starts (or joins) loading a lazy step's implementation without navigating.
    * Never sets isLoadingStep and never reports through onError — the caller owns
-   * the returned promise (add `.catch(() => {})` for fire-and-forget). Rejects with
+   * the returned promise (add `.catch(() => {})` for fire-and-forget; bindings'
+   * `actions.preloadStep` already never rejects). Rejects with
    * WizardNavigationError (reason "not-found") for an unknown id and with
    * WizardStepLoadError when the load fails. Resolves immediately for a step
    * without `load` or one that is already loaded.
+   *
+   * When the loaded step is the CURRENT step, emits one onStateChange so bindings
+   * pick up the new `currentStep` definition (skipped while a foreground load of
+   * that step is in flight, and after destroy()).
    */
   preloadStep(stepId: StepId): Promise<void>;
 
@@ -865,7 +870,7 @@ class WizardRestoreError extends WizardError {
 
 ### `WizardStepLoadError`
 
-A lazy step's implementation failed to load (WIZ-013): the loader rejected or threw, or it resolved to something that is not a step implementation object (including a non-function `validate` / `onEnter` / `onLeave` / `onSubmit`). The original failure is available as `cause`. Navigation and `submit()` reject with it; `validate()` resolves `{ valid: false, errors: { general: "Failed to load step" } }`.
+A lazy step's implementation failed to load (WIZ-013): the loader rejected or threw, or it resolved to something that is not a step implementation object (including a non-function `validate` / `onEnter` / `onLeave` / `onSubmit`). The original failure is the native `cause`, and its message is appended to this error's message: `Failed to load step "<id>": <cause message>` (just `Failed to load step "<id>"` without a cause). Navigation and `submit()` reject with it; `validate()` resolves `{ valid: false, errors: { general: "Failed to load step" } }`. Leaving a step whose own load fails is not blocked (only a failing target load blocks); see [Lazy Steps](../defining-wizards.md#lazy-steps).
 
 ```ts
 class WizardStepLoadError extends WizardError {

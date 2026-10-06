@@ -87,7 +87,7 @@ Creates a `WizardMachine` and a `WizardStateManager` and mirrors the manager's f
 | `cancel` | `() => Promise<void>` | Calls `onCancel`, then resets. |
 | `serialize` | `() => WizardSerializedState<T>` | |
 | `restore` | `(state: WizardSerializedState<T>) => void` | Fire-and-forget; `WizardRestoreError` → `onError` (else `console.error`). |
-| `preloadStep` | `(stepId: StepId) => Promise<void>` | Prefetches a lazy step's implementation (WIZ-013). Does not set `isLoadingStep`; the caller owns the rejection — use `.catch(() => {})` for fire-and-forget. |
+| `preloadStep` | `(stepId: StepId) => Promise<void>` | Prefetches a lazy step's implementation (WIZ-013). Does not set `isLoadingStep`; never rejects (safe to fire and forget — failures are reported by the navigation that needs the step). |
 
 **Other members**
 

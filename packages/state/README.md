@@ -143,7 +143,7 @@ Updates loading state and notifies loading channel subscribers.
 manager.setLoadingState({ isValidating: true });
 ```
 
-`isLoadingStep` (WIZ-013) is different from the other flags: it mirrors `machine.snapshot.isLoadingStep` and is seeded from the snapshot, so `trackLoading()` only accepts `TrackedLoadingFlag` (`"isValidating" | "isSubmitting" | "isNavigating"`) — `trackLoading("isLoadingStep")` is a type error. `createWizardActions` adds `preloadStep(stepId)`, which prefetches a lazy step without touching any loading flag.
+`isLoadingStep` (WIZ-013) is different from the other flags: it mirrors `machine.snapshot.isLoadingStep` and is seeded from the snapshot, so `trackLoading()` only accepts `TrackedLoadingFlag` (`"isValidating" | "isSubmitting" | "isNavigating"`) — `trackLoading("isLoadingStep")` is a type error. `setLoadingState()` likewise only accepts the tracked flags (`isLoadingStep` is a type error). When the machine replaces the current step's definition without any other state change (a background `preloadStep()` / `validateAll()` of the current step), the manager refreshes the `"state"` slice's `currentStep`. `createWizardActions` adds `preloadStep(stepId)`, which prefetches a lazy step without touching any loading flag and **never rejects** (failures are reported by the navigation that needs the step; `machine.preloadStep()` itself still rejects).
 
 ### Notification
 

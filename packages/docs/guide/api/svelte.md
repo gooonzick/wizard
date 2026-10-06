@@ -165,7 +165,7 @@ interface WizardStoreActions<T> {
   serialize(): WizardSerializedState<T>;
   /** Fire-and-forget (`void manager.runRestore(...)`). */
   restore(state: WizardSerializedState<T>): void;
-  /** WIZ-013: prefetch a lazy step's implementation without navigating. Does not set isLoadingStep; the caller owns the rejection. */
+  /** WIZ-013: prefetch a lazy step's implementation without navigating. Does not set isLoadingStep; never rejects (failures are reported by the navigation that needs the step). */
   preloadStep(stepId: StepId): Promise<void>;
 }
 ```

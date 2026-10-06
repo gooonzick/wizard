@@ -214,7 +214,7 @@ A throwing `onStateChange` subscriber (the machine-level event, or a framework b
 | `"state"` | An `onStateChange` subscriber threw |
 | `"load"` | A lazy step failed to load (WIZ-013) |
 
-A failed lazy-step load is reported once (with a `WizardStepLoadError`, original failure as `cause`) even when several operations await the same failed attempt; a retry is a new attempt and is reported again. Plugins with an exhaustive `switch` on `phase` need a `"load"` case.
+A failed lazy-step load is reported once (with a `WizardStepLoadError` whose message is `Failed to load step "<id>": <cause message>` and whose native `cause` is the original failure) even when several operations await the same failed attempt; a retry is a new attempt and is reported again. Plugins with an exhaustive `switch` on `phase` need a `"load"` case.
 
 ### Re-entrancy / Busy Guard
 

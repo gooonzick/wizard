@@ -172,7 +172,7 @@ actions.submit();
 actions.reset();
 actions.cancel(); // onCancel + reset
 actions.serialize(); // / actions.restore(saved)
-actions.preloadStep("documents").catch(() => {}); // prefetch a lazy step
+actions.preloadStep("documents"); // prefetch a lazy step (never rejects)
 ```
 
 ### Plugins
@@ -267,7 +267,7 @@ interface UseWizardActions<T> {
   cancel(): Promise<void>;
   serialize(): WizardSerializedState<T>;
   restore(state: WizardSerializedState<T>): void;
-  preloadStep(stepId: string): Promise<void>; // prefetch a lazy step; you own the rejection
+  preloadStep(stepId: string): Promise<void>; // prefetch a lazy step; never rejects
 }
 ```
 

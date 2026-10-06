@@ -267,10 +267,10 @@ actions.restore(savedState); // Re-apply snapshot (throws WizardRestoreError if 
 // (Prefer `createPersistencePlugin` for automatic save/restore — see "Persisting Progress".)
 
 // Lazy steps
-actions.preloadStep("documents").catch(() => {}); // Prefetch a lazy step's implementation
+actions.preloadStep("documents"); // Prefetch a lazy step's implementation (never rejects)
 ```
 
-Steps declared with `load` / `.lazy()` load their `validate` and lifecycle hooks on first use; show a spinner with `loading.isLoadingStep.value`. `preloadStep` does not set the flag and returns a promise you own, so add `.catch(() => {})` when you fire and forget. See [Lazy Steps](./defining-wizards.md#lazy-steps).
+Steps declared with `load` / `.lazy()` load their `validate` and lifecycle hooks on first use; show a spinner with `loading.isLoadingStep.value`. `actions.preloadStep` does not set the flag and never rejects (failures are reported by the navigation that needs the step), so it is safe to fire and forget from hover/focus handlers; `machine.preloadStep()` in core still rejects. See [Lazy Steps](./defining-wizards.md#lazy-steps).
 
 ## Reset & Cancel
 

@@ -399,7 +399,7 @@ const machine = new WizardMachine(definition, context, initialData, {
 
 ### Loading state
 
-`WizardState` carries `isLoadingStep: boolean` — `true` while a lazy step's implementation loads (WIZ-013). It is transient, never serialized, and flips back to `false` once the load settles. See [Lazy Steps](./defining-wizards.md#lazy-steps).
+`WizardState` carries `isLoadingStep: boolean` — `true` while a lazy step's implementation loads (WIZ-013). It is transient, never serialized, and flips back to `false` once the load settles. Only foreground loads (navigation, `submit()`, the initial step) set it; background loads (`preloadStep()`, `validateAll()`, `canSubmit()`) do not, but a background load that replaces the **current** step's definition emits one `onStateChange` so bindings refresh `currentStep`. See [Lazy Steps](./defining-wizards.md#lazy-steps).
 
 ### Reacting to data changes
 

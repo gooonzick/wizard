@@ -70,7 +70,8 @@ When touching data-mutation events specifically (WIZ-010 `onDataChange` /
    load it depends on — `initializeFirstStep`, `navigateToStep`, `validate`, `validateAll`,
    `goNext`, `submit` — never a skeleton reference captured before the await
 3. `packages/state/src/manager.ts` / `types.ts` / `actions.ts` (`isLoadingStep` mirror,
-   `TrackedLoadingFlag`, `preloadStep` action) and each binding's loading + actions slices
+   `TrackedLoadingFlag`, `preloadStep` action — which swallows failures — and the
+   `currentStep` cache refresh) and each binding's loading + actions slices
 4. Docs pair `defining-wizards.md` / `api/core.md` / `plugins.md` in `docs/` and
    `packages/docs/guide/`, plus the "Lazy Steps" tab in every `examples/` app
 
@@ -79,16 +80,27 @@ Invariants:
   ~25 places (progress, `isLastStep`, disabled-step skipping), so only the four hooks are lazy.
 - Load points: navigating into/out of a step (current AND target, before `beforeTransition`,
   `onLeave` and any state write, so a failed load never half-commits), `validate()`,
-  `submit()`, the initial step, and `validateAll()` (enabled lazy steps only, background).
+  `submit()`, the initial step, `validateAll()` (enabled lazy steps only, background) and
+  `canSubmit()` (current step, background).
   `goTo(id, { skipLifecycle: true })` does not load the target; the current step is still
   loaded for validation unless `skipValidation` is also set.
+- Hook composition: a loaded hook never replaces a skeleton hook. `validate` →
+  `combineValidators(skeleton, loaded)`; `onEnter` / `onLeave` / `onSubmit` → skeleton first,
+  then loaded (`mergeLazyImplementation`). Keeps builder `.required(...)` alive.
+- Leaving a step whose own load fails is allowed: `navigateToStep` loads the target as
+  required and the current step as optional (phase `"load"` reported, skeleton `onLeave`);
+  only a target failure blocks. goNext / goTo with validation / submit / validate need the
+  current step loaded first.
 - Cache: per machine; concurrent callers share one `import()`; success is cached for the
   machine's lifetime and survives `reset()` / `cancel()` / `restore()`; failure evicts, the
   next request retries.
-- `isLoadingStep` is machine-owned (foreground loads only, counted per generation; `preloadStep`
-  and `validateAll` never touch it) and mirrored — not tracked — by `wizard-state`. If the
+- `isLoadingStep` is machine-owned (foreground loads only, counted per generation; `preloadStep`,
+  `validateAll` and `canSubmit` never touch it, and it lives outside the progress-versioned
+  state) and mirrored — not tracked — by `wizard-state` (`setLoadingState` does not accept it).
+  A background load that replaces the CURRENT step's definition (`preloadStep` / `validateAll`)
+  emits one `onStateChange`. If the
   user moves to another step while the load for the step they left is pending, that load's
-  result is dropped (`validate()` returns the superseded invalid result, a lazy initial step's
+  result is dropped (`validate()` validates the NEW current step instead, a lazy initial step's
   `onEnter` / `onStepEnter` are skipped, failures are not reported) and the flag can stay
   true until the abandoned load settles. After `destroy()` no flag flips and a lazy
   navigation is a silent no-op.
@@ -162,7 +174,8 @@ Then run project quality gates:
 - Reading a step's hooks from `definition.steps[id]` (or a reference captured before an
   await) at a hook call site: for lazy steps that is the skeleton. Use the resolved
   definition after the load.
-- Forgetting `.catch(() => {})` on a fire-and-forget `preloadStep()`.
+- Forgetting `.catch(() => {})` on a fire-and-forget `machine.preloadStep()` (bindings'
+  `actions.preloadStep()` never rejects — keep it that way).
 - Treating `progress.isLastStep` as authoritative for async transitions. It is
   computed synchronously: it is `true` ONLY when the current step's next resolves
   synchronously to null (genuinely terminal). If the `next` transition or the target

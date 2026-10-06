@@ -254,8 +254,8 @@ await wizard.actions.cancel(); // awaits onCancel, then resets
 const snapshot = wizard.actions.serialize();
 wizard.actions.restore(snapshot);
 
-// Lazy steps — prefetch the implementation; the returned promise is yours to handle
-wizard.actions.preloadStep("documents").catch(() => {});
+// Lazy steps — prefetch the implementation; never rejects (failures are reported by the navigation that needs the step)
+wizard.actions.preloadStep("documents");
 ```
 
 `reset` and `restore` return `void`, not `Promise<void>` — exact parity with the React
@@ -269,7 +269,7 @@ navigation method toggles `isNavigating`, and `reset` / `cancel` / `restore` run
 `manager.runReset` / `runCancel` / `runRestore` so `wizard.loading` stays accurate for them
 too.
 
-`isLoadingStep` is the one loading flag the manager does not track: it mirrors the machine's `isLoadingStep` (`true` while a lazy step's implementation loads) and is never set by `actions.preloadStep`. See [Lazy Steps](./defining-wizards.md#lazy-steps).
+`isLoadingStep` is the one loading flag the manager does not track: it mirrors the machine's `isLoadingStep` (`true` while a lazy step's implementation loads) and is never set by `actions.preloadStep`, which never rejects. See [Lazy Steps](./defining-wizards.md#lazy-steps).
 
 ## Options
 

@@ -15,8 +15,23 @@ Large wizards pay for every step's heavy implementation (Zod/Valibot schemas, bi
 - **Only the step implementation is lazy, not the step itself.** The ROADMAP sketch made the step *value* a function (`heavy: () => import(...)`). That would hide `next` / `previous` / `enabled` / `meta` until load, but `definition.steps[id]` is read synchronously in ~25 places in `wizard-machine.ts` (constructor, `initializeStepStatuses`, the `currentStep` getter, `resolveNextStepSync` / `isLastStep`, `computeProgress`, `isKnownStepId`, `restore()`), and `step-resolver.ts` reads `enabled` on *unvisited* steps to skip disabled ones. Making the step value lazy would turn all of these async or "unknown" and push the feature into a 2.0.0. Instead the step **skeleton** (`id`, `next`, `previous`, `enabled`, `meta`) stays eager and only `validate` / `onEnter` / `onLeave` / `onSubmit` are loaded lazily. This solves the stated problem (heavy validation schemas) and keeps progress, `isLastStep`, disabled-step skipping, `canNavigateToStep`, `getAvailableSteps` and the future WIZ-012 graph export working without any load.
 - **Load errors get a new plugin phase `"load"`** (not reused `"transition"`), so analytics/logging can tell a failed chunk from a failing resolver or `onSubmit`.
 - **`preloadStep(stepId)`** is public, for prefetching (hover, idle, entering the previous step).
-- **A hook defined both on the skeleton and in the loaded implementation → the loaded one wins.**
+- **A hook defined both on the skeleton and in the loaded implementation → they are composed** (revised after review, see "Post-review changes"; originally "the loaded one wins").
 - **Every framework example app gets a "Lazy Steps" demo** (§8).
+
+### Post-review changes
+
+Code review of the first implementation changed or refined these decisions (they supersede the text above and in the later sections where they conflict):
+
+- **Hook composition instead of "loaded wins".** `validate` → `combineValidators(skeleton, loaded)` (both must pass, errors merged); `onEnter` / `onLeave` / `onSubmit` → skeleton hook, then loaded hook. A builder's `.required("x").lazy(...)` therefore keeps its required check after the load.
+- **`WizardStepLoadError` message** is `Failed to load step "<id>": <cause message>` (just `Failed to load step "<id>"` without a cause); `cause` is the native Error cause. UIs show `error.message` only.
+- **Leaving a step whose own chunk fails is allowed.** `navigateToStep` loads the target as required and the current step as optional (failure reported with phase `"load"`, the skeleton's `onLeave` runs); only a target failure blocks. `goNext()`, `goTo()` with validation and `submit()` still require the current step loaded before validating.
+- **Initial lazy step failure replays entry.** Its `onEnter` + `onStepEnter` run once, the next time the wizard prepares that step (validate / goNext / goTo / submit / navigation) while still on it in the same generation; `reset()` / `cancel()` / `restore()` discard the pending entry.
+- **`validate()` re-targets after drift:** if the user moved to another step during its load, it validates the new current step instead of returning a fake invalid result.
+- **`canSubmit()` loads a lazy current step in the background** (no `isLoadingStep` flip, no `onError`; a failed load resolves `false`).
+- **`isLoadingStep` no longer bumps the progress-versioned state** (performance only; no API change).
+- **Background loads of the current step emit once.** After `preloadStep()` or `validateAll()` loads the current step the machine emits one `onStateChange` (`validateAll()`: at most one in total), replacing the earlier "background loads never emit / `currentStep` may lag" behaviour.
+- **State manager:** `handleStateChange` refreshes the `"state"` slice whenever `machine.currentStep` changes identity (not only inside the `isLoadingStep` flip); `setLoadingState()` accepts only the tracked flags (`isLoadingStep` stays machine-owned); the binding `actions.preloadStep` never rejects (`machine.preloadStep(id).catch(() => {})`, still `Promise<void>`) because it is meant for fire-and-forget hover/focus handlers — the navigation that needs the step reports the failure, while `machine.preloadStep` itself still rejects.
+- **Packaging:** `wizard-state` externalizes every `@gooonzick/wizard-core` entry (`/^@gooonzick\/wizard-core(\/|$)/`).
 
 ### Non-goals
 
@@ -183,7 +198,7 @@ Vitest; assertions through public API, events and spies only (AGENTS.md §4). Lo
 - `restore()` onto a lazy step: `isLoadingStep` flips true → false via restore's trailing validate; an explicit `validate()` during that load joins it (one loader call) and runs the lazy validator.
 - `validate()` with a failing load: invalid result, no state write, no `onValidation`, reported once.
 - `goTo(id, { skipLifecycle: true })` does not load.
-- Merge rule: loaded hook overrides skeleton hook; skeleton hook kept when the loaded key is absent/`undefined`.
+- Merge rule (revised after review): `validate` → `combineValidators(skeleton, loaded)`; `onEnter` / `onLeave` / `onSubmit` → skeleton first, then loaded; a hook only one side defines (or an `undefined` loaded key) is used as-is.
 - Module shapes: `{ default: impl }` and bare `impl`; a non-object result → `WizardStepLoadError`.
 - `validateAll()` loads all enabled lazy steps, skips disabled ones, reports a failed load as `_error` without plugin dispatch.
 - `preloadStep()`: no `isLoadingStep` flip, later navigation does not call the loader again, unknown id throws, failure rejects without `onError`.
