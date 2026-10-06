@@ -3,6 +3,7 @@ import {
 	WizardConfigurationError,
 	WizardNavigationError,
 	WizardRestoreError,
+	WizardStepLoadError,
 	WizardValidationError,
 } from "../errors";
 import { PluginHost } from "../plugins/plugin-host";
@@ -27,6 +28,7 @@ import type {
 	WizardStepDefinition,
 } from "../types/step";
 import { resolveStepInDirection } from "./step-resolver";
+import { loadStepDefinition } from "./lazy-steps";
 import { evaluateGuard } from "./transitions";
 import { alwaysValid } from "./validators";
 
@@ -42,6 +44,11 @@ export interface WizardState<T> {
 	validationErrors?: Record<string, string>;
 	stepStatuses: Record<StepId, StepStatus>;
 	progress: WizardProgress;
+	/**
+	 * WIZ-013: true while the implementation of the current step (or of the
+	 * step being navigated to) is loading. Transient — never serialized.
+	 */
+	isLoadingStep: boolean;
 }
 
 /**
@@ -173,6 +180,15 @@ export class WizardMachine<T extends WizardData> {
 	 * overwrite the result of a later navigation's refresh.
 	 */
 	private guardRefreshSeq = 0;
+	/** WIZ-013: in-flight lazy loads; concurrent requests share one promise. */
+	private stepLoads = new Map<StepId, Promise<WizardStepDefinition<T>>>();
+	/** WIZ-013: merged definitions of successfully loaded lazy steps. */
+	private loadedSteps = new Map<StepId, WizardStepDefinition<T>>();
+	/** WIZ-013: pending foreground loads of generation `foregroundLoadsGen`. */
+	private foregroundLoads = 0;
+	private foregroundLoadsGen = -1;
+	/** WIZ-013: load errors already reported (each failed attempt reports once). */
+	private reportedLoadErrors = new WeakSet<Error>();
 
 	/**
 	 * @param plugins Optional plugins to register at construction time.
@@ -207,6 +223,7 @@ export class WizardMachine<T extends WizardData> {
 			isValid: true,
 			isCompleted: false,
 			canGoBack: false,
+			isLoadingStep: false,
 			stepStatuses: this.initializeStepStatuses(),
 		};
 		this.visitedSteps.add(definition.initialStepId);
@@ -346,10 +363,11 @@ export class WizardMachine<T extends WizardData> {
 	}
 
 	/**
-	 * Gets the current step definition
+	 * Gets the current step definition. For a lazy step this is the skeleton
+	 * until its implementation has loaded, then the merged definition (WIZ-013).
 	 */
 	get currentStep(): WizardStepDefinition<T> {
-		return this.definition.steps[this.state.currentStepId];
+		return this.resolvedStep(this.state.currentStepId);
 	}
 
 	/**
@@ -472,6 +490,7 @@ export class WizardMachine<T extends WizardData> {
 			canGoBack:
 				serializedState.currentStepId !== this.definition.initialStepId &&
 				this.stepHistory.length > 1,
+			isLoadingStep: false,
 			validationErrors: serializedState.validationErrors
 				? { ...serializedState.validationErrors }
 				: undefined,
@@ -1201,6 +1220,27 @@ export class WizardMachine<T extends WizardData> {
 	}
 
 	/**
+	 * WIZ-013: starts (or joins) loading a lazy step's implementation without
+	 * navigating — e.g. on hover of the "Next" button. Never sets
+	 * `isLoadingStep` and never reports through `onError`: a failure rejects
+	 * the returned promise with `WizardStepLoadError` and the next attempt
+	 * retries. Resolves immediately for steps without `load` or already loaded.
+	 */
+	async preloadStep(stepId: StepId): Promise<void> {
+		if (!this.isKnownStepId(stepId)) {
+			throw new WizardNavigationError(
+				`Step "${stepId}" not found`,
+				stepId,
+				"not-found",
+			);
+		}
+		if (!this.needsLoad(stepId)) {
+			return;
+		}
+		await this.loadStep(stepId);
+	}
+
+	/**
 	 * Resolves the next step ID (with infinite loop protection)
 	 */
 	private async resolveNextStep(): Promise<StepId | null> {
@@ -1541,6 +1581,7 @@ export class WizardMachine<T extends WizardData> {
 			isValid: true,
 			isCompleted: false,
 			canGoBack: false,
+			isLoadingStep: false,
 			validationErrors: undefined,
 			stepStatuses: this.initializeStepStatuses(),
 		};
@@ -1664,6 +1705,126 @@ export class WizardMachine<T extends WizardData> {
 		if (this.context.signal?.aborted) {
 			throw new WizardAbortError();
 		}
+	}
+
+	/** WIZ-013: merged definition when loaded, the skeleton otherwise. */
+	private resolvedStep(stepId: StepId): WizardStepDefinition<T> {
+		return this.loadedSteps.get(stepId) ?? this.definition.steps[stepId];
+	}
+
+	/** WIZ-013: true when the step has a `load` that has not succeeded yet. */
+	private needsLoad(stepId: StepId): boolean {
+		return (
+			this.definition.steps[stepId]?.load !== undefined &&
+			!this.loadedSteps.has(stepId)
+		);
+	}
+
+	/**
+	 * WIZ-013: starts or joins the load of one step. A success is cached for
+	 * the machine's lifetime (it survives reset/cancel/restore); a failure is
+	 * evicted so the next request retries. Never touches state.
+	 */
+	private loadStep(stepId: StepId): Promise<WizardStepDefinition<T>> {
+		const loaded = this.loadedSteps.get(stepId);
+		if (loaded) {
+			return Promise.resolve(loaded);
+		}
+		const inFlight = this.stepLoads.get(stepId);
+		if (inFlight) {
+			return inFlight;
+		}
+		const pending = loadStepDefinition(stepId, this.definition.steps[stepId]).then(
+			(merged) => {
+				this.loadedSteps.set(stepId, merged);
+				return merged;
+			},
+		);
+		this.stepLoads.set(stepId, pending);
+		const settle = () => {
+			if (this.stepLoads.get(stepId) === pending) {
+				this.stepLoads.delete(stepId);
+			}
+		};
+		pending.then(settle, settle);
+		return pending;
+	}
+
+	/**
+	 * WIZ-013: loads every not-yet-loaded step in `stepIds` as a FOREGROUND
+	 * load (reflected in `isLoadingStep`). Callers must only await this when
+	 * `stepIds.some((id) => this.needsLoad(id))`, so non-lazy wizards never get
+	 * an extra microtask.
+	 */
+	private async ensureStepsLoaded(stepIds: StepId[]): Promise<void> {
+		const pending = [...new Set(stepIds)].filter((id) => this.needsLoad(id));
+		if (pending.length === 0) {
+			return;
+		}
+		await this.trackForegroundLoad(
+			Promise.all(pending.map((id) => this.loadStep(id))),
+		);
+	}
+
+	/**
+	 * WIZ-013: reference-counts foreground loads of the current generation.
+	 * 0 → 1 sets `isLoadingStep: true`, 1 → 0 sets it back to false (one
+	 * `onStateChange` each). Loads that started before a reset()/cancel()/
+	 * restore() (which rebuild state with `isLoadingStep: false`) or that
+	 * settle after destroy() never touch the flag.
+	 */
+	private async trackForegroundLoad<R>(work: Promise<R>): Promise<R> {
+		const gen = this.generation;
+		if (this.foregroundLoadsGen !== gen) {
+			this.foregroundLoadsGen = gen;
+			this.foregroundLoads = 0;
+		}
+		this.foregroundLoads += 1;
+		if (this.foregroundLoads === 1) {
+			this.setLoadingStep(true);
+		}
+		try {
+			return await work;
+		} finally {
+			if (
+				this.foregroundLoadsGen === gen &&
+				this.generation === gen &&
+				!this.isDestroyed
+			) {
+				this.foregroundLoads -= 1;
+				if (this.foregroundLoads === 0) {
+					this.setLoadingStep(false);
+				}
+			}
+		}
+	}
+
+	private setLoadingStep(value: boolean): void {
+		if (this.state.isLoadingStep === value) {
+			return;
+		}
+		this.state = { ...this.state, isLoadingStep: value };
+		this.notifyStateChange();
+	}
+
+	/**
+	 * WIZ-013: reports a load failure with phase "load", at most once per
+	 * error instance (all callers awaiting one failed attempt share it).
+	 */
+	private reportLoadError(error: unknown): void {
+		if (error instanceof WizardStepLoadError) {
+			if (this.reportedLoadErrors.has(error)) {
+				return;
+			}
+			this.reportedLoadErrors.add(error);
+			this.handleError(error, "load", error.stepId);
+			return;
+		}
+		this.handleError(error, "load");
+	}
+
+	private isReportedLoadError(error: unknown): boolean {
+		return error instanceof Error && this.reportedLoadErrors.has(error);
 	}
 
 	/**
