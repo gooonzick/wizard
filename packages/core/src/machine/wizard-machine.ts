@@ -1685,12 +1685,11 @@ export class WizardMachine<T extends WizardData> {
 				}
 			}
 		}
-		const currentStep = this.currentStep;
 		const targetStep = this.resolvedStep(stepId);
 
 		// WIZ-007: beforeTransition (sequential, veto/throw aware) at the very top,
 		// before onLeave / state write, where both from and to are known.
-		const fromStepId = currentStep.id;
+		const fromStepId = this.currentStep.id;
 		const event = {
 			type,
 			fromStepId,
@@ -1728,8 +1727,13 @@ export class WizardMachine<T extends WizardData> {
 			// Call onLeave for current step (re-checked here: a concurrent
 			// validate() may have replayed a pending initial entry meanwhile).
 			if (!this.isLeavingUnenteredInitialStep()) {
-				if (currentStep.onLeave) {
-					await this.runLifecycleHook(currentStep, "onLeave", () =>
+				// WIZ-013: read the departing step's definition only now — a
+				// concurrent load (e.g. validate() + replay during beforeTransition)
+				// may have replaced the skeleton with the merged definition. The
+				// current step cannot have changed (that would be stale above).
+				const departingStep = this.currentStep;
+				if (departingStep.onLeave) {
+					await this.runLifecycleHook(departingStep, "onLeave", () =>
 						this.isTransitionStale(),
 					);
 				}
@@ -1737,7 +1741,7 @@ export class WizardMachine<T extends WizardData> {
 				if (this.isTransitionStale()) {
 					return;
 				}
-				this.events.onStepLeave?.(currentStep.id, this.state.data);
+				this.events.onStepLeave?.(fromStepId, this.state.data);
 			}
 		}
 

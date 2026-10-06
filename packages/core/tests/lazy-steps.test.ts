@@ -1877,3 +1877,68 @@ describe("WIZ-013 lazy steps — concurrent operations wait for the initial-entr
 		await flush();
 	});
 });
+
+describe("WIZ-013 lazy steps — the departing step's definition is read right before onLeave", () => {
+	it("a replay completed during beforeTransition: the LOADED onLeave runs together with onStepLeave", async () => {
+		const gate = deferred<void>();
+		const onEnter = vi.fn();
+		const onLeave = vi.fn();
+		const skeletonOnLeave = vi.fn();
+		const load = vi
+			.fn<StepLoader<Data>>()
+			.mockRejectedValueOnce(new Error("offline"))
+			.mockResolvedValue({ onEnter, onLeave });
+		const onStepLeave = vi.fn();
+		const afterTransition = vi.fn();
+		const { machine } = createMachine(
+			{
+				id: "reread",
+				initialStepId: "start",
+				steps: {
+					start: {
+						id: "start",
+						load,
+						onLeave: skeletonOnLeave,
+						next: { type: "static", to: "end" },
+					},
+					end: { id: "end" },
+				},
+			},
+			{ onStepLeave },
+			[
+				{
+					name: "gate",
+					beforeTransition: () => gate.promise.then(() => true),
+					afterTransition,
+				},
+			],
+		);
+		await flush();
+
+		const g = machine.goTo("end", { skipValidation: true });
+		await flush();
+		await machine.validate();
+		expect(load).toHaveBeenCalledTimes(2);
+		expect(onEnter).toHaveBeenCalledTimes(1);
+		expect(onLeave).not.toHaveBeenCalled();
+
+		gate.resolve();
+		await expect(g).resolves.toBeUndefined();
+
+		expect(machine.snapshot.currentStepId).toBe("end");
+		expect(skeletonOnLeave).toHaveBeenCalledTimes(1);
+		expect(onLeave).toHaveBeenCalledTimes(1);
+		expect(onStepLeave).toHaveBeenCalledTimes(1);
+		expect(onStepLeave).toHaveBeenCalledWith("start", initialData);
+		const order = [
+			skeletonOnLeave.mock.invocationCallOrder[0],
+			onLeave.mock.invocationCallOrder[0],
+			onStepLeave.mock.invocationCallOrder[0],
+		];
+		expect(order).toEqual([...order].sort((a, b) => a - b));
+		expect(afterTransition.mock.calls[0][0]).toMatchObject({
+			fromStepId: "start",
+			toStepId: "end",
+		});
+	});
+});

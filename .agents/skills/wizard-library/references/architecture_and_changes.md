@@ -68,7 +68,8 @@ When touching data-mutation events specifically (WIZ-010 `onDataChange` /
    (`WizardStepLoadError`), `builders/create-step.ts` (`.lazy()`)
 2. `wizard-machine.ts`: every hook call site reads the resolved (merged) definition AFTER the
    load it depends on — `initializeFirstStep`, `navigateToStep`, `validate`, `validateAll`,
-   `goNext`, `submit` — never a skeleton reference captured before the await
+   `goNext`, `submit` — never a skeleton reference captured before the await (`navigateToStep`
+   reads the departing step right before `onLeave`, after `beforeTransition` and any replay wait)
 3. `packages/state/src/manager.ts` / `types.ts` / `actions.ts` (`isLoadingStep` mirror,
    `TrackedLoadingFlag`, `preloadStep` action — which swallows failures — and the
    `currentStep` cache refresh) and each binding's loading + actions slices
