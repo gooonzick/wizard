@@ -488,9 +488,13 @@ export class WizardStateManager<T extends WizardData> {
 	}
 
 	/**
-	 * Update loading state and notify loading channel
+	 * Update the manager-owned loading flags and notify the loading channel.
+	 * `isLoadingStep` is machine-owned (mirrored in handleStateChange) and is
+	 * deliberately not accepted here.
 	 */
-	setLoadingState(update: Partial<LoadingState>): void {
+	setLoadingState(
+		update: Partial<Pick<LoadingState, TrackedLoadingFlag>>,
+	): void {
 		if (this.destroyed) return;
 		this.loadingCache = { ...this.loadingCache, ...update };
 		this.notifySubscribersForChannel("loading");

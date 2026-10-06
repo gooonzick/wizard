@@ -136,6 +136,12 @@ describe("WizardStateManager — isLoadingStep (WIZ-013)", () => {
 		expectTypeOf<"isLoadingStep">().not.toMatchTypeOf<Flag>();
 	});
 
+	it("setLoadingState rejects the machine-owned isLoadingStep flag", () => {
+		type Update = Parameters<WizardStateManager<Data>["setLoadingState"]>[0];
+		expectTypeOf<{ isNavigating: true }>().toMatchTypeOf<Update>();
+		expectTypeOf<{ isLoadingStep: true }>().not.toMatchTypeOf<Update>();
+	});
+
 	it("actions.preloadStep delegates to the machine without loading flags", async () => {
 		const { manager, gate, load } = setup();
 		await flush();
