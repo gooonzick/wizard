@@ -153,6 +153,7 @@ describe("actions", () => {
 			isValidating: false,
 			isSubmitting: false,
 			isNavigating: false,
+			isLoadingStep: false,
 		});
 	});
 

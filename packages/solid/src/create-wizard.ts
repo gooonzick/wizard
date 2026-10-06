@@ -115,6 +115,7 @@ export function createWizard<T extends WizardData>(
 		cancel: bindingActions.cancel,
 		serialize: bindingActions.serialize,
 		restore: bindingActions.restore,
+		preloadStep: bindingActions.preloadStep,
 	};
 
 	const fields = new Map<keyof T, unknown>();
@@ -207,6 +208,9 @@ export function createWizard<T extends WizardData>(
 		},
 		get isNavigating() {
 			return loadingSnapshot().isNavigating;
+		},
+		get isLoadingStep() {
+			return loadingSnapshot().isLoadingStep;
 		},
 		get state() {
 			return stateSnapshot();
