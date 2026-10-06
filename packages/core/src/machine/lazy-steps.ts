@@ -15,6 +15,8 @@ function isObject(value: unknown): value is Record<string, unknown> {
 /**
  * Unwraps a module namespace (`{ default: impl }`) and returns the
  * implementation object, or `null` when the value is not an object.
+ * When an object `default` export is present it wins; named exports are then
+ * ignored.
  */
 export function normalizeLazyModule<T>(
 	raw: unknown,
@@ -38,6 +40,8 @@ export function mergeLazyImplementation<T>(
 	impl: LazyStepImplementation<T>,
 ): WizardStepDefinition<T> {
 	const merged: WizardStepDefinition<T> = { ...skeleton };
+	// A loaded step is no longer lazy.
+	delete merged.load;
 	for (const key of LAZY_KEYS) {
 		const hook = impl[key];
 		if (hook !== undefined) {
@@ -69,6 +73,16 @@ export async function loadStepDefinition<T>(
 				`Step loader for "${stepId}" must resolve to an object`,
 			),
 		});
+	}
+	for (const key of LAZY_KEYS) {
+		const hook: unknown = impl[key];
+		if (hook !== undefined && typeof hook !== "function") {
+			throw new WizardStepLoadError(stepId, {
+				cause: new TypeError(
+					`Step loader for "${stepId}" returned a non-function "${key}"`,
+				),
+			});
+		}
 	}
 	return mergeLazyImplementation(skeleton, impl);
 }

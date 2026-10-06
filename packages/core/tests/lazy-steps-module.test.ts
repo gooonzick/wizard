@@ -67,6 +67,15 @@ describe("mergeLazyImplementation", () => {
 		expect(skeleton.onEnter).toBe(skeletonEnter); // skeleton not mutated
 	});
 
+	it("does not copy load into the merged definition", () => {
+		const load = async () => ({});
+		const skeleton: WizardStepDefinition<D> = { id: "s", load };
+		const merged = mergeLazyImplementation(skeleton, { onEnter: vi.fn() });
+		expect(merged.load).toBeUndefined();
+		expect("load" in merged).toBe(false);
+		expect(skeleton.load).toBe(load);
+	});
+
 	it("ignores keys outside the lazy implementation", () => {
 		const skeleton: WizardStepDefinition<D> = {
 			id: "s",
@@ -113,6 +122,16 @@ describe("loadStepDefinition", () => {
 		await expect(loadStepDefinition("s", skeleton)).rejects.toBeInstanceOf(
 			WizardStepLoadError,
 		);
+	});
+
+	it("rejects a non-function loaded hook with a TypeError cause", async () => {
+		const skeleton: WizardStepDefinition<D> = {
+			id: "s",
+			load: async () => ({ validate: "x" }) as never,
+		};
+		const err = await loadStepDefinition("s", skeleton).catch((e) => e);
+		expect(err).toBeInstanceOf(WizardStepLoadError);
+		expect(err.cause).toBeInstanceOf(TypeError);
 	});
 
 	it("rejects a non-object result with a TypeError cause", async () => {
