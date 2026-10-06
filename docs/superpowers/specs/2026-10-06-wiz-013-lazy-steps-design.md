@@ -86,7 +86,7 @@ class WizardMachine<T> {
 }
 ```
 
-- `preloadStep` throws `WizardNavigationError` (reason `"not-found"`) for an unknown id, resolves immediately for a step without `load` or already loaded, rejects with `WizardStepLoadError` on failure (and does **not** report through `onError` — the caller owns the promise; a later navigation that hits the same failure reports it).
+- `preloadStep` is `async`: an unknown id yields a **rejected promise** with `WizardNavigationError` (reason `"not-found"`), never a synchronous throw. It resolves immediately for a step without `load` or already loaded, and rejects with `WizardStepLoadError` on failure (and does **not** report through `onError` — the caller owns the promise; a later navigation that hits the same failure reports it).
 - The `currentStep` getter returns the merged definition once the current step is loaded, the skeleton before that.
 
 ### Errors (`errors.ts`)
@@ -97,6 +97,8 @@ export class WizardStepLoadError extends WizardError {
 	// message: `Failed to load step "${stepId}"`
 }
 ```
+
+`WizardError`'s constructor takes only `message`; `WizardStepLoadError` assigns `this.cause` itself (ES2022 lib is available).
 
 Exported from `index.ts`.
 
@@ -109,6 +111,18 @@ Exported from `index.ts`.
 - Success is cached for the lifetime of the machine and survives `reset()` / `cancel()` / `restore()` (it is definition-scoped, not runtime state).
 - Failure evicts the entry, so the next request retries.
 
+### Resolved definitions — every hook call site reads them
+
+`private resolvedStep(id)` returns the merged definition when the step is loaded, the skeleton otherwise. **Every hook call site reads hooks from `resolvedStep()` *after* the load it depends on**, never from `this.definition.steps[id]` or a reference captured before the load:
+
+- `initializeFirstStep()` (today `this.definition.steps[initialStepId]`);
+- `navigateToStep()` (today `targetStep = this.definition.steps[stepId]` for `onEnter`, `this.currentStep` for `onLeave`);
+- `validate()`, `validateAll()` (today `step.validate`);
+- `goNext()` (`onSubmit`, already read after `validate()`);
+- `submit()` — today it captures `const step = this.currentStep` **before** `await this.validate()`; it must re-read the resolved step after the current step is loaded.
+
+The public `currentStep` getter returns `resolvedStep(currentStepId)`.
+
 ### `ensureStepLoaded(stepId, { foreground })` (private)
 
 - Steps without `load`, or already loaded → returns synchronously-resolved, **no state change, no emission**. Existing emission-count tests for non-lazy wizards stay valid.
@@ -119,29 +133,35 @@ Exported from `index.ts`.
 
 | Call site | Loads | Notes |
 | --- | --- | --- |
-| `initializeFirstStep()` | initial step | Before `onEnter`. Generation-checked after the await. Failure → reported (phase `"load"`), `onEnter` / `onStepEnter` skipped; the machine stays usable and the next `validate()` / navigation retries. |
-| `validate()` | current step | Before running the validator. Failure → reported once (phase `"load"`), returns `{ valid: false, errors: { general: "Failed to load step" } }`, and marks the call as already reported so `goNext()` / `goTo()` / `submit()` do not re-report it as a validation failure. |
-| `goNext()` / `submit()` | current step (via `validate()`) | `onSubmit` therefore always runs on the loaded definition. |
-| `navigateToStep()` | current **and** target, in parallel | Only when `skipLifecycle` is false. Runs **before** `beforeTransition`, `onLeave` and any state write, so a failure leaves the machine exactly where it was (no half-committed state like the `onEnter`-throws case). Followed by `isTransitionStale()`. |
-| `goTo(…, { skipLifecycle: true })` | nothing | Hooks are skipped anyway; the step loads on demand at the next `validate()` / navigation. |
-| `validateAll()` | every enabled lazy step, in parallel (`Promise.allSettled`) | Stays isolated from plugins and does not emit: a failed load becomes `{ valid: false, errors: { _error: message } }` for that step, like a throwing validator. |
-| `restore()` | nothing | Stays synchronous; the restored current step loads on demand. |
+| `initializeFirstStep()` (constructor, `reset()`, `cancel()`) | initial step | In its **own** try before `onEnter`; generation-checked after the await. On failure: reported (phase `"load"`), `onEnter` and `onStepEnter` are skipped, but the function-guard refresh (`refreshGuardStatuses`) and the final `notifyStateChange()` **still run**, so `"skipped"` statuses are computed. The initial `onEnter` is **not replayed** when a later `validate()` / navigation loads the step successfully (documented; `reset()` re-runs initialisation). |
+| `goNext()` / `goTo()` / `submit()` | current step, **explicitly, before `validate()`** | Failure → reported once (phase `"load"`), the operation rejects with `WizardStepLoadError`, the step is **not** marked `"error"` (it is not a validation failure), no `WizardValidationError`. After success, `validate()`'s own load is a cache hit. `goPrevious()` / `goBack()` do not validate, so their current-step load happens in `navigateToStep()`. |
+| `validate()` (public, and from `restore()`) | current step | Before running the validator. Failure → reported once (phase `"load"`) and resolves `{ valid: false, errors: { general: "Failed to load step" } }` **without a state write and without `onValidation`** — mirroring today's thrown-validator path. Sets `validateAlreadyReported` like that path. |
+| `navigateToStep()` | current **and** target, in parallel | Only when `skipLifecycle` is false. Runs **before** `beforeTransition`, `onLeave` and any state write, so a failure leaves the machine exactly where it was (no half-committed state like the `onEnter`-throws case). Followed by the stale/destroyed check. In `goNext()` this is after `onSubmit` / `events.onSubmit` already ran, so a retry after a target-load failure runs `onSubmit` again — same as today when `beforeTransition` throws. |
+| `goTo(…, { skipLifecycle: true })` | target: nothing | Hooks are skipped anyway; the target loads on demand at the next `validate()` / navigation. (Current-step validation still loads the current step unless `skipValidation` is also set.) |
+| `validateAll()` | every enabled lazy step, in parallel | Order: evaluate all `enabled` guards first (sequentially, as today), then `Promise.allSettled` the loads of the enabled lazy steps, then run validators sequentially in insertion order. Stays isolated from plugins and does not emit: a failed load becomes `{ valid: false, errors: { _error: message } }` for that step, like a throwing validator. |
+| `restore()` | current step, via its existing trailing `void this.validate()` | `restore()` itself stays synchronous, but its fire-and-forget `validate()` is a foreground load, so restoring onto an unloaded lazy step flips `isLoadingStep` true → false right away. An explicit `validate()` called meanwhile **joins** that load (one loader call). |
 
 - Transitions keep their busy semantics: a load inside `goNext` / `goPrevious` / `goTo` / `goBack` happens inside `withTransition`, so `isBusy` is `true` and concurrent navigation is rejected as today.
-- `destroy()` during a load: the settled load is ignored (existing `checkAborted` / generation checks).
+- **`destroy()` during a load — new behaviour.** Today `destroy()` neither bumps `generation` nor is checked by `checkAborted()` (which only reads `context.signal`). After every load await, call sites check `this.isDestroyed` in addition to the generation / `isTransitionStale()` check and return silently (no navigation, no hooks, no emission, no `onError`). The foreground counter is not decremented into an emission after destroy.
+- **Single reporting.** A `WizardStepLoadError` is reported at the load site with phase `"load"`. `withTransition`'s catch and `submit()`'s catch must skip re-reporting it, exactly as they already skip `WizardValidationError`. A load failure observed after the transition became stale or the machine was destroyed is **not** reported (the operation just returns).
 - Transition events, `beforeTransition` veto semantics and `afterTransition` are unchanged; plugins see no new hooks.
 
 ## 5. Errors & Reporting
 
 - Any rejection / invalid shape from a loader is wrapped in `WizardStepLoadError(stepId, { cause })`.
-- Navigation, `submit()` and `validate()` report it **once** through `handleError(err, "load")` → `events.onError` and plugin `onError` with `ErrorContext.phase === "load"`. Navigation then rejects with the same `WizardStepLoadError`; `validate()` resolves invalid as described in §4.
+- Navigation, `submit()`, `validate()` and `initializeFirstStep()` report it **once** through `handleError(err, "load")` → `events.onError` and plugin `onError` with `ErrorContext.phase === "load"` (see "Single reporting" in §4). `goNext()` / `goPrevious()` / `goBack()` / `goTo()` / `submit()` then reject with the same `WizardStepLoadError` — whether the current or the target step failed; `validate()` resolves invalid as described in §4.
 - `ErrorContext.phase` gains `"load"`. **Behaviour change** (same class as `"state"` in 1.10.0): plugins with an exhaustive `switch` on `phase` need a `"load"` case. Called out in the changeset.
 - `preloadStep()` and `validateAll()` never call `handleError`.
 
 ## 6. State Manager & Bindings
 
-- `@gooonzick/wizard-state`: `LoadingState` gains `isLoadingStep: boolean`. Unlike the other flags it is **sourced from `machine.snapshot.isLoadingStep`**, not from `trackLoading()`. When a machine state change flips it, the manager refreshes the `"loading"` cache and notifies the `"loading"` channel (plus `"all"`). `forceLoadingOff` / reset paths leave it to the machine (the machine already resets it).
-- React (`useWizard`, granular `useWizardLoading`), Vue (`useWizard`, granular composables), Svelte (stores + runes, including the flat getter), Solid (loading slice + flat getter) expose `isLoadingStep` wherever they expose `isNavigating`. Type additions are additive.
+- `@gooonzick/wizard-state`: `LoadingState` gains `isLoadingStep: boolean`. Unlike the other flags it is **sourced from `machine.snapshot.isLoadingStep`**, not from `trackLoading()`. Concrete changes in `packages/state/src/manager.ts`:
+  - **Seed from the snapshot.** The constructor seeds `loadingCache` with literal `false`s today; `isLoadingStep` must be seeded from `snapshot.isLoadingStep`, because a lazy initial step flips it to `true` synchronously inside `new WizardMachine()`, before the manager is wired (constructor-time emissions are dropped by `createMachineAndManager`).
+  - **`handleStateChange`** diffs `newState.isLoadingStep !== oldState.isLoadingStep`; on change it rebuilds `loadingCache` (keeping the ref-counted flags) and adds `"loading"` **and `"state"`** to the affected channels. Refreshing `"state"` matters: when a step finishes loading in place (initial step, after `restore()`), only `isLoadingStep` changes, and `stateCache.currentStep` must pick up the merged definition.
+  - `notifySubscribers` does not refresh `loadingCache` today (by design) — the loading-cache rebuild for this case happens in `handleStateChange` / a dedicated helper, not by changing that rule.
+  - **Typing.** `loadingCounts`, `discardLoadingRefs()`, `forceLoadingOff()` and `trackLoading(flag)` are keyed on `keyof LoadingState`; introduce `type TrackedLoadingFlag = Exclude<keyof LoadingState, "isLoadingStep">` and use it there, so `trackLoading("isLoadingStep")` is a type error. `forceLoadingOff()` does not touch `isLoadingStep` (the machine resets it).
+- React (`useWizard`, granular `useWizardLoading`), Vue (`useWizard`, granular composables), Svelte (stores + runes, including the flat getter), Solid (loading slice + flat getter) expose `isLoadingStep` wherever they expose `isNavigating`.
+- `WizardState.isLoadingStep` is a **required** field (the machine always produces it). That is a type-level change for code that hand-builds `WizardState` literals (test harnesses, fake `WizardMachineReadonly.snapshot`s); the plan greps the repo for such literals and updates them, and the changeset mentions it.
 
 ## 7. Testing
 
@@ -153,10 +173,14 @@ Vitest; assertions through public API, events and spies only (AGENTS.md §4). Lo
 - `isLoadingStep` emission sequence: `true` (still on the old step) → `false` → navigation commit; no extra emissions for non-lazy steps.
 - Repeated navigation (back and forth, after `reset()`) does not call the loader again.
 - Concurrent `validate()` + `goNext()` into/on the same lazy step → one loader call.
-- Load failure: `goNext()` rejects with `WizardStepLoadError`, `onError` called once, plugin `onError` with phase `"load"`, current step unchanged, no `onLeave` / `beforeTransition`; next `goNext()` retries and succeeds.
+- **Target** load failure: `goNext()` rejects with `WizardStepLoadError`, `onError` called once, plugin `onError` with phase `"load"` (not `"transition"`), current step unchanged, no `onLeave` / `beforeTransition`; next `goNext()` retries and succeeds.
+- **Current** step load failure (e.g. after `restore()` with a failing loader): `goNext()` / `goTo()` / `submit()` reject with `WizardStepLoadError` (not `WizardValidationError`), step not marked `"error"`, reported once.
+- `submit()` on a lazy last step runs the **loaded** `onSubmit`.
+- `destroy()` during a pending load: late resolution does not navigate, call hooks, emit or report.
 - `reset()` / `cancel()` / `restore()` during a pending load: transition superseded, `isLoadingStep` ends `false`, late resolution does not navigate or emit.
-- Lazy initial step: `onEnter` runs after load; failure reported with phase `"load"`, wizard still navigable after a successful retry.
-- `restore()` onto a lazy step, then `validate()` loads and runs the lazy validator.
+- Lazy initial step: `onEnter` runs after load; on failure: reported with phase `"load"`, function-guard `"skipped"` statuses still computed, initial `onEnter` not replayed later, wizard navigable after a successful retry.
+- `restore()` onto a lazy step: `isLoadingStep` flips true → false via restore's trailing validate; an explicit `validate()` during that load joins it (one loader call) and runs the lazy validator.
+- `validate()` with a failing load: invalid result, no state write, no `onValidation`, reported once.
 - `goTo(id, { skipLifecycle: true })` does not load.
 - Merge rule: loaded hook overrides skeleton hook; skeleton hook kept when the loaded key is absent/`undefined`.
 - Module shapes: `{ default: impl }` and bare `impl`; a non-object result → `WizardStepLoadError`.
@@ -165,7 +189,7 @@ Vitest; assertions through public API, events and spies only (AGENTS.md §4). Lo
 - Progress / `isLastStep` / `getAvailableSteps` identical with and without `load` (no loader calls).
 - `StepBuilder.lazy()` sets `load`; type tests (`expectTypeOf`): `LazyStepImplementation<T>` has exactly the keys `validate` / `onEnter` / `onLeave` / `onSubmit`, and a loader whose result is typed with `next` / `enabled` / `meta` is not assignable when those are the only keys (runtime ignores extra keys anyway).
 
-`packages/state/tests`: `isLoadingStep` in the loading slice follows the snapshot, notifies `"loading"`, survives `trackLoading` reference counting untouched.
+`packages/state/tests`: `isLoadingStep` seeded from the snapshot for a lazy initial step; follows the snapshot and notifies `"loading"` + `"state"`; `stateCache.currentStep` is the merged definition after an in-place load; untouched by `trackLoading` / `forceLoadingOff`; `trackLoading("isLoadingStep")` is a type error.
 
 One smoke test per binding (`react`, `vue`, `svelte` stores + runes, `solid`): navigating into a lazy step exposes `isLoadingStep === true` until the deferred resolves.
 
