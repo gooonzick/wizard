@@ -7,18 +7,20 @@ import { Card } from "@/components/ui/card";
 import { armLoadFailure, createLazyStepsWizard } from "./lazy-steps/definition";
 import { lazyInitialData } from "./lazy-steps/types";
 
-const definition = createLazyStepsWizard();
-
 function LazyStepsWizard({ onRecreate }: { onRecreate: () => void }) {
 	const [loadError, setLoadError] = useState<string | null>(null);
 	const [failureArmed, setFailureArmed] = useState(false);
+	// One definition per wizard instance, so recreating also resets the demo flag.
+	const [definition] = useState(() => createLazyStepsWizard());
 	const { state, navigation, validation, loading, actions } = useWizard({
 		definition,
 		initialData: lazyInitialData,
 		onError: (error) => {
 			if (error instanceof WizardStepLoadError) {
 				const cause = error.cause instanceof Error ? error.cause.message : "";
-				setLoadError(`${error.message}${cause ? ` — ${cause}` : ""}`);
+				setLoadError(
+					`${error.message}${cause ? ` — ${cause}` : ""} — click Next to retry.`,
+				);
 				setFailureArmed(false);
 			}
 		},
@@ -40,11 +42,15 @@ function LazyStepsWizard({ onRecreate }: { onRecreate: () => void }) {
 			</div>
 
 			{loading.isLoadingStep && (
-				<p className="text-sm text-blue-600 animate-pulse">
+				<p role="status" className="text-sm text-blue-600 animate-pulse">
 					Loading step implementation…
 				</p>
 			)}
-			{loadError && <p className="text-sm text-red-600">{loadError}</p>}
+			{loadError && (
+				<p role="alert" className="text-sm text-red-600">
+					{loadError}
+				</p>
+			)}
 
 			{state.currentStepId === "account" && (
 				<label className="block">
@@ -123,14 +129,14 @@ function LazyStepsWizard({ onRecreate }: { onRecreate: () => void }) {
 					{failureArmed ? "Next load will fail" : "Fail next load"}
 				</Button>
 				<Button variant="outline" onClick={onRecreate}>
-					Recreate wizard (forget loaded chunks)
+					Recreate wizard (forget loaded steps)
 				</Button>
 			</div>
 			<p className="text-xs text-gray-500">
 				A loaded step is cached per wizard. Hovering “Next” on the first step
-				prefetches it with <code>preloadStep</code>, so no spinner appears.
-				“Fail next load” only matters before the step has loaded once — recreate
-				the wizard to try it again.
+				prefetches it with <code>preloadStep</code>, so usually no spinner
+				appears. “Fail next load” only matters before the step has loaded once —
+				recreate the wizard to try it again.
 			</p>
 		</Card>
 	);

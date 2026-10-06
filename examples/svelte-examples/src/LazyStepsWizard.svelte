@@ -15,7 +15,7 @@
 		onError: (error) => {
 			if (error instanceof WizardStepLoadError) {
 				const cause = error.cause instanceof Error ? error.cause.message : "";
-				loadError = `${error.message}${cause ? ` — ${cause}` : ""}`;
+				loadError = `${error.message}${cause ? ` — ${cause}` : ""} — click Next to retry.`;
 				failureArmed = false;
 			}
 		},
@@ -46,10 +46,10 @@
 	<p class="description">{wizard.currentStep.meta?.description}</p>
 
 	{#if wizard.isLoadingStep}
-		<p class="description">Loading step implementation…</p>
+		<p class="description" role="status">Loading step implementation…</p>
 	{/if}
 	{#if loadError}
-		<p class="error">{loadError}</p>
+		<p class="error" role="alert">{loadError}</p>
 	{/if}
 
 	{#if wizard.currentStepId === "account"}

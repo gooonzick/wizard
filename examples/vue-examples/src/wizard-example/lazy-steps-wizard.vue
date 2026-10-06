@@ -21,7 +21,7 @@ const { state, navigation, validation, loading, actions } = useWizard({
 	onError: (error) => {
 		if (error instanceof WizardStepLoadError) {
 			const cause = error.cause instanceof Error ? error.cause.message : "";
-			loadError.value = `${error.message}${cause ? ` — ${cause}` : ""}`;
+			loadError.value = `${error.message}${cause ? ` — ${cause}` : ""} — click Next to retry.`;
 			failureArmed.value = false;
 		}
 	},
@@ -58,10 +58,10 @@ function armFailure() {
 			</p>
 		</div>
 
-		<p v-if="loading.isLoadingStep.value" class="text-sm text-blue-600 animate-pulse">
+		<p v-if="loading.isLoadingStep.value" role="status" class="text-sm text-blue-600 animate-pulse">
 			Loading step implementation…
 		</p>
-		<p v-if="loadError" class="text-sm text-red-600">{{ loadError }}</p>
+		<p v-if="loadError" role="alert" class="text-sm text-red-600">{{ loadError }}</p>
 
 		<label v-if="state.currentStepId.value === 'account'" class="block">
 			<span class="text-sm font-medium text-gray-700">Email</span>
@@ -120,12 +120,12 @@ function armFailure() {
 				{{ failureArmed ? "Next load will fail" : "Fail next load" }}
 			</Button>
 			<Button variant="outline" @click="emit('recreate')">
-				Recreate wizard (forget loaded chunks)
+				Recreate wizard (forget loaded steps)
 			</Button>
 		</div>
 		<p class="text-xs text-gray-500">
 			A loaded step is cached per wizard. Hovering “Next” on the first step
-			prefetches it with <code>preloadStep</code>, so no spinner appears.
+			prefetches it with <code>preloadStep</code>, so usually no spinner appears.
 			“Fail next load” only matters before the step has loaded once — recreate
 			the wizard to try it again.
 		</p>

@@ -25,6 +25,8 @@ async function loadDocumentsStep(): Promise<
 }
 
 export function createLazyStepsWizard() {
+	// A fresh wizard starts with no armed failure (the flag is module-level).
+	failNextLoad = false;
 	return createWizard<LazyDemoData>("lazy-steps")
 		.initialStep("account")
 		.step("account", (s) =>

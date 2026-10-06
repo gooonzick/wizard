@@ -14,7 +14,9 @@ function LazyStepsWizard(props: { onRecreate: () => void }) {
 		onError: (error) => {
 			if (error instanceof WizardStepLoadError) {
 				const cause = error.cause instanceof Error ? error.cause.message : "";
-				setLoadError(`${error.message}${cause ? ` — ${cause}` : ""}`);
+				setLoadError(
+					`${error.message}${cause ? ` — ${cause}` : ""} — click Next to retry.`,
+				);
 				setFailureArmed(false);
 			}
 		},
@@ -42,10 +44,16 @@ function LazyStepsWizard(props: { onRecreate: () => void }) {
 			<p class="description">{wizard.currentStep.meta?.description}</p>
 
 			<Show when={wizard.isLoadingStep}>
-				<p class="description">Loading step implementation…</p>
+				<p class="description" role="status">
+					Loading step implementation…
+				</p>
 			</Show>
 			<Show when={loadError()}>
-				{(message) => <p class="error">{message()}</p>}
+				{(message) => (
+					<p class="error" role="alert">
+						{message()}
+					</p>
+				)}
 			</Show>
 
 			<Switch>
