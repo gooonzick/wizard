@@ -135,7 +135,9 @@ export type LazyStepImplementation<T> = Pick<
 /**
  * Loads a step implementation (WIZ-013), typically `() => import("./step")`.
  * A module namespace with a `default` export is accepted as well. Hooks from
- * the loaded implementation override same-named hooks on the skeleton.
+ * the loaded implementation compose with same-named hooks on the skeleton:
+ * validators are combined (both must pass, errors merged) and lifecycle
+ * hooks run skeleton first, then loaded.
  */
 export type StepLoader<T> = () => Promise<
 	LazyStepImplementation<T> | { default: LazyStepImplementation<T> }

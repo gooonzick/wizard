@@ -157,7 +157,10 @@ export class StepBuilder<T extends WizardData> {
 	 * Loads this step's implementation (validate / onEnter / onLeave /
 	 * onSubmit) lazily on first use (WIZ-013), e.g.
 	 * `.lazy(() => import("./steps/documents"))`. Transitions, `enabled` and
-	 * meta set on this builder stay eager.
+	 * meta set on this builder stay eager. Hooks set on this builder are
+	 * composed with the loaded ones, not replaced: e.g. `.required(...)` still
+	 * applies alongside a loaded `validate` (both must pass), and an eager
+	 * `onEnter` runs before the loaded `onEnter`.
 	 */
 	lazy(loader: StepLoader<T>): this {
 		this.step.load = loader;

@@ -1,5 +1,6 @@
 import { WizardStepLoadError } from "../errors";
-import type { StepId } from "../types/base";
+import { combineValidators } from "./validators";
+import type { StepId, WizardContext } from "../types/base";
 import type {
 	LazyStepImplementation,
 	WizardStepDefinition,
@@ -30,10 +31,28 @@ export function normalizeLazyModule<T>(
 	return raw as LazyStepImplementation<T>;
 }
 
+type LifecycleKey = "onEnter" | "onLeave" | "onSubmit";
+type LifecycleFn<T> = NonNullable<WizardStepDefinition<T>[LifecycleKey]>;
+
+/** Runs `first` then `second`, each awaited, with the same arguments. */
+function sequence<T>(first: LifecycleFn<T>, second: LifecycleFn<T>) {
+	return async (data: T, ctx: WizardContext): Promise<void> => {
+		await first(data, ctx);
+		await second(data, ctx);
+	};
+}
+
 /**
- * Returns a new definition: the skeleton plus every lazy hook the loaded
- * implementation defines. A loaded key that is `undefined` keeps the
- * skeleton's hook; keys outside `LAZY_KEYS` are ignored.
+ * Returns a new definition: the skeleton composed with every lazy hook the
+ * loaded implementation defines. When only one side defines a hook, that
+ * hook is used as-is (a loaded key that is `undefined` keeps the skeleton's
+ * hook). When BOTH define it, they are composed — the loaded implementation
+ * never silently drops a skeleton hook (e.g. a builder's `.required(...)`):
+ * - `validate` → `combineValidators(skeleton, loaded)`: both must pass, their
+ *   errors are merged;
+ * - `onEnter` / `onLeave` / `onSubmit` → the skeleton hook runs first, then
+ *   the loaded one, each awaited (a throw stops the sequence).
+ * Keys outside `LAZY_KEYS` are ignored.
  */
 export function mergeLazyImplementation<T>(
 	skeleton: WizardStepDefinition<T>,
@@ -42,10 +61,16 @@ export function mergeLazyImplementation<T>(
 	const merged: WizardStepDefinition<T> = { ...skeleton };
 	// A loaded step is no longer lazy.
 	delete merged.load;
-	for (const key of LAZY_KEYS) {
-		const hook = impl[key];
-		if (hook !== undefined) {
-			(merged as unknown as Record<string, unknown>)[key] = hook;
+	if (impl.validate) {
+		merged.validate = skeleton.validate
+			? combineValidators(skeleton.validate, impl.validate)
+			: impl.validate;
+	}
+	for (const key of ["onEnter", "onLeave", "onSubmit"] as const) {
+		const loaded = impl[key];
+		if (loaded) {
+			const own = skeleton[key];
+			merged[key] = own ? sequence(own, loaded) : loaded;
 		}
 	}
 	return merged;

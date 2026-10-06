@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { createStep } from "../src/builders/create-step";
 import { WizardError, WizardStepLoadError } from "../src/errors";
 import {
 	loadStepDefinition,
@@ -45,10 +46,10 @@ describe("normalizeLazyModule", () => {
 });
 
 describe("mergeLazyImplementation", () => {
-	it("loaded hooks override skeleton hooks; undefined keeps the skeleton hook", () => {
+	it("a hook defined only on one side is used as-is; the skeleton is not mutated", () => {
 		const skeletonEnter = vi.fn();
 		const skeletonValidate = vi.fn();
-		const loadedEnter = vi.fn();
+		const loadedLeave = vi.fn();
 		const skeleton: WizardStepDefinition<D> = {
 			id: "s",
 			onEnter: skeletonEnter,
@@ -57,14 +58,87 @@ describe("mergeLazyImplementation", () => {
 		};
 
 		const merged = mergeLazyImplementation(skeleton, {
-			onEnter: loadedEnter,
+			onLeave: loadedLeave,
 			validate: undefined,
 		});
 
-		expect(merged.onEnter).toBe(loadedEnter);
+		expect(merged.onEnter).toBe(skeletonEnter);
 		expect(merged.validate).toBe(skeletonValidate);
+		expect(merged.onLeave).toBe(loadedLeave);
 		expect(merged.meta).toEqual({ title: "S" });
-		expect(skeleton.onEnter).toBe(skeletonEnter); // skeleton not mutated
+		expect(skeleton.onLeave).toBeUndefined(); // skeleton not mutated
+	});
+
+	it("composes lifecycle hooks defined on both sides: skeleton first, then loaded, sequentially", async () => {
+		for (const key of ["onEnter", "onLeave", "onSubmit"] as const) {
+			const order: string[] = [];
+			let releaseSkeleton!: () => void;
+			const skeletonHook = vi.fn(
+				() =>
+					new Promise<void>((resolve) => {
+						releaseSkeleton = () => {
+							order.push("skeleton");
+							resolve();
+						};
+					}),
+			);
+			const loadedHook = vi.fn(() => {
+				order.push("loaded");
+			});
+			const merged = mergeLazyImplementation<D>(
+				{ id: "s", [key]: skeletonHook },
+				{ [key]: loadedHook },
+			);
+
+			const data = { name: "x" };
+			const done = merged[key]?.(data, {});
+			await Promise.resolve();
+			expect(skeletonHook).toHaveBeenCalledWith(data, {});
+			expect(loadedHook).not.toHaveBeenCalled(); // waits for the skeleton
+			releaseSkeleton();
+			await done;
+			expect(loadedHook).toHaveBeenCalledWith(data, {});
+			expect(order).toEqual(["skeleton", "loaded"]);
+		}
+	});
+
+	it("composes validators defined on both sides: both must pass, errors are merged", async () => {
+		const merged = mergeLazyImplementation<D>(
+			{
+				id: "s",
+				validate: (d) =>
+					d.name ? { valid: true } : { valid: false, errors: { name: "req" } },
+			},
+			{ validate: () => ({ valid: false, errors: { other: "bad" } }) },
+		);
+		await expect(merged.validate?.({ name: "" }, {})).resolves.toEqual({
+			valid: false,
+			errors: { name: "req", other: "bad" },
+		});
+		await expect(merged.validate?.({ name: "x" }, {})).resolves.toEqual({
+			valid: false,
+			errors: { other: "bad" },
+		});
+
+		const allValid = mergeLazyImplementation<D>(
+			{ id: "s", validate: () => ({ valid: true }) },
+			{ validate: () => ({ valid: true }) },
+		);
+		await expect(allValid.validate?.({ name: "" }, {})).resolves.toEqual({
+			valid: true,
+			errors: undefined,
+		});
+	});
+
+	it("a builder-required field still fails when the loaded validator passes", async () => {
+		const step = createStep<{ passport: string }>("documents")
+			.required("passport")
+			.lazy(async () => ({ validate: () => ({ valid: true }) }))
+			.build();
+		const merged = await loadStepDefinition(step.id, step);
+		const result = await merged.validate?.({ passport: "" }, {});
+		expect(result?.valid).toBe(false);
+		expect(result?.errors).toHaveProperty("passport");
 	});
 
 	it("does not copy load into the merged definition", () => {

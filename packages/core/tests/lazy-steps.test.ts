@@ -382,7 +382,7 @@ describe("WIZ-013 lazy steps — navigation", () => {
 		expect(load).toHaveBeenCalledTimes(2);
 	});
 
-	it("loaded hooks override skeleton hooks; absent loaded hooks keep the skeleton's", async () => {
+	it("loaded hooks compose with skeleton hooks (skeleton first); absent loaded hooks keep the skeleton's", async () => {
 		const skeletonEnter = vi.fn();
 		const loadedEnter = vi.fn();
 		const skeletonValidate = vi.fn(() => ({ valid: true }));
@@ -399,7 +399,10 @@ describe("WIZ-013 lazy steps — navigation", () => {
 		await machine.goNext();
 
 		expect(loadedEnter).toHaveBeenCalledTimes(1);
-		expect(skeletonEnter).not.toHaveBeenCalled();
+		expect(skeletonEnter).toHaveBeenCalledTimes(1);
+		expect(skeletonEnter.mock.invocationCallOrder[0]).toBeLessThan(
+			loadedEnter.mock.invocationCallOrder[0],
+		);
 		expect(skeletonValidate).toHaveBeenCalled();
 	});
 
