@@ -565,3 +565,49 @@ describe("WIZ-013 lazy steps — initial step, validate, restore", () => {
 		expect(machine.snapshot.validationErrors).toBe(before.validationErrors);
 	});
 });
+
+describe("WIZ-013 lazy steps — validateAll", () => {
+	it("loads enabled lazy steps, skips disabled ones, and reports load failures as _error without plugin dispatch", async () => {
+		const documentsValidate = vi.fn(() => ({
+			valid: false,
+			errors: { passport: "required" },
+		}));
+		const disabledLoad = vi.fn(async () => ({}));
+		const failingLoad = vi
+			.fn<StepLoader<Data>>()
+			.mockRejectedValue(new Error("x"));
+		const def = lazyDefinition(
+			vi.fn(async () => ({ validate: documentsValidate })),
+		);
+		def.steps.disabled = { id: "disabled", enabled: false, load: disabledLoad };
+		def.steps.summary.load = failingLoad;
+		const onError = vi.fn();
+		const pluginError = vi.fn();
+		const { machine, states } = createMachine(def, { onError }, [
+			{ name: "spy", onError: pluginError },
+		]);
+		await flush();
+		const before = states.length;
+
+		const summary = await machine.validateAll();
+
+		expect(disabledLoad).not.toHaveBeenCalled();
+		expect(summary.steps.map((s) => s.stepId)).toEqual([
+			"account",
+			"documents",
+			"summary",
+		]);
+		expect(summary.steps[1]).toMatchObject({
+			valid: false,
+			errors: { passport: "required" },
+		});
+		expect(summary.steps[2]).toMatchObject({
+			valid: false,
+			errors: { _error: 'Failed to load step "summary"' },
+		});
+		expect(summary.invalidStepIds).toEqual(["documents", "summary"]);
+		expect(onError).not.toHaveBeenCalled();
+		expect(pluginError).not.toHaveBeenCalled();
+		expect(states.length).toBe(before); // no emission, no isLoadingStep flip
+	});
+});

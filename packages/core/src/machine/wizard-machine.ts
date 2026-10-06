@@ -786,6 +786,9 @@ export class WizardMachine<T extends WizardData> {
 	 * (no plugin hook — including onError — is dispatched). With
 	 * `updateStatuses: true`, invalid steps are marked "error" in a single state
 	 * write that emits exactly one onStateChange.
+	 *
+	 * Lazy steps (WIZ-013) are loaded in the background (no `isLoadingStep`,
+	 * no `onError`); a failed load marks that step invalid with `errors._error`.
 	 */
 	async validateAll(options?: {
 		updateStatuses?: boolean;
@@ -796,29 +799,69 @@ export class WizardMachine<T extends WizardData> {
 		const steps: StepValidationSummary[] = [];
 		const invalidStepIds: StepId[] = [];
 
-		// Insertion order == canonical order (matches computeProgress / Progress API).
-		for (const [stepId, step] of Object.entries(this.definition.steps)) {
-			// Skip disabled steps (boolean false OR guard resolving to false).
-			const isEnabled = await evaluateGuard(
-				step.enabled,
-				this.state.data,
-				this.context,
+		const entries = Object.entries(this.definition.steps);
+		// WIZ-013: with unloaded lazy steps, evaluate all guards first, load the
+		// enabled lazy steps in parallel, then validate in insertion order.
+		// Without them the original per-step guard → validator order is kept.
+		const hasUnloaded = entries.some(([stepId]) => this.needsLoad(stepId));
+		const loadErrors = new Map<StepId, unknown>();
+		let enabledIds: Set<StepId> | undefined;
+		if (hasUnloaded) {
+			enabledIds = new Set();
+			for (const [stepId, step] of entries) {
+				if (await evaluateGuard(step.enabled, this.state.data, this.context)) {
+					enabledIds.add(stepId);
+				}
+			}
+			const toLoad = [...enabledIds].filter((id) => this.needsLoad(id));
+			// Background loads: no isLoadingStep flip, no onError (validateAll is
+			// fully isolated from plugins).
+			const settled = await Promise.allSettled(
+				toLoad.map((id) => this.loadStep(id)),
 			);
-			if (!isEnabled) {
-				continue;
+			for (const [index, result] of settled.entries()) {
+				if (result.status === "rejected") {
+					loadErrors.set(toLoad[index], result.reason);
+				}
+			}
+		}
+
+		// Insertion order == canonical order (matches computeProgress / Progress API).
+		for (const [stepId, step] of entries) {
+			if (enabledIds) {
+				if (!enabledIds.has(stepId)) {
+					continue;
+				}
+			} else {
+				// Skip disabled steps (boolean false OR guard resolving to false).
+				const isEnabled = await evaluateGuard(
+					step.enabled,
+					this.state.data,
+					this.context,
+				);
+				if (!isEnabled) {
+					continue;
+				}
 			}
 
-			const validator = step.validate || alwaysValid;
-
 			let result: ValidationResult;
-			try {
-				result = await validator(this.state.data, this.context);
-			} catch (error) {
-				// A thrown validator is caught here and marked invalid with the
-				// sentinel `_error` field. Do NOT call handleError / dispatch to
-				// plugins — validateAll is fully isolated from the plugin system.
-				const message = error instanceof Error ? error.message : String(error);
+			const loadError = loadErrors.get(stepId);
+			if (loadErrors.has(stepId)) {
+				const message =
+					loadError instanceof Error ? loadError.message : String(loadError);
 				result = { valid: false, errors: { _error: message } };
+			} else {
+				const validator = this.resolvedStep(stepId).validate || alwaysValid;
+				try {
+					result = await validator(this.state.data, this.context);
+				} catch (error) {
+					// A thrown validator is caught here and marked invalid with the
+					// sentinel `_error` field. Do NOT call handleError / dispatch to
+					// plugins — validateAll is fully isolated from the plugin system.
+					const message =
+						error instanceof Error ? error.message : String(error);
+					result = { valid: false, errors: { _error: message } };
+				}
 			}
 
 			steps.push({ stepId, valid: result.valid, errors: result.errors });
