@@ -41,7 +41,7 @@
 
 ### Current Release
 
-The published version is **1.9.0** (`core`, `react`, `vue`, `svelte`, `solid`, and `state` are fixed-versioned together; `solid` joins with the next release). The WIZ-001..008 runtime foundation above shipped by 1.5.0 and was hardened in 1.5.1 by a pre-release audit covering concurrency/veto-safety, resolver-safety, StrictMode-safe React/Vue bindings, and real-machine state tests. Later releases:
+The published version is **1.11.2** (`core`, `react`, `vue`, `svelte`, `solid`, and `state` are fixed-versioned together). The WIZ-001..008 runtime foundation above shipped by 1.5.0 and was hardened in 1.5.1 by a pre-release audit covering concurrency/veto-safety, resolver-safety, StrictMode-safe React/Vue bindings, and real-machine state tests. Later releases:
 
 | Version | Shipped                                                                                   |
 | ------- | ----------------------------------------------------------------------------------------- |
@@ -49,7 +49,10 @@ The published version is **1.9.0** (`core`, `react`, `vue`, `svelte`, `solid`, a
 | 1.7.0   | Built-in `createAnalyticsPlugin` (WIZ-016)                                                 |
 | 1.8.0   | Built-in `createPersistencePlugin` + storage adapters (WIZ-006 follow-up)                  |
 | 1.9.0   | `@gooonzick/wizard-svelte` (WIZ-014); React/Vue `updateField` and reset/restore error fixes |
-| 1.10.0 (next) | `@gooonzick/wizard-solid` (WIZ-015) |
+| 1.10.0  | `@gooonzick/wizard-solid` (WIZ-015); `onStateChange` subscriber errors isolated via `onError` (new `ErrorContext.phase` `"state"`); `WizardStateManager.trackLoading()` |
+| 1.11.0  | Correctness batch from a full-repo review (reset/cancel supersede pending validation, `onComplete` ordering, guard-aware `goPrevious()`, `"skipped"` status for guard-disabled steps, progress reaches 100%); all bindings moved onto shared `wizard-state` wiring (`createMachineAndManager`, `createWizardActions`, ref-counted loading flags, synchronously seeded `canGoNext`/`isLastStep`) |
+| 1.11.1  | Docs: Svelte/Solid/state READMEs synced to the 1.11.0 navigation seeding; Quick Start Next buttons fixed |
+| 1.11.2  | Docs: React/Vue README Next buttons fixed so the last step can be finished |
 
 Remaining backlog: WIZ-011 (sub-wizards), WIZ-012 (DevTools / Mermaid export), WIZ-013 (lazy steps).
 
@@ -89,7 +92,7 @@ Remaining backlog: WIZ-011 (sub-wizards), WIZ-012 (DevTools / Mermaid export), W
 
 ### Key Takeaway
 
-`gooonzick/wizard` already outperforms most competitors in its foundation: typing, declarative approach, framework-agnostic architecture, conditional branching, guard combinators, and Standard Schema. Its **runtime capabilities** are now complete too — navigation (including `goTo` and history), step status tracking, progress, reset/cancel, persistence, plugins, and all-steps validation (WIZ-001 through WIZ-008) have all shipped. Its **framework reach** is now a differentiator as well: alongside React and Vue, first-class Svelte support ships in `@gooonzick/wizard-svelte` (WIZ-014) with a classic store API for Svelte 4/5 and a native Svelte 5 runes API — almost every lightweight competitor is React-only, and the framework-agnostic ones (XState, `@robo-wizard`) leave the binding to you. The remaining differentiators on the horizon are sub-wizards and DevTools/visualization — closing those will make the library an undisputed leader in its niche.
+`gooonzick/wizard` already outperforms most competitors in its foundation: typing, declarative approach, framework-agnostic architecture, conditional branching, guard combinators, and Standard Schema. Its **runtime capabilities** are now complete too — navigation (including `goTo` and history), step status tracking, progress, reset/cancel, persistence, plugins, and all-steps validation (WIZ-001 through WIZ-008) have all shipped. Its **framework reach** is now a differentiator as well: alongside React and Vue, first-class Svelte support ships in `@gooonzick/wizard-svelte` (WIZ-014) with a classic store API for Svelte 4/5 and a native Svelte 5 runes API, and Solid support in `@gooonzick/wizard-solid` (WIZ-015) — almost every lightweight competitor is React-only, and the framework-agnostic ones (XState, `@robo-wizard`) leave the binding to you. The remaining differentiators on the horizon are sub-wizards and DevTools/visualization — closing those will make the library an undisputed leader in its niche.
 
 ---
 
@@ -603,7 +606,7 @@ interface TransitionEvent<TData> {
 
 interface ErrorContext<TData> {
   stepId: StepId;
-  phase: "validation" | "transition" | "lifecycle" | "submit" | "data";
+  phase: "validation" | "transition" | "lifecycle" | "submit" | "data" | "state"; // "state" since 1.10.0
   data: DeepReadonly<TData>;
 }
 
@@ -1279,7 +1282,7 @@ function App() {
   like Svelte's `setWizardContext`, rather than creation options.
 - **Solid 1.x only** (`solid-js ^1.8.0`); Solid 2.0 is a follow-up.
 - Also depends on `@gooonzick/wizard-state` (the shared `WizardStateManager`), like the other bindings.
-- Ships in **1.10.0**.
+- Shipped in **1.10.0**.
 
 ---
 
@@ -1417,6 +1420,6 @@ Phase 5 (Advanced):                                            🚧 in progress
 | WIZ-011 Sub-wizards | New step type                            | Additive, non-breaking                      |
 | WIZ-013 Lazy Steps  | Steps can be a function                  | Requires `typeof step === 'function'` check |
 
-**Release history:** Phases 1–4 shipped incrementally as additive minor releases (1.1.0–1.8.0) rather than the originally proposed per-phase bundles; see Appendix A for per-task versions. WIZ-014 shipped additively in 1.9.0; WIZ-015 ships additively in 1.10.0.
+**Release history:** Phases 1–4 shipped incrementally as additive minor releases (1.1.0–1.8.0) rather than the originally proposed per-phase bundles; see Appendix A for per-task versions. WIZ-014 shipped additively in 1.9.0 and WIZ-015 in 1.10.0. 1.11.0 was a correctness-and-wiring minor (no new backlog items); 1.11.1–1.11.2 were docs-only patches.
 
 **Recommendation for the rest of Phase 5:** ship WIZ-011 and WIZ-012 as additive minors. Reserve a major (v2.0.0) for WIZ-013 only if lazy steps cannot be introduced without changing the `steps` type for existing consumers.
