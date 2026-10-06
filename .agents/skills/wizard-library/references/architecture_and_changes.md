@@ -100,6 +100,12 @@ Invariants:
   runs its `onLeave` (skeleton or loaded) / `events.onStepLeave` — lifecycle hooks of a step
   run only if it was entered. beforeTransition / afterTransition, history, statuses and the
   target load / entry are unchanged; the commit drops the marker.
+  The same skip applies while the initial step's FIRST load is still in flight
+  (`initialLoadInFlightGen`, set synchronously in `initializeFirstStep` for a lazy initial
+  step, cleared when that load settles): `navigateToStep` checks EITHER marker
+  (`isLeavingUnenteredInitialStep`). The in-flight marker never drives a replay (no double
+  entry with a concurrent `validate()`); `initializeFirstStep`'s `left()` check skips the
+  entry when the load settles after the user left.
 - Abort: the signal is checked only on entry to a public method. `validate()` is a thin
   wrapper (`checkAborted()` + private `runValidation()`); the drift re-target and the internal
   callers (goNext / goTo / submit) call `runValidation()`, so an abort mid-flight never rejects

@@ -281,6 +281,8 @@ createWizard<Application>("loan").step("documents", (s) =>
   still on it. Lifecycle hooks of a step run only if it was entered: leaving it without
   validation (goPrevious, `goTo(id, { skipValidation: true })`) skips loading it and skips its
   `onLeave` (also a skeleton one) / `onStepLeave`; coming back loads and enters it normally.
+  The same holds while the initial step's first load is still in flight (it is then never
+  entered when that load settles, and a failure is not reported).
   `reset()` / `cancel()` / `restore()` discard the pending entry.
 - `validate()` while the user moves to another step during its load validates the NEW current
   step (no fake invalid result, no report for the step they left). The abort signal is checked

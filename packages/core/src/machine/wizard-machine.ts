@@ -235,6 +235,16 @@ export class WizardMachine<T extends WizardData> {
 	 * A new generation (reset/cancel/restore) or leaving the step discards it.
 	 */
 	private pendingInitialEntryGen: number | undefined;
+	/**
+	 * WIZ-013: generation whose lazy initial step's FIRST load (started by
+	 * `initializeFirstStep`) is still in flight — the step has not been entered
+	 * yet either. Cleared when that load settles (success or failure). Only
+	 * `navigateToStep` reads it (leaving the step skips its load and leave
+	 * hooks); it never drives a replay, so a concurrent `validate()` cannot
+	 * cause a double entry — `initializeFirstStep` enters the step itself, or
+	 * skips the entry when the wizard left it during the load.
+	 */
+	private initialLoadInFlightGen: number | undefined;
 	/** WIZ-013: staleness check for loads inside a transition / submit. */
 	private readonly transitionAborted = (): boolean =>
 		this.isTransitionStale() || this.isDestroyed;
@@ -375,9 +385,15 @@ export class WizardMachine<T extends WizardData> {
 		// to lazy initial steps, so non-lazy wizards keep their exact behaviour.
 		const wasLazy = this.needsLoad(initialStepId);
 		let entered = true;
+		if (wasLazy) {
+			this.initialLoadInFlightGen = gen;
+		}
 		const prep = this.prepareSteps([initialStepId], [], left, false);
 		if (isPromiseLike(prep)) {
 			const prepared = await prep;
+			if (this.initialLoadInFlightGen === gen) {
+				this.initialLoadInFlightGen = undefined;
+			}
 			if (prepared.status === "stale") {
 				return;
 			}
@@ -1621,13 +1637,14 @@ export class WizardMachine<T extends WizardData> {
 		// a current-step failure is reported and the skeleton's onLeave is used,
 		// so a broken chunk never traps the user on its step.
 		// Lifecycle hooks of a step run only if the step was entered: an initial
-		// step whose entry is still pending (its load failed) is not loaded
-		// here, its pending entry is not replayed (opt-out) and its onLeave /
-		// onStepLeave are skipped below; the commit drops the pending marker.
+		// step whose entry is still pending (its load failed) or whose first
+		// load is still in flight is not loaded here, a pending entry is not
+		// replayed (opt-out) and its onLeave / onStepLeave are skipped below;
+		// the commit drops the pending marker.
 		if (!skipLifecycle) {
 			const prep = this.prepareSteps(
 				[stepId],
-				this.isInitialStepUnentered() ? [] : [this.state.currentStepId],
+				this.isLeavingUnenteredInitialStep() ? [] : [this.state.currentStepId],
 				this.transitionAborted,
 				false,
 			);
@@ -1670,7 +1687,7 @@ export class WizardMachine<T extends WizardData> {
 
 		// Call onLeave for current step (re-checked here: a concurrent validate()
 		// may have replayed a pending initial entry during the awaits above).
-		if (!skipLifecycle && !this.isInitialStepUnentered()) {
+		if (!skipLifecycle && !this.isLeavingUnenteredInitialStep()) {
 			if (currentStep.onLeave) {
 				await currentStep.onLeave(this.state.data, this.context);
 			}
@@ -2259,6 +2276,20 @@ export class WizardMachine<T extends WizardData> {
 		return (
 			this.pendingInitialEntryGen === this.generation &&
 			this.state.currentStepId === this.definition.initialStepId
+		);
+	}
+
+	/**
+	 * WIZ-013: navigation's "not entered" check for the step being left: the
+	 * initial step is unentered (pending entry, see `isInitialStepUnentered`)
+	 * or its first load is still in flight in this generation. Never used for
+	 * replay. Synchronous.
+	 */
+	private isLeavingUnenteredInitialStep(): boolean {
+		return (
+			this.isInitialStepUnentered() ||
+			(this.initialLoadInFlightGen === this.generation &&
+				this.state.currentStepId === this.definition.initialStepId)
 		);
 	}
 

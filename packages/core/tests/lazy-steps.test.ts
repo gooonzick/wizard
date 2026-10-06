@@ -1397,6 +1397,48 @@ describe("WIZ-013 lazy steps — drift during a pending load", () => {
 		expect(onStepEnter).toHaveBeenCalledWith("start", initialData);
 	});
 
+	for (const outcome of ["resolves", "rejects"] as const) {
+		it(`leaving the initial step while its first load is in flight (${outcome}) skips its load and leave hooks and never enters it`, async () => {
+			const onEnter = vi.fn();
+			const onLeave = vi.fn();
+			const skeletonOnLeave = vi.fn();
+			const loader = controlledLoader({ onEnter, onLeave });
+			const def = lazyInitialDefinition(loader.load);
+			def.steps.start.onLeave = skeletonOnLeave;
+			const onStepEnter = vi.fn();
+			const onStepLeave = vi.fn();
+			const onError = vi.fn();
+			const { machine } = createMachine(def, {
+				onStepEnter,
+				onStepLeave,
+				onError,
+			});
+			expect(machine.snapshot.isLoadingStep).toBe(true);
+
+			await machine.goTo("end", { skipValidation: true });
+			expect(machine.snapshot.currentStepId).toBe("end");
+			expect(loader.load).toHaveBeenCalledTimes(1);
+			expect(onLeave).not.toHaveBeenCalled();
+			expect(skeletonOnLeave).not.toHaveBeenCalled();
+			expect(onStepLeave).not.toHaveBeenCalled();
+			expect(onEnter).not.toHaveBeenCalled();
+			expect(onStepEnter).not.toHaveBeenCalledWith("start", expect.anything());
+
+			if (outcome === "resolves") {
+				loader.resolve();
+			} else {
+				loader.reject();
+			}
+			await flush();
+			expect(loader.load).toHaveBeenCalledTimes(1);
+			expect(onEnter).not.toHaveBeenCalled();
+			expect(onStepEnter).not.toHaveBeenCalledWith("start", expect.anything());
+			expect(onLeave).not.toHaveBeenCalled();
+			expect(onError).not.toHaveBeenCalled();
+			expect(machine.snapshot.isLoadingStep).toBe(false);
+		});
+	}
+
 	it("an initial load failure for a step the user already left is not reported", async () => {
 		const loader = controlledLoader();
 		const onError = vi.fn();
