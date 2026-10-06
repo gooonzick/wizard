@@ -873,6 +873,30 @@ describe("WIZ-013 lazy steps — drift during a pending load", () => {
 		expect(machine.snapshot.isLoadingStep).toBe(false);
 	});
 
+	it("a NON-lazy initial step keeps its behaviour: onStepEnter still fires after an async onEnter even if the user left", async () => {
+		const gate = deferred();
+		const onEnter = vi.fn(() => gate.promise);
+		const onStepEnter = vi.fn();
+		const { machine } = createMachine(
+			{
+				id: "eager-initial",
+				initialStepId: "start",
+				steps: {
+					start: { id: "start", onEnter, next: { type: "static", to: "end" } },
+					end: { id: "end" },
+				},
+			},
+			{ onStepEnter },
+		);
+		expect(onEnter).toHaveBeenCalledTimes(1);
+
+		await machine.goTo("end", { skipValidation: true, skipLifecycle: true });
+		gate.resolve();
+		await flush();
+		expect(machine.snapshot.currentStepId).toBe("end");
+		expect(onStepEnter).toHaveBeenCalledWith("start", initialData);
+	});
+
 	it("an initial load failure for a step the user already left is not reported", async () => {
 		const loader = controlledLoader();
 		const onError = vi.fn();

@@ -317,8 +317,11 @@ export class WizardMachine<T extends WizardData> {
 			this.generation !== gen ||
 			this.isDestroyed ||
 			this.state.currentStepId !== initialStepId;
+		// Captured synchronously: the post-onEnter drift check below applies only
+		// to lazy initial steps, so non-lazy wizards keep their exact behaviour.
+		const wasLazy = this.needsLoad(initialStepId);
 		let entered = true;
-		if (this.needsLoad(initialStepId)) {
+		if (wasLazy) {
 			try {
 				await this.ensureStepsLoaded([initialStepId]);
 			} catch (error) {
@@ -341,7 +344,7 @@ export class WizardMachine<T extends WizardData> {
 				}
 				if (
 					this.generation !== gen ||
-					this.state.currentStepId !== initialStepId
+					(wasLazy && this.state.currentStepId !== initialStepId)
 				) {
 					return;
 				}
