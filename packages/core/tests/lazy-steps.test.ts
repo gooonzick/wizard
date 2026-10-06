@@ -539,9 +539,7 @@ describe("WIZ-013 lazy steps — initial step, validate, restore", () => {
 	});
 
 	it("validate() with a failing load: invalid result, reported once, no state write, no onValidation", async () => {
-		const load = vi
-			.fn<StepLoader<Data>>()
-			.mockRejectedValue(new Error("down"));
+		const load = vi.fn<StepLoader<Data>>().mockRejectedValue(new Error("down"));
 		const onError = vi.fn();
 		const onValidation = vi.fn();
 		const { machine } = createMachine(lazyDefinition(load), {
@@ -609,5 +607,162 @@ describe("WIZ-013 lazy steps — validateAll", () => {
 		expect(onError).not.toHaveBeenCalled();
 		expect(pluginError).not.toHaveBeenCalled();
 		expect(states.length).toBe(before); // no emission, no isLoadingStep flip
+	});
+});
+
+describe("WIZ-013 lazy steps — supersede, destroy, dedupe", () => {
+	for (const [name, supersede] of [
+		["reset()", (m: WizardMachine<Data>) => m.reset()],
+		["cancel()", (m: WizardMachine<Data>) => void m.cancel()],
+		[
+			"restore()",
+			(m: WizardMachine<Data>) =>
+				m.restore({
+					...documentsSnapshot,
+					currentStepId: "account",
+					history: ["account"],
+					visitedSteps: ["account"],
+					stepStatuses: {
+						account: "active",
+						documents: "pristine",
+						summary: "pristine",
+					},
+				}),
+		],
+	] as const) {
+		it(`${name} during a pending target load supersedes the transition`, async () => {
+			const onEnter = vi.fn();
+			const loader = controlledLoader({ onEnter });
+			const onStepEnter = vi.fn();
+			const onError = vi.fn();
+			const { machine, states } = createMachine(lazyDefinition(loader.load), {
+				onStepEnter,
+				onError,
+			});
+			await flush();
+
+			const p = machine.goNext();
+			await flush();
+			expect(machine.snapshot.isLoadingStep).toBe(true);
+			supersede(machine);
+			await flush();
+			expect(machine.snapshot.isLoadingStep).toBe(false);
+			const count = states.length;
+
+			loader.resolve();
+			await expect(p).resolves.toBeUndefined();
+			await flush();
+			expect(machine.snapshot.currentStepId).toBe("account");
+			expect(onEnter).not.toHaveBeenCalled();
+			expect(onStepEnter).not.toHaveBeenCalledWith(
+				"documents",
+				expect.anything(),
+			);
+			expect(states.length).toBe(count);
+			expect(onError).not.toHaveBeenCalled();
+		});
+	}
+
+	it("a superseded load FAILURE is not reported", async () => {
+		const loader = controlledLoader();
+		const onError = vi.fn();
+		const { machine } = createMachine(lazyDefinition(loader.load), { onError });
+		await flush();
+
+		const p = machine.goNext();
+		await flush();
+		machine.reset();
+		loader.reject();
+		await expect(p).resolves.toBeUndefined();
+		expect(onError).not.toHaveBeenCalled();
+	});
+
+	it("destroy() during a pending load: no navigation, hooks, emissions or reports", async () => {
+		const onEnter = vi.fn();
+		const loader = controlledLoader({ onEnter });
+		const onError = vi.fn();
+		const { machine, states } = createMachine(lazyDefinition(loader.load), {
+			onError,
+		});
+		await flush();
+
+		const p = machine.goNext();
+		await flush();
+		await machine.destroy();
+		const count = states.length;
+
+		loader.resolve();
+		await p;
+		await flush();
+		expect(machine.snapshot.currentStepId).toBe("account");
+		expect(onEnter).not.toHaveBeenCalled();
+		expect(states.length).toBe(count);
+		expect(onError).not.toHaveBeenCalled();
+	});
+
+	it("concurrent validate() + goNext() on an unloaded current step share one load", async () => {
+		const validate = vi.fn(() => ({ valid: true }));
+		const loader = controlledLoader({ validate });
+		const { machine } = createMachine(lazyDefinition(loader.load));
+		await machine.goTo("documents", {
+			skipValidation: true,
+			skipLifecycle: true,
+		});
+
+		const v = machine.validate();
+		const n = machine.goNext();
+		await flush();
+		expect(loader.load).toHaveBeenCalledTimes(1);
+
+		loader.resolve();
+		await Promise.all([v, n]);
+		expect(machine.snapshot.currentStepId).toBe("summary");
+	});
+
+	it("a failed attempt awaited by two callers is reported once", async () => {
+		const loader = controlledLoader();
+		const onError = vi.fn();
+		const { machine } = createMachine(lazyDefinition(loader.load), { onError });
+		await machine.goTo("documents", {
+			skipValidation: true,
+			skipLifecycle: true,
+		});
+
+		const v = machine.validate();
+		const n = machine.goNext().catch((e) => e);
+		await flush();
+		loader.reject();
+		await v;
+		const error = await n;
+		expect(error).toBeInstanceOf(WizardStepLoadError);
+		expect(onError).toHaveBeenCalledTimes(1);
+	});
+
+	it("a preload in flight that a navigation joins, then fails: onError once with phase 'load', the preload promise rejects with the same WizardStepLoadError instance, one loader call", async () => {
+		const loader = controlledLoader();
+		const onError = vi.fn();
+		const pluginError = vi.fn();
+		const { machine } = createMachine(
+			lazyDefinition(loader.load),
+			{ onError },
+			[{ name: "spy", onError: pluginError }],
+		);
+		await flush();
+
+		const pre = machine.preloadStep("documents");
+		// Attach the handler up front so the rejection is never unhandled.
+		const preError = pre.catch((e) => e);
+		const nav = machine.goNext().catch((e) => e);
+		await flush();
+		loader.reject();
+
+		const navError = await nav;
+		expect(navError).toBeInstanceOf(WizardStepLoadError);
+		expect(await preError).toBe(navError);
+		expect(onError).toHaveBeenCalledTimes(1);
+		expect(onError.mock.calls[0][0]).toBe(navError);
+		expect(pluginError).toHaveBeenCalledTimes(1);
+		expect(pluginError.mock.calls[0][1]).toMatchObject({ phase: "load" });
+		expect(loader.load).toHaveBeenCalledTimes(1);
 	});
 });
