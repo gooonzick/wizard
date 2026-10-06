@@ -73,3 +73,21 @@ export class WizardAbortError extends WizardError {
 		this.name = "WizardAbortError";
 	}
 }
+
+/**
+ * Error thrown when a lazy step's `load()` rejects or resolves to something
+ * that is not a step implementation object (WIZ-013). The original failure is
+ * available as `cause`.
+ */
+export class WizardStepLoadError extends WizardError {
+	constructor(
+		public readonly stepId: StepId,
+		options?: { cause?: unknown },
+	) {
+		super(`Failed to load step "${stepId}"`);
+		this.name = "WizardStepLoadError";
+		if (options && "cause" in options) {
+			this.cause = options.cause;
+		}
+	}
+}

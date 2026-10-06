@@ -37,7 +37,8 @@ export interface ErrorContext<TData> {
 		| "lifecycle"
 		| "submit"
 		| "data"
-		| "state";
+		| "state"
+		| "load";
 	data: DeepReadonly<TData>;
 }
 

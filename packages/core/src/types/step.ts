@@ -113,6 +113,30 @@ export interface WizardStepDefinition<T> {
 	// Action on step submit
 	onSubmit?: SubmitHandler<T>;
 
+	// Lazily loaded implementation (WIZ-013): validate / onEnter / onLeave /
+	// onSubmit. Transitions, `enabled` and `meta` always stay on the skeleton.
+	load?: StepLoader<T>;
+
 	// UI metadata
 	meta?: StepMeta;
 }
+
+/**
+ * The part of a step that may be loaded lazily (WIZ-013). Everything the
+ * machine needs synchronously — transitions, `enabled`, `meta` — stays on the
+ * eager step skeleton, so progress, `isLastStep` and disabled-step skipping
+ * never wait for a load.
+ */
+export type LazyStepImplementation<T> = Pick<
+	WizardStepDefinition<T>,
+	"validate" | "onEnter" | "onLeave" | "onSubmit"
+>;
+
+/**
+ * Loads a step implementation (WIZ-013), typically `() => import("./step")`.
+ * A module namespace with a `default` export is accepted as well. Hooks from
+ * the loaded implementation override same-named hooks on the skeleton.
+ */
+export type StepLoader<T> = () => Promise<
+	LazyStepImplementation<T> | { default: LazyStepImplementation<T> }
+>;

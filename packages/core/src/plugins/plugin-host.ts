@@ -15,7 +15,7 @@ import type {
  */
 export type PluginErrorReporter = (
 	error: unknown,
-	phase?: "validation" | "transition" | "lifecycle" | "submit" | "data",
+	phase?: ErrorContext<unknown>["phase"],
 ) => void;
 
 /**
@@ -237,7 +237,7 @@ export class PluginHost<TData> {
 	/** Awaits a hook, catching + reporting any throw/rejection. */
 	private async runIsolated(
 		fn: () => void | Promise<void>,
-		phase?: "validation" | "transition" | "lifecycle" | "submit" | "data",
+		phase?: ErrorContext<unknown>["phase"],
 	): Promise<void> {
 		try {
 			await fn();
