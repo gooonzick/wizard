@@ -127,6 +127,8 @@ interface WizardStoreLoading {
   isValidating: boolean;
   isSubmitting: boolean;
   isNavigating: boolean;
+  /** True while a lazy step's implementation loads (WIZ-013). Mirrored from the machine. */
+  isLoadingStep: boolean;
 }
 
 interface WizardSnapshot<T>
@@ -158,6 +160,8 @@ interface WizardStoreActions<T> {
   serialize(): WizardSerializedState<T>;
   /** Fire-and-forget (`void manager.runRestore(...)`), mirroring React. */
   restore(state: WizardSerializedState<T>): void;
+  /** WIZ-013: prefetch a lazy step's implementation without navigating. Does not set isLoadingStep; the caller owns the rejection. */
+  preloadStep(stepId: StepId): Promise<void>;
 }
 ```
 
@@ -168,7 +172,8 @@ terminated: a malformed snapshot raises `WizardRestoreError`, which is forwarded
 Loading flags are owned by `WizardStateManager` (the React model): `validate` /
 `validateAll` toggle `isValidating`, `submit` toggles `isSubmitting`, navigation toggles
 `isNavigating`, and `reset` / `cancel` / `restore` go through `manager.runReset` /
-`runCancel` / `runRestore`.
+`runCancel` / `runRestore`. `isLoadingStep` is the exception: it is not tracked by the manager but
+mirrored from `machine.snapshot.isLoadingStep`, and `actions.preloadStep` never sets it.
 
 ## Context helpers (store layer)
 
@@ -227,6 +232,7 @@ interface Wizard<T> {
   readonly isValidating: boolean;
   readonly isSubmitting: boolean;
   readonly isNavigating: boolean;
+  readonly isLoadingStep: boolean;
 
   // Slice getters — parity with the store layer's sub-stores
   readonly state: WizardStoreState<T>;

@@ -58,6 +58,7 @@ Each step in a wizard is defined by a `WizardStepDefinition`. A step can have:
 - **Lifecycle hooks**: onEnter, onLeave, onSubmit
 - **Guards**: Conditions that determine if the step is available
 - **Metadata**: Title, description, icons, etc.
+- **Lazy implementation** (optional): `validate` and the lifecycle hooks can be loaded on first use via `load` / `.lazy()` — see [Lazy Steps](./defining-wizards.md#lazy-steps)
 
 ```typescript
 const personalInfoStep: WizardStepDefinition<SignupData> = {
@@ -391,6 +392,10 @@ const machine = new WizardMachine(definition, context, initialData, {
   },
 });
 ```
+
+### Loading state
+
+`WizardState` carries `isLoadingStep: boolean` — `true` while a lazy step's implementation loads (WIZ-013). It is transient, never serialized, and flips back to `false` once the load settles. See [Lazy Steps](./defining-wizards.md#lazy-steps).
 
 ### Reacting to data changes
 

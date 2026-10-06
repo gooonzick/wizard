@@ -21,6 +21,7 @@ A declarative, type-safe, and extensible framework for building multi-step wizar
 - **Svelte Integration**: Svelte stores + Svelte 5 runes
 - **Solid Integration**: Signal-backed `createWizard()` for Solid 1.x
 - **Builder Pattern**: Fluent API for easy wizard creation
+- **Lazy Steps**: Load a step's validation and lifecycle code on first use with `load` / `.lazy()`, with `isLoadingStep` and `preloadStep` in every binding
 
 ## 📦 Installation
 

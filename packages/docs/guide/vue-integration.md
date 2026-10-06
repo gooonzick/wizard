@@ -225,6 +225,7 @@ await navigation.goTo(id); // Jump to specific step (validates first)
 loading.isValidating.value; // Validation in progress? (ComputedRef)
 loading.isSubmitting.value; // Submission in progress? (ComputedRef)
 loading.isNavigating.value; // Navigation in progress? (ComputedRef)
+loading.isLoadingStep.value; // A lazy step's implementation is loading? (ComputedRef, see Lazy Steps)
 ```
 
 #### Actions Slice
@@ -269,7 +270,12 @@ await actions.cancel(); // Awaits definition.onCancel + onCancel event, then res
 actions.serialize(); // JSON-safe runtime snapshot
 actions.restore(savedState); // Re-apply snapshot (throws WizardRestoreError if incompatible)
 // (Prefer `createPersistencePlugin` for automatic save/restore — see "Persisting Progress".)
+
+// Lazy steps
+actions.preloadStep("documents").catch(() => {}); // Prefetch a lazy step's implementation
 ```
+
+Steps declared with `load` / `.lazy()` load their `validate` and lifecycle hooks on first use; show a spinner with `loading.isLoadingStep.value`. `preloadStep` does not set the flag and returns a promise you own, so add `.catch(() => {})` when you fire and forget. See [Lazy Steps](./defining-wizards.md#lazy-steps).
 
 ## Reset & Cancel
 

@@ -10,6 +10,7 @@ A framework-agnostic, type-safe state machine for building multi-step wizards in
 - **Navigation History** - Built-in history stack for reliable back navigation through conditional flows
 - **Validation** - Built-in validators, schema support, and custom predicates
 - **Extensible** - Context, guards, lifecycle hooks, and side effects
+- **Lazy Steps** - Load a step's `validate` / lifecycle hooks on first use (`load` / `.lazy()`), with `preloadStep` and `isLoadingStep`
 - **State Machine** - Predictable behavior based on finite state machine principles
 - **Zero Dependencies** - Core library has no external dependencies (only for Standard Schema validation)
 
@@ -147,6 +148,27 @@ machine.use(
 ```
 
 See the [Plugins guide](../../docs/plugins.md) for veto semantics and lifecycle hooks.
+
+### Lazy Steps
+
+Defer a step's heavy implementation (`validate`, `onEnter`, `onLeave`, `onSubmit`) to a dynamic `import()`. The step skeleton (`id`, `next`, `previous`, `enabled`, `meta`) stays eager, so progress, `isLastStep` and disabled-step skipping never wait for a download.
+
+```typescript
+createWizard<Application>("loan")
+  .step("documents", (s) =>
+    s
+      .title("Documents")
+      .previous("personal")
+      .next("summary")
+      .lazy(() => import("./steps/documents")), // default export: { validate, onEnter, ... }
+  )
+  .build();
+
+machine.snapshot.isLoadingStep; // true while the current/target step loads
+machine.preloadStep("documents").catch(() => {}); // prefetch, e.g. on hover of "Next"
+```
+
+A failed load rejects the operation with `WizardStepLoadError`, is reported with `ErrorContext.phase === "load"`, leaves the wizard on its current step and is retried by the next attempt. See the [Lazy Steps guide](../../docs/defining-wizards.md#lazy-steps).
 
 ### Three Transition Types
 

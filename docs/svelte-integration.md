@@ -144,6 +144,7 @@ $wizard.stepHistory;
 $wizard.isValidating;
 $wizard.isSubmitting;
 $wizard.isNavigating;
+$wizard.isLoadingStep; // a lazy step's implementation is loading (see Lazy Steps)
 ```
 
 The aggregate is subscribed to the manager's `"all"` channel, so it re-emits on *any*
@@ -252,6 +253,9 @@ await wizard.actions.cancel(); // awaits onCancel, then resets
 // Persistence
 const snapshot = wizard.actions.serialize();
 wizard.actions.restore(snapshot);
+
+// Lazy steps — prefetch the implementation; the returned promise is yours to handle
+wizard.actions.preloadStep("documents").catch(() => {});
 ```
 
 `reset` and `restore` return `void`, not `Promise<void>` — exact parity with the React
@@ -264,6 +268,8 @@ Loading flags are owned by `WizardStateManager`, the same model React uses:
 navigation method toggles `isNavigating`, and `reset` / `cancel` / `restore` run through
 `manager.runReset` / `runCancel` / `runRestore` so `wizard.loading` stays accurate for them
 too.
+
+`isLoadingStep` is the one loading flag the manager does not track: it mirrors the machine's `isLoadingStep` (`true` while a lazy step's implementation loads) and is never set by `actions.preloadStep`. See [Lazy Steps](./defining-wizards.md#lazy-steps).
 
 ## Options
 

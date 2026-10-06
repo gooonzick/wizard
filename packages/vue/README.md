@@ -199,8 +199,8 @@ Main composable for wizard state management. Returns organized state slices.
 - `state` - Current step, data, `stepStatuses`, `progress` (`ComputedRef`s)
 - `validation` - Validation state and errors
 - `navigation` - Navigation state and methods (`goPrevious`, `goTo`, …)
-- `loading` - Async operation states
-- `actions` - Data mutations, `validate` / `validateAll`, `submit`, `reset` / `cancel`, `serialize` / `restore`
+- `loading` - Async operation states (`isValidating`, `isSubmitting`, `isNavigating`, `isLoadingStep`)
+- `actions` - Data mutations, `validate` / `validateAll`, `submit`, `reset` / `cancel`, `serialize` / `restore`, `preloadStep`
 
 #### Granular Composables (require WizardProvider)
 

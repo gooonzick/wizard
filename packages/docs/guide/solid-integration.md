@@ -93,10 +93,10 @@ export function SignupWizard() {
 
 | Group | Members |
 | ----- | ------- |
-| Flat getters | `currentStepId`, `currentStep`, `data`, `isCompleted`, `stepStatuses`, `progress`, `isValid`, `validationErrors`, `canGoNext`, `canGoPrevious`, `canGoBack`, `isFirstStep`, `isLastStep`, `visitedSteps`, `availableSteps`, `stepHistory`, `isValidating`, `isSubmitting`, `isNavigating` |
+| Flat getters | `currentStepId`, `currentStep`, `data`, `isCompleted`, `stepStatuses`, `progress`, `isValid`, `validationErrors`, `canGoNext`, `canGoPrevious`, `canGoBack`, `isFirstStep`, `isLastStep`, `visitedSteps`, `availableSteps`, `stepHistory`, `isValidating`, `isSubmitting`, `isNavigating`, `isLoadingStep` |
 | Slices | `state`, `navigation`, `validation`, `loading` — the manager's frozen snapshots |
 | Navigation | `goNext()`, `goPrevious()`, `goTo(stepId, options?)` |
-| Actions | `wizard.actions.updateField`, `updateData`, `setData`, `validate`, `validateAll`, `canSubmit`, `submit`, `reset`, `cancel`, `serialize`, `restore` |
+| Actions | `wizard.actions.updateField`, `updateData`, `setData`, `validate`, `validateAll`, `canSubmit`, `submit`, `reset`, `cancel`, `serialize`, `restore`, `preloadStep` |
 | Binding | `field(key)` |
 | Escape hatches | `getMachine()`, `getManager()`, `destroy()`, `isDestroyed` |
 
@@ -108,7 +108,7 @@ The shape matches the Svelte runes API (`@gooonzick/wizard-svelte/runes`), so co
 - **Per-channel tracking.** The wizard holds four signals: `state`, `navigation`, `validation`, `loading`. Reading `wizard.data.name` subscribes to the whole `state` channel, so any data change re-runs that expression (DOM writes still only happen when the value differs).
 - **Atomic updates.** All four signals are refreshed inside one `batch()`, so an effect never sees a new `currentStepId` together with a stale `canGoNext`.
 - **Navigation flags.** `canGoNext` and `isLastStep` are seeded synchronously from `wizard.progress.isLastStep` when the wizard is created and whenever the current step changes, so they are correct on first render for synchronous graphs. The seed is conservative: a step whose `next` is an async resolver starts as "not last" until the async computation settles one microtask later. `canGoPrevious` and `availableSteps` come only from that async computation: right after creation `canGoPrevious` is `false` and `availableSteps` is empty.
-- **Reference-counted loading flags.** `isNavigating`, `isValidating` and `isSubmitting` stay `true` while any operation that set them is still in flight, so a double-clicked Next rejected as busy, or an overlapping `validate()`, no longer clears another operation's flag.
+- **Reference-counted loading flags.** `isNavigating`, `isValidating` and `isSubmitting` stay `true` while any operation that set them is still in flight, so a double-clicked Next rejected as busy, or an overlapping `validate()`, no longer clears another operation's flag. `isLoadingStep` (a lazy step's implementation is loading, see [Lazy Steps](./defining-wizards.md#lazy-steps)) is the exception: it mirrors the machine and is not set by `actions.preloadStep`, whose promise you own (`.catch(() => {})` for fire-and-forget).
 - **`canGoNext` is not validity.** It means "a next step exists"; validation runs inside `goNext()`, which rejects (and reports to `onError`) when the current step is invalid.
 - **Non-reactive options.** `definition`, `initialData`, `context` and `plugins` are read once. Recreate the wizard (e.g. inside a keyed `<Show>`) to reconfigure.
 
@@ -168,7 +168,7 @@ Plugins are registered once at creation. See the [plugin contract](/guide/plugin
 - Machine errors (validation, lifecycle hooks, plugins, `onDataChange` subscribers) go to `onError`.
 - `goNext`, `goPrevious`, `goTo`, `submit` and `cancel` return promises that reject on failure (e.g. `goNext()` on an invalid step). Loading flags are always reset.
 - `validate` **resolves** even on an invalid step — the result is reported through `isValid` / `validationErrors`, not through rejection. It rejects only if the operation was already aborted (via an `AbortSignal` passed in context) before the call; a `reset()`/`cancel()` while it is in flight does not reject it — that call is superseded and still resolves, without writing its result into state.
-- `validateAll` also **resolves** with a `ValidationSummary` even when steps are invalid (a throwing step validator counts as invalid, not a rejection). It rejects if the wizard was already aborted, or if a step's `enabled` guard throws. Unlike `validate`, it has no supersede protection: a `reset()`/`cancel()` fired while it's running does not cancel it, and with `updateStatuses: true` its step statuses are still written into the (now post-reset) state.
+- `validateAll` also **resolves** with a `ValidationSummary` even when steps are invalid (a throwing step validator counts as invalid, not a rejection). It rejects if the wizard was already aborted, or if a step's `enabled` guard throws. A `reset()` / `cancel()` / `restore()` / `destroy()` fired while it's running does not cancel it, but with `updateStatuses: true` its step statuses are no longer written into the (now post-reset) state.
 - `reset(data)` rewinds to the initial step with `data` and makes it the new reset baseline: a later bare `reset()` (or `cancel()`) returns to that data, not the original `initialData`.
 - `reset()` and `restore()` are fire-and-forget; a malformed snapshot (`WizardRestoreError`) is reported to `onError` (or logged with `console.error` when no `onError` is given), never as an unhandled rejection.
 - **Throwing effects.** Solid 1.x runs effects synchronously when the wizard updates its signals — inside the machine's transition, and also on loading-flag changes and the async navigation recompute. If a `createEffect` throws and no `<ErrorBoundary>` catches it, the wizard reports the error to `onError` (or logs it with `console.error` when no `onError` is given) and keeps working. Solid itself may leave other effects from that same update stale, so wrap effect-heavy UI in `<ErrorBoundary>` or use `catchError`.

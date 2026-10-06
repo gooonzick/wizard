@@ -83,6 +83,8 @@ interface UseWizardLoading {
   isValidating: boolean;
   isSubmitting: boolean;
   isNavigating: boolean;
+  /** True while a lazy step's implementation loads (WIZ-013). Not an operation flag: mirrored from the machine. */
+  isLoadingStep: boolean;
 }
 
 interface UseWizardActions<T> {
@@ -97,6 +99,8 @@ interface UseWizardActions<T> {
   cancel(): Promise<void>;
   serialize(): WizardSerializedState<T>;
   restore(state: WizardSerializedState<T>): void;
+  /** WIZ-013: prefetch a lazy step's implementation without navigating. Does not set isLoadingStep; the caller owns the rejection. */
+  preloadStep(stepId: StepId): Promise<void>;
 }
 ```
 
@@ -131,7 +135,7 @@ const { canGoNext, canGoPrevious, goNext, goPrevious, goTo, ... } = useWizardNav
 const { isValid, validationErrors } = useWizardValidation();
 
 // Only subscribes to loading changes
-const { isValidating, isSubmitting, isNavigating } = useWizardLoading();
+const { isValidating, isSubmitting, isNavigating, isLoadingStep } = useWizardLoading();
 
 // Actions (stable, doesn't cause re-renders)
 const {
@@ -146,6 +150,7 @@ const {
   cancel,
   serialize,
   restore,
+  preloadStep,
 } = useWizardActions<T>();
 ```
 

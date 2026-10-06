@@ -82,7 +82,7 @@ const navUnsub = manager.subscribe(
 - `"state"` - Data or current step changes
 - `"navigation"` - Navigation capabilities (canGoNext, canGoPrevious)
 - `"validation"` - Validation state or errors
-- `"loading"` - Loading flags (isValidating, isSubmitting, isNavigating)
+- `"loading"` - Loading flags (isValidating, isSubmitting, isNavigating, isLoadingStep)
 - `"all"` - All channels (default)
 
 ### Snapshot Methods
@@ -142,6 +142,8 @@ Updates loading state and notifies loading channel subscribers.
 ```typescript
 manager.setLoadingState({ isValidating: true });
 ```
+
+`isLoadingStep` (WIZ-013) is different from the other flags: it mirrors `machine.snapshot.isLoadingStep` and is seeded from the snapshot, so `trackLoading()` only accepts `TrackedLoadingFlag` (`"isValidating" | "isSubmitting" | "isNavigating"`) — `trackLoading("isLoadingStep")` is a type error. `createWizardActions` adds `preloadStep(stepId)`, which prefetches a lazy step without touching any loading flag.
 
 ### Notification
 

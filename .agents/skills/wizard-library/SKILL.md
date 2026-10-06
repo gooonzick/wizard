@@ -32,10 +32,15 @@ Use this skill to execute Wizard tasks with high correctness and minimal regress
   `localStorageAdapter` / `sessionStorageAdapter`). See
   `references/api_reference.md`.
 
+- Lazy steps (WIZ-013): `load` / `StepBuilder.lazy()` defer `validate` / `onEnter` /
+  `onLeave` / `onSubmit` to a dynamic `import()`; `machine.preloadStep(id)`,
+  `WizardState.isLoadingStep`, `WizardStepLoadError`, `ErrorContext.phase` `"load"`.
+  See `references/api_reference.md` and `references/architecture_and_changes.md`.
+
 ### React (`@gooonzick/wizard-react`)
 
 - Keep `useWizard` API shape stable unless request explicitly requires breaking changes.
-- Preserve loading-state handling (`isValidating`, `isSubmitting`, `isNavigating`).
+- Preserve loading-state handling (`isValidating`, `isSubmitting`, `isNavigating`, and the machine-mirrored `isLoadingStep`).
 
 ### Vue (`@gooonzick/wizard-vue`)
 

@@ -59,7 +59,7 @@ interface TransitionEvent<TData> {
 /** Context passed to a plugin's onError hook. */
 interface ErrorContext<TData> {
   stepId: StepId;
-  phase: "validation" | "transition" | "lifecycle" | "submit" | "data" | "state";
+  phase: "validation" | "transition" | "lifecycle" | "submit" | "data" | "state" | "load";
   data: DeepReadonly<TData>;
 }
 
@@ -199,6 +199,22 @@ Each error is reported to plugins **exactly once** regardless of where it origin
 Plugin hook errors themselves are **isolated**: if your plugin's `onComplete` throws, the error is routed through `onError` at phase `"lifecycle"` and does not propagate to the calling code.
 
 A throwing `onStateChange` subscriber (the machine-level event, or a framework binding's listener) is isolated the same way: the error is routed through `onError` at phase `"state"` and the in-flight operation (e.g. `goNext()`, `updateField`) still completes.
+
+### Error Phases
+
+`ErrorContext.phase` tells `onError` where a failure originated:
+
+| Phase | Origin |
+|---|---|
+| `"validation"` | A step validator threw |
+| `"transition"` | A failure during navigation (resolver, guard, `beforeTransition`, `onLeave` / `onEnter`) — the default phase |
+| `"lifecycle"` | An `onComplete` / `onReset` / `destroy` handler (plugin or event) or the initial step's `onEnter` threw |
+| `"submit"` | `onSubmit` threw inside `submit()` |
+| `"data"` | An `onDataChange` handler threw |
+| `"state"` | An `onStateChange` subscriber threw |
+| `"load"` | A lazy step failed to load (WIZ-013) |
+
+A failed lazy-step load is reported once (with a `WizardStepLoadError`, original failure as `cause`) even when several operations await the same failed attempt; a retry is a new attempt and is reported again. Plugins with an exhaustive `switch` on `phase` need a `"load"` case.
 
 ### Re-entrancy / Busy Guard
 

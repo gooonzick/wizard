@@ -237,6 +237,9 @@ const checkoutWizard = createWizard<CheckoutData>("checkout")
 
     // Availability
     .enabled(true) // or (data) => boolean
+
+    // Lazy implementation (validate / onEnter / onLeave / onSubmit)
+    .lazy(() => import("./steps/documents"))
 )
 ```
 
@@ -383,6 +386,44 @@ const step = (s) => s.title("Account Setup").validateWithSchema(schema);
     })
 )
 ```
+
+### Lazy Steps
+
+Large wizards can defer a step's heavy implementation — validation schemas, lifecycle code — until the step is actually used. The step **skeleton** (`id`, `next`, `previous`, `enabled`, `meta`) stays in the definition, so progress, `isLastStep` and disabled-step skipping never wait for a download. Only `validate`, `onEnter`, `onLeave` and `onSubmit` are loaded lazily.
+
+```typescript
+// steps/documents.ts — becomes its own chunk
+import type { LazyStepImplementation } from "@gooonzick/wizard-core";
+
+export default {
+  validate: createStandardSchemaValidator(heavyDocumentsSchema),
+  onEnter: async (data, ctx) => { /* … */ },
+} satisfies LazyStepImplementation<Application>;
+
+// wizard.ts
+createWizard<Application>("loan")
+  .step("documents", (s) =>
+    s
+      .title("Documents")
+      .previous("personal")
+      .next("summary")
+      .lazy(() => import("./steps/documents")),
+  );
+```
+
+Declaratively, set `load: () => import("./steps/documents")` on the step definition. The loader may resolve to the implementation object or to a module namespace with a `default` export (an object `default` export wins over named exports). If a hook is defined both on the skeleton and in the loaded implementation, the loaded one wins. Every loaded hook must be a function — a non-function `validate`, `onEnter`, `onLeave` or `onSubmit` is a load error. The merged step definition does not keep `load`.
+
+**When it loads.** The first time the implementation is needed: navigating into or out of the step (before `beforeTransition`, `onLeave` and any state change), validating or submitting it, or entering it as the initial step. `validateAll()` loads every enabled lazy step. A successful load is cached for the lifetime of the machine (it survives `reset()`); `goTo(id, { skipLifecycle: true })` does not load.
+
+**Loading state.** `snapshot.isLoadingStep` (and `isLoadingStep` in every binding's loading slice) is `true` while the current or target step loads — show a spinner with it. If the user moves to another step (for example with `goTo(id, { skipLifecycle: true })`) while the load for the step they left is still pending, that load's result is dropped, and `isLoadingStep` can stay `true` until the abandoned load settles. After `destroy()` no loading flag flips and a lazy navigation is a silent no-op.
+
+**Prefetching.** `machine.preloadStep("documents")` (or `actions.preloadStep` in a binding) starts the load without navigating — e.g. on hover of "Next". It does not set `isLoadingStep`. The returned promise belongs to the caller and is not reported through `onError`, so a fire-and-forget call must handle the rejection:
+
+```typescript
+actions.preloadStep("documents").catch(() => {});
+```
+
+**Errors.** A failed load rejects the navigation / `submit()` with `WizardStepLoadError` (`stepId`, original error as `cause`), is reported once through `onError` and plugin `onError` with `phase: "load"` — even when several operations await the same failed attempt — and leaves the wizard on the current step. Failed loads are not cached — the next attempt is a new attempt, retries the loader and is reported again. `validate()` resolves `{ valid: false, errors: { general: "Failed to load step" } }`; `validateAll()` marks the step invalid with `errors._error`. A `validate()` whose load result was dropped because the user moved to another step resolves the superseded result `{ valid: false, errors: { general: "Validation error occurred" } }`, and the failure is not reported.
 
 ### Using Context in Validation
 
