@@ -3217,11 +3217,11 @@ Declaratively, set `load: () => import("./steps/documents")` on the step definit
 
 **When it loads.** The first time the implementation is needed: navigating into or out of the step (before `beforeTransition`, `onLeave` and any state change), validating or submitting it, or entering it as the initial step. `validateAll()` loads every enabled lazy step. A successful load is cached for the lifetime of the machine (it survives `reset()`); `goTo(id, { skipLifecycle: true })` does not load.
 
-**Loading state.** `snapshot.isLoadingStep` (and `isLoadingStep` in every binding's loading slice) is `true` while the current or target step loads — show a spinner with it.
+**Loading state.** `snapshot.isLoadingStep` (and `isLoadingStep` in every binding's loading slice) is `true` while the current or target step loads — show a spinner with it. After `destroy()` the flag is left as-is; a destroyed wizard is not read.
 
 **Prefetching.** `machine.preloadStep("documents")` (or `actions.preloadStep` in a binding) starts the load without navigating — e.g. on hover of “Next”. It does not set `isLoadingStep`.
 
-**Errors.** A failed load rejects the navigation / `submit()` with `WizardStepLoadError` (`stepId`, original error as `cause`), is reported once through `onError` and plugin `onError` with `phase: "load"`, and leaves the wizard on the current step. Failed loads are not cached — the next attempt retries. (After `destroy()` the flag is left as-is; a destroyed wizard is not read.) `validate()` resolves `{ valid: false, errors: { general: "Failed to load step" } }`; `validateAll()` marks the step invalid with `errors._error`.
+**Errors.** A failed load rejects the navigation / `submit()` with `WizardStepLoadError` (`stepId`, original error as `cause`), is reported once through `onError` and plugin `onError` with `phase: "load"`, and leaves the wizard on the current step. Failed loads are not cached — the next attempt retries. `validate()` resolves `{ valid: false, errors: { general: "Failed to load step" } }`; `validateAll()` marks the step invalid with `errors._error`.
 ````
 
 - [ ] **Step 2: Other doc touch-points** (both trees):
