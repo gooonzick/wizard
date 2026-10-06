@@ -59,4 +59,81 @@ describe("svelte — lazy steps (WIZ-013)", () => {
 		expect(wizard.isLoadingStep).toBe(false);
 		expect(wizard.currentStepId).toBe("b");
 	});
+
+	function twoStep(id: string, load: StepLoader<D>): WizardDefinition<D> {
+		return {
+			id,
+			initialStepId: "a",
+			steps: {
+				a: { id: "a", next: { type: "static", to: "b" } },
+				b: { id: "b", load },
+			},
+		};
+	}
+
+	it("store API: actions.preloadStep loads once; goNext reuses it", async () => {
+		const load = vi.fn(async () => ({})) as unknown as StepLoader<D>;
+		const wizard = createWizardStore<D>({
+			definition: twoStep("svelte-store-preload", load),
+			initialData: { name: "" },
+		});
+		const seen: boolean[] = [];
+		const unsubscribe = wizard.loading.subscribe((l) =>
+			seen.push(l.isLoadingStep),
+		);
+
+		await wizard.actions.preloadStep("b");
+		expect(load).toHaveBeenCalledTimes(1);
+
+		await wizard.goNext();
+		expect(get(wizard).currentStepId).toBe("b");
+		expect(load).toHaveBeenCalledTimes(1);
+		expect(seen).not.toContain(true);
+		unsubscribe();
+	});
+
+	it("store API: a failing actions.preloadStep resolves", async () => {
+		const load = vi.fn(async () => {
+			throw new Error("offline");
+		}) as unknown as StepLoader<D>;
+		const wizard = createWizardStore<D>({
+			definition: twoStep("svelte-store-preload-fail", load),
+			initialData: { name: "" },
+		});
+
+		await expect(wizard.actions.preloadStep("b")).resolves.toBeUndefined();
+		expect(load).toHaveBeenCalledTimes(1);
+		expect(get(wizard.loading).isLoadingStep).toBe(false);
+	});
+
+	it("runes API: actions.preloadStep loads once; goNext reuses it", async () => {
+		const load = vi.fn(async () => ({})) as unknown as StepLoader<D>;
+		const wizard = createWizard<D>({
+			definition: twoStep("svelte-runes-preload", load),
+			initialData: { name: "" },
+		});
+
+		await wizard.actions.preloadStep("b");
+		expect(load).toHaveBeenCalledTimes(1);
+		expect(wizard.isLoadingStep).toBe(false);
+
+		await wizard.goNext();
+		expect(wizard.currentStepId).toBe("b");
+		expect(load).toHaveBeenCalledTimes(1);
+		expect(wizard.isLoadingStep).toBe(false);
+	});
+
+	it("runes API: a failing actions.preloadStep resolves", async () => {
+		const load = vi.fn(async () => {
+			throw new Error("offline");
+		}) as unknown as StepLoader<D>;
+		const wizard = createWizard<D>({
+			definition: twoStep("svelte-runes-preload-fail", load),
+			initialData: { name: "" },
+		});
+
+		await expect(wizard.actions.preloadStep("b")).resolves.toBeUndefined();
+		expect(load).toHaveBeenCalledTimes(1);
+		expect(wizard.isLoadingStep).toBe(false);
+	});
 });

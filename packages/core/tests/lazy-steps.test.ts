@@ -1289,3 +1289,85 @@ describe("WIZ-013 lazy steps — drift during a pending load", () => {
 		expect(machine.snapshot.isLoadingStep).toBe(false);
 	});
 });
+
+describe("WIZ-013 lazy steps — goBack and plugin veto", () => {
+	const summarySnapshot: WizardSerializedState<Data> = {
+		...documentsSnapshot,
+		currentStepId: "summary",
+		stepStatuses: {
+			account: "completed",
+			documents: "completed",
+			summary: "active",
+		},
+		visitedSteps: ["account", "documents", "summary"],
+		history: ["account", "documents", "summary"],
+	};
+
+	it("goBack(1) into an unloaded lazy step loads it and runs its loaded onEnter", async () => {
+		const onEnter = vi.fn();
+		const loader = controlledLoader({ onEnter });
+		const { machine, states } = createMachine(lazyDefinition(loader.load));
+		await flush();
+		machine.restore(summarySnapshot);
+		await flush();
+		expect(loader.load).not.toHaveBeenCalled();
+		states.length = 0;
+
+		const p = machine.goBack(1);
+		await flush();
+		expect(machine.snapshot.isLoadingStep).toBe(true);
+		expect(machine.snapshot.currentStepId).toBe("summary");
+
+		loader.resolve();
+		await p;
+		expect(loader.load).toHaveBeenCalledTimes(1);
+		expect(onEnter).toHaveBeenCalledTimes(1);
+		expect(machine.snapshot.currentStepId).toBe("documents");
+		expect(machine.snapshot.isLoadingStep).toBe(false);
+	});
+
+	it("goBack(1) out of an unloaded lazy current step loads it to run its onLeave", async () => {
+		const onLeave = vi.fn();
+		const load = vi.fn(async () => ({ onLeave }));
+		const { machine } = createMachine(lazyDefinition(load));
+		await machine.goTo("documents", {
+			skipValidation: true,
+			skipLifecycle: true,
+		});
+		expect(load).not.toHaveBeenCalled();
+
+		await machine.goBack(1);
+		expect(load).toHaveBeenCalledTimes(1);
+		expect(onLeave).toHaveBeenCalledTimes(1);
+		expect(machine.snapshot.currentStepId).toBe("account");
+		expect(machine.snapshot.isLoadingStep).toBe(false);
+	});
+
+	it("a beforeTransition veto after a successful target load stays put; the step stays loaded", async () => {
+		const onEnter = vi.fn();
+		const load = vi.fn(async () => ({ onEnter }));
+		let veto = true;
+		const plugin: WizardPlugin<Data> = {
+			name: "veto",
+			beforeTransition: () => (veto ? false : undefined),
+		};
+		const { machine, states } = createMachine(lazyDefinition(load), {}, [
+			plugin,
+		]);
+		await flush();
+		states.length = 0;
+
+		await machine.goNext();
+		expect(load).toHaveBeenCalledTimes(1);
+		expect(machine.snapshot.currentStepId).toBe("account");
+		expect(machine.snapshot.isLoadingStep).toBe(false);
+		expect(onEnter).not.toHaveBeenCalled();
+		expect(states.at(-1)?.isLoadingStep).toBe(false);
+
+		veto = false;
+		await machine.goNext();
+		expect(machine.snapshot.currentStepId).toBe("documents");
+		expect(load).toHaveBeenCalledTimes(1);
+		expect(onEnter).toHaveBeenCalledTimes(1);
+	});
+});
