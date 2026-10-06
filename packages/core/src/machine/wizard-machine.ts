@@ -27,7 +27,12 @@ import type {
 	WizardProgress,
 	WizardStepDefinition,
 } from "../types/step";
-import { loadStepDefinition } from "./lazy-steps";
+import {
+	getComposedHookParts,
+	type LifecycleFn,
+	type LifecycleKey,
+	loadStepDefinition,
+} from "./lazy-steps";
 import { resolveStepInDirection } from "./step-resolver";
 import { evaluateGuard } from "./transitions";
 import { alwaysValid } from "./validators";
@@ -407,7 +412,13 @@ export class WizardMachine<T extends WizardData> {
 			if (entered) {
 				const initialStep = this.resolvedStep(initialStepId);
 				if (initialStep.onEnter) {
-					await initialStep.onEnter(this.state.data, this.context);
+					await this.runLifecycleHook(
+						initialStep,
+						"onEnter",
+						() =>
+							this.generation !== gen ||
+							(wasLazy && this.state.currentStepId !== initialStepId),
+					);
 				}
 				if (
 					this.generation !== gen ||
@@ -1137,7 +1148,9 @@ export class WizardMachine<T extends WizardData> {
 			const step = this.currentStep;
 			// Execute step's submit handler
 			if (step.onSubmit) {
-				await step.onSubmit(this.state.data, this.context);
+				await this.runLifecycleHook(step, "onSubmit", () =>
+					this.isTransitionStale(),
+				);
 				// FIX F5: a reset()/cancel() during onSubmit supersedes this submit.
 				if (this.isTransitionStale()) {
 					return;
@@ -1233,7 +1246,9 @@ export class WizardMachine<T extends WizardData> {
 			// `handleError` call for the same throw. Not fixed in this pass.
 			const currentStep = this.currentStep;
 			if (currentStep.onSubmit) {
-				await currentStep.onSubmit(this.state.data, this.context);
+				await this.runLifecycleHook(currentStep, "onSubmit", () =>
+					this.isTransitionStale(),
+				);
 				// FIX 2: a reset()/cancel() during onSubmit supersedes this transition.
 				if (this.isTransitionStale()) {
 					return;
@@ -1689,7 +1704,9 @@ export class WizardMachine<T extends WizardData> {
 		// may have replayed a pending initial entry during the awaits above).
 		if (!skipLifecycle && !this.isLeavingUnenteredInitialStep()) {
 			if (currentStep.onLeave) {
-				await currentStep.onLeave(this.state.data, this.context);
+				await this.runLifecycleHook(currentStep, "onLeave", () =>
+					this.isTransitionStale(),
+				);
 			}
 			// FIX 2: a reset()/cancel() during onLeave supersedes this transition.
 			if (this.isTransitionStale()) {
@@ -1748,7 +1765,9 @@ export class WizardMachine<T extends WizardData> {
 		if (!skipLifecycle) {
 			if (targetStep.onEnter) {
 				try {
-					await targetStep.onEnter(this.state.data, this.context);
+					await this.runLifecycleHook(targetStep, "onEnter", () =>
+						this.isTransitionStale(),
+					);
 				} catch (err) {
 					// FIX F4: state is already committed to the target step (above,
 					// after the beforeTransition veto). Guarantee subscribers observe
@@ -2319,7 +2338,11 @@ export class WizardMachine<T extends WizardData> {
 		const step = this.resolvedStep(initialStepId);
 		try {
 			if (step.onEnter) {
-				await step.onEnter(this.state.data, this.context);
+				await this.runLifecycleHook(
+					step,
+					"onEnter",
+					() => isStale() || this.state.currentStepId !== initialStepId,
+				);
 			}
 		} catch (error) {
 			if (!isStale()) {
@@ -2332,6 +2355,41 @@ export class WizardMachine<T extends WizardData> {
 		}
 		this.events.onStepEnter?.(initialStepId, this.state.data);
 		this.debug(`Entered initial step: ${initialStepId}`);
+	}
+
+	/**
+	 * WIZ-013: runs a step's lifecycle hook with the current data and context.
+	 * A plain hook is called exactly as before (as a method of `step`, its
+	 * result returned as-is — no added microtask for non-lazy wizards). A hook
+	 * composed by `mergeLazyImplementation` (skeleton + loaded) is run part by
+	 * part: when `isStale()` is true after a part, the remaining part does not
+	 * run (the caller's own staleness check then stops the operation). A throw
+	 * from any part propagates unchanged.
+	 */
+	private runLifecycleHook(
+		step: WizardStepDefinition<T>,
+		key: LifecycleKey,
+		isStale: () => boolean,
+	): ReturnType<LifecycleFn<T>> {
+		const hook = step[key] as LifecycleFn<T>;
+		const parts = getComposedHookParts(hook);
+		if (!parts) {
+			return hook.call(step, this.state.data, this.context);
+		}
+		return this.runComposedHookParts(parts, isStale);
+	}
+
+	private async runComposedHookParts(
+		parts: readonly LifecycleFn<T>[],
+		isStale: () => boolean,
+	): Promise<void> {
+		const data = this.state.data;
+		for (const [index, part] of parts.entries()) {
+			if (index > 0 && isStale()) {
+				return;
+			}
+			await part(data, this.context);
+		}
 	}
 
 	/**

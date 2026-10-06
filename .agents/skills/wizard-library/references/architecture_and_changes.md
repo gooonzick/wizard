@@ -87,7 +87,10 @@ Invariants:
   loaded for validation unless `skipValidation` is also set.
 - Hook composition: a loaded hook never replaces a skeleton hook. `validate` →
   `combineValidators(skeleton, loaded)`; `onEnter` / `onLeave` / `onSubmit` → skeleton first,
-  then loaded (`mergeLazyImplementation`). Keeps builder `.required(...)` alive.
+  then loaded (`mergeLazyImplementation`). Keeps builder `.required(...)` alive. A composed
+  hook carries its parts (internal `COMPOSED_HOOK_PARTS` symbol); machine call sites use
+  `runLifecycleHook(step, key, isStale)`, which stops between the parts once the operation is
+  superseded (plain hooks are called as-is — no added microtask).
 - Leaving a step whose own load fails is allowed: `navigateToStep` loads the target as
   required and the current step as optional (phase `"load"` reported, skeleton `onLeave`);
   only a target failure blocks. goNext / goTo with validation / submit / validate need the

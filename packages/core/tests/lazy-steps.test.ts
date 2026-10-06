@@ -1550,3 +1550,197 @@ describe("WIZ-013 lazy steps — goBack and plugin veto", () => {
 		expect(onEnter).toHaveBeenCalledTimes(1);
 	});
 });
+
+describe("WIZ-013 lazy steps — composed hooks stop when superseded", () => {
+	/** A hook whose every call parks on a fresh deferred the test releases. */
+	function parkingHook() {
+		const calls: Array<ReturnType<typeof deferred<void>>> = [];
+		const fn = vi.fn(() => {
+			const d = deferred();
+			calls.push(d);
+			return d.promise;
+		});
+		return { fn, release: (i = calls.length - 1) => calls[i].resolve() };
+	}
+
+	function lazyStartDefinition(
+		load: StepLoader<Data>,
+		start: Partial<WizardStepDefinition<Data>> = {},
+	): WizardDefinition<Data> {
+		return {
+			id: "lazy-start",
+			initialStepId: "start",
+			steps: {
+				start: {
+					id: "start",
+					load,
+					next: { type: "static", to: "end" },
+					...start,
+				},
+				end: { id: "end" },
+			},
+		};
+	}
+
+	for (const op of ["goNext", "submit"] as const) {
+		it(`${op}(): reset() during the skeleton onSubmit skips the loaded onSubmit`, async () => {
+			const skeleton = parkingHook();
+			const loaded = vi.fn();
+			const load = vi.fn(async () => ({ onSubmit: loaded }));
+			const onSubmit = vi.fn();
+			const { machine } = createMachine(
+				lazyDefinition(load, { onSubmit: skeleton.fn }),
+				{ onSubmit },
+			);
+			await flush();
+			await machine.goNext();
+			expect(machine.snapshot.currentStepId).toBe("documents");
+
+			const p = op === "goNext" ? machine.goNext() : machine.submit();
+			await flush();
+			expect(skeleton.fn).toHaveBeenCalledTimes(1);
+			machine.reset();
+			skeleton.release();
+			await expect(p).resolves.toBeUndefined();
+			await flush();
+
+			expect(loaded).not.toHaveBeenCalled();
+			expect(onSubmit).not.toHaveBeenCalled();
+			expect(machine.snapshot.currentStepId).toBe("account");
+		});
+	}
+
+	it("reset() during the skeleton onLeave skips the loaded onLeave", async () => {
+		const skeleton = parkingHook();
+		const loaded = vi.fn();
+		const load = vi.fn(async () => ({ onLeave: loaded }));
+		const onStepLeave = vi.fn();
+		const { machine } = createMachine(
+			lazyDefinition(load, { onLeave: skeleton.fn }),
+			{ onStepLeave },
+		);
+		await flush();
+		await machine.goNext();
+
+		const p = machine.goNext();
+		await flush();
+		expect(skeleton.fn).toHaveBeenCalledTimes(1);
+		machine.reset();
+		skeleton.release();
+		await expect(p).resolves.toBeUndefined();
+		await flush();
+
+		expect(loaded).not.toHaveBeenCalled();
+		expect(onStepLeave).not.toHaveBeenCalledWith(
+			"documents",
+			expect.anything(),
+		);
+		expect(machine.snapshot.currentStepId).toBe("account");
+	});
+
+	it("reset() during the skeleton onEnter of a navigation skips the loaded onEnter", async () => {
+		const skeleton = parkingHook();
+		const loaded = vi.fn();
+		const load = vi.fn(async () => ({ onEnter: loaded }));
+		const onStepEnter = vi.fn();
+		const { machine } = createMachine(
+			lazyDefinition(load, { onEnter: skeleton.fn }),
+			{ onStepEnter },
+		);
+		await flush();
+
+		const p = machine.goNext();
+		await flush();
+		expect(skeleton.fn).toHaveBeenCalledTimes(1);
+		machine.reset();
+		skeleton.release();
+		await expect(p).resolves.toBeUndefined();
+		await flush();
+
+		expect(loaded).not.toHaveBeenCalled();
+		expect(onStepEnter).not.toHaveBeenCalledWith(
+			"documents",
+			expect.anything(),
+		);
+	});
+
+	it("reset() during the initial step's skeleton onEnter skips the superseded loaded onEnter", async () => {
+		const skeleton = parkingHook();
+		const loaded = vi.fn();
+		const load = vi.fn(async () => ({ onEnter: loaded }));
+		const onStepEnter = vi.fn();
+		const { machine } = createMachine(
+			lazyStartDefinition(load, { onEnter: skeleton.fn }),
+			{ onStepEnter },
+		);
+		await flush();
+		expect(skeleton.fn).toHaveBeenCalledTimes(1);
+
+		machine.reset();
+		await flush();
+		expect(skeleton.fn).toHaveBeenCalledTimes(2);
+		skeleton.release(0);
+		await flush();
+		expect(loaded).not.toHaveBeenCalled();
+		expect(onStepEnter).not.toHaveBeenCalled();
+
+		skeleton.release(1);
+		await flush();
+		expect(loaded).toHaveBeenCalledTimes(1);
+		expect(onStepEnter).toHaveBeenCalledTimes(1);
+	});
+
+	it("reset() during a replayed skeleton onEnter skips the superseded loaded onEnter", async () => {
+		const skeleton = parkingHook();
+		const loaded = vi.fn();
+		const load = vi
+			.fn<StepLoader<Data>>()
+			.mockRejectedValueOnce(new Error("offline"))
+			.mockResolvedValue({ onEnter: loaded });
+		const onStepEnter = vi.fn();
+		const { machine } = createMachine(
+			lazyStartDefinition(load, { onEnter: skeleton.fn }),
+			{ onStepEnter },
+		);
+		await flush();
+		expect(skeleton.fn).not.toHaveBeenCalled();
+
+		const v = machine.validate();
+		await flush();
+		expect(skeleton.fn).toHaveBeenCalledTimes(1);
+		machine.reset();
+		await flush();
+		expect(skeleton.fn).toHaveBeenCalledTimes(2);
+		skeleton.release(0);
+		await v;
+		await flush();
+		expect(loaded).not.toHaveBeenCalled();
+		expect(onStepEnter).not.toHaveBeenCalled();
+
+		skeleton.release(1);
+		await flush();
+		expect(loaded).toHaveBeenCalledTimes(1);
+		expect(onStepEnter).toHaveBeenCalledTimes(1);
+	});
+
+	it("an unsuperseded composed hook still runs both parts in order", async () => {
+		const order: string[] = [];
+		const load = vi.fn(async () => ({
+			onSubmit: () => {
+				order.push("loaded");
+			},
+		}));
+		const { machine } = createMachine(
+			lazyDefinition(load, {
+				onSubmit: async () => {
+					order.push("skeleton");
+				},
+			}),
+		);
+		await flush();
+		await machine.goNext();
+		await machine.goNext();
+		expect(order).toEqual(["skeleton", "loaded"]);
+		expect(machine.snapshot.currentStepId).toBe("summary");
+	});
+});

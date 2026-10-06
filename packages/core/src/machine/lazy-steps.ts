@@ -31,15 +31,48 @@ export function normalizeLazyModule<T>(
 	return raw as LazyStepImplementation<T>;
 }
 
-type LifecycleKey = "onEnter" | "onLeave" | "onSubmit";
-type LifecycleFn<T> = NonNullable<WizardStepDefinition<T>[LifecycleKey]>;
+export type LifecycleKey = "onEnter" | "onLeave" | "onSubmit";
+export type LifecycleFn<T> = NonNullable<WizardStepDefinition<T>[LifecycleKey]>;
 
-/** Runs `first` then `second`, each awaited, with the same arguments. */
-function sequence<T>(first: LifecycleFn<T>, second: LifecycleFn<T>) {
-	return async (data: T, ctx: WizardContext): Promise<void> => {
+/**
+ * Internal (not exported from the package entry): tags a composed lifecycle
+ * hook with its parts `[skeleton, loaded]` so the machine can run them one by
+ * one and stop between them when the operation is superseded (see
+ * `WizardMachine.runLifecycleHook`). Non-enumerable, so the hook still looks
+ * like a plain function to everyone else.
+ */
+export const COMPOSED_HOOK_PARTS: unique symbol = Symbol(
+	"wizard.composedHookParts",
+);
+
+type ComposedHook<T> = LifecycleFn<T> & {
+	readonly [COMPOSED_HOOK_PARTS]?: readonly [LifecycleFn<T>, LifecycleFn<T>];
+};
+
+/** The parts of a hook built by `mergeLazyImplementation`, or `undefined`. */
+export function getComposedHookParts<T>(
+	hook: LifecycleFn<T>,
+): readonly [LifecycleFn<T>, LifecycleFn<T>] | undefined {
+	return (hook as ComposedHook<T>)[COMPOSED_HOOK_PARTS];
+}
+
+/**
+ * Runs `first` then `second`, each awaited, with the same arguments. The
+ * result is tagged with its parts (`COMPOSED_HOOK_PARTS`); called directly it
+ * always runs both.
+ */
+function sequence<T>(
+	first: LifecycleFn<T>,
+	second: LifecycleFn<T>,
+): LifecycleFn<T> {
+	const composed = async (data: T, ctx: WizardContext): Promise<void> => {
 		await first(data, ctx);
 		await second(data, ctx);
 	};
+	Object.defineProperty(composed, COMPOSED_HOOK_PARTS, {
+		value: Object.freeze([first, second] as const),
+	});
+	return composed;
 }
 
 /**
@@ -51,7 +84,9 @@ function sequence<T>(first: LifecycleFn<T>, second: LifecycleFn<T>) {
  * - `validate` → `combineValidators(skeleton, loaded)`: both must pass, their
  *   errors are merged;
  * - `onEnter` / `onLeave` / `onSubmit` → the skeleton hook runs first, then
- *   the loaded one, each awaited (a throw stops the sequence).
+ *   the loaded one, each awaited (a throw stops the sequence). The machine
+ *   runs the parts itself and stops between them when the operation is
+ *   superseded (reset/cancel/restore).
  * Keys outside `LAZY_KEYS` are ignored.
  */
 export function mergeLazyImplementation<T>(

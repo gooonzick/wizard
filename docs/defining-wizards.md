@@ -407,7 +407,7 @@ createWizard<Application>("loan")
   );
 ```
 
-Declaratively, set `load: () => import("./steps/documents")` on the step definition. The loader may resolve to the implementation object or to a module namespace with a `default` export (an object `default` export wins over named exports). A hook defined on both the skeleton and the loaded implementation is **composed**, never replaced: `validate` becomes `combineValidators(skeleton, loaded)` (both must pass, their errors are merged) and `onEnter` / `onLeave` / `onSubmit` run the skeleton's hook first, then the loaded one. A hook only one side defines is used as-is, and a loaded key that is `undefined` keeps the skeleton's hook. So a builder's `.required(...)` keeps protecting the step after its implementation loads:
+Declaratively, set `load: () => import("./steps/documents")` on the step definition. The loader may resolve to the implementation object or to a module namespace with a `default` export (an object `default` export wins over named exports). A hook defined on both the skeleton and the loaded implementation is **composed**, never replaced: `validate` becomes `combineValidators(skeleton, loaded)` (both must pass, their errors are merged) and `onEnter` / `onLeave` / `onSubmit` run the skeleton's hook first, then the loaded one (if the operation is superseded by `reset()`, `cancel()` or `restore()` while the skeleton's hook runs, the loaded one does not run). A hook only one side defines is used as-is, and a loaded key that is `undefined` keeps the skeleton's hook. So a builder's `.required(...)` keeps protecting the step after its implementation loads:
 
 ```typescript
 .step("documents", (s) =>

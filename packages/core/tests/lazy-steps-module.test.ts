@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { createStep } from "../src/builders/create-step";
 import { WizardError, WizardStepLoadError } from "../src/errors";
+import * as publicApi from "../src/index";
 import {
+	COMPOSED_HOOK_PARTS,
+	getComposedHookParts,
 	loadStepDefinition,
 	mergeLazyImplementation,
 	normalizeLazyModule,
@@ -112,6 +115,35 @@ describe("mergeLazyImplementation", () => {
 			expect(loadedHook).toHaveBeenCalledWith(data, {});
 			expect(order).toEqual(["skeleton", "loaded"]);
 		}
+	});
+
+	it("tags a composed hook with its parts (non-enumerable, internal); single-side hooks are untagged", async () => {
+		const skeletonEnter = vi.fn();
+		const loadedEnter = vi.fn();
+		const loadedLeave = vi.fn();
+		const merged = mergeLazyImplementation<D>(
+			{ id: "s", onEnter: skeletonEnter },
+			{ onEnter: loadedEnter, onLeave: loadedLeave },
+		);
+		const onEnter = merged.onEnter;
+		if (!onEnter) {
+			throw new Error("expected a composed onEnter");
+		}
+
+		expect(getComposedHookParts(onEnter)).toEqual([skeletonEnter, loadedEnter]);
+		expect(Object.keys(onEnter)).toEqual([]);
+		expect(
+			Object.getOwnPropertyDescriptor(onEnter, COMPOSED_HOOK_PARTS)?.enumerable,
+		).toBe(false);
+		expect(getComposedHookParts(loadedLeave)).toBeUndefined();
+		expect(Object.values(publicApi)).not.toContain(COMPOSED_HOOK_PARTS);
+		expect(publicApi).not.toHaveProperty("getComposedHookParts");
+
+		// Called directly (e.g. `machine.currentStep.onEnter(...)`), it still
+		// runs both parts.
+		await onEnter({ name: "x" }, {});
+		expect(skeletonEnter).toHaveBeenCalledTimes(1);
+		expect(loadedEnter).toHaveBeenCalledTimes(1);
 	});
 
 	it("composes validators defined on both sides: both must pass, errors are merged", async () => {
