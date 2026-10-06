@@ -14,8 +14,8 @@
 		initialData: lazyInitialData,
 		onError: (error) => {
 			if (error instanceof WizardStepLoadError) {
-				const cause = error.cause instanceof Error ? error.cause.message : "";
-				loadError = `${error.message}${cause ? ` — ${cause}` : ""} — click Next to retry.`;
+				// The message already includes the cause.
+				loadError = `${error.message} — click Next to retry.`;
 				failureArmed = false;
 			}
 		},
@@ -36,7 +36,7 @@
 	function prefetch() {
 		// Skipped while a failure is armed: a silent preload would consume it.
 		if (wizard.currentStepId === "account" && !failureArmed) {
-			void wizard.actions.preloadStep("documents").catch(() => {});
+			void wizard.actions.preloadStep("documents");
 		}
 	}
 </script>

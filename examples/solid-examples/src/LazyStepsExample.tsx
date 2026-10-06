@@ -13,10 +13,8 @@ function LazyStepsWizard(props: { onRecreate: () => void }) {
 		initialData: lazyInitialData,
 		onError: (error) => {
 			if (error instanceof WizardStepLoadError) {
-				const cause = error.cause instanceof Error ? error.cause.message : "";
-				setLoadError(
-					`${error.message}${cause ? ` — ${cause}` : ""} — click Next to retry.`,
-				);
+				// The message already includes the cause.
+				setLoadError(`${error.message} — click Next to retry.`);
 				setFailureArmed(false);
 			}
 		},
@@ -34,7 +32,7 @@ function LazyStepsWizard(props: { onRecreate: () => void }) {
 	const prefetch = () => {
 		// Skipped while a failure is armed: a silent preload would consume it.
 		if (wizard.currentStepId === "account" && !failureArmed()) {
-			void wizard.actions.preloadStep("documents").catch(() => {});
+			void wizard.actions.preloadStep("documents");
 		}
 	};
 
