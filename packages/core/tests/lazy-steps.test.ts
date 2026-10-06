@@ -755,6 +755,107 @@ describe("WIZ-013 lazy steps — initial step, validate, restore", () => {
 		expect(onStepEnter.mock.calls.map((c) => c[0])).toEqual(["start", "end"]);
 	});
 
+	it("initial load failure: leaving the never-entered step without validation skips its load and leave hooks; coming back enters it once", async () => {
+		const onEnter = vi.fn();
+		const onLeave = vi.fn();
+		const skeletonOnLeave = vi.fn();
+		const load = vi
+			.fn<StepLoader<Data>>()
+			.mockRejectedValueOnce(new Error("offline"))
+			.mockResolvedValue({ onEnter, onLeave });
+		const def = lazyInitialDefinition(load);
+		def.steps.start.onLeave = skeletonOnLeave;
+		const onStepEnter = vi.fn();
+		const onStepLeave = vi.fn();
+		const afterTransition = vi.fn();
+		const { machine } = createMachine(def, { onStepEnter, onStepLeave }, [
+			{ name: "spy", afterTransition },
+		]);
+		await flush();
+		expect(load).toHaveBeenCalledTimes(1);
+
+		await machine.goTo("end", { skipValidation: true });
+		expect(load).toHaveBeenCalledTimes(1);
+		expect(onEnter).not.toHaveBeenCalled();
+		expect(onLeave).not.toHaveBeenCalled();
+		expect(skeletonOnLeave).not.toHaveBeenCalled();
+		expect(onStepEnter).not.toHaveBeenCalledWith("start", expect.anything());
+		expect(onStepLeave).not.toHaveBeenCalled();
+		expect(afterTransition).toHaveBeenCalledTimes(1);
+		expect(afterTransition.mock.calls[0][0]).toMatchObject({
+			type: "goTo",
+			fromStepId: "start",
+			toStepId: "end",
+		});
+		expect(machine.snapshot.currentStepId).toBe("end");
+		expect(machine.snapshot.stepStatuses.start).toBe("visited");
+		expect(machine.snapshot.isLoadingStep).toBe(false);
+
+		// Back to the initial step: loaded as the target, entered exactly once.
+		await machine.goTo("start", { skipValidation: true });
+		expect(load).toHaveBeenCalledTimes(2);
+		expect(machine.snapshot.currentStepId).toBe("start");
+		expect(onEnter).toHaveBeenCalledTimes(1);
+		expect(onStepEnter.mock.calls.map((c) => c[0])).toEqual(["end", "start"]);
+
+		// A validate() now does not replay an entry that already happened.
+		await machine.validate();
+		expect(onEnter).toHaveBeenCalledTimes(1);
+		expect(onStepEnter).toHaveBeenCalledTimes(2);
+	});
+
+	it("initial load failure: goNext() replays the entry, then leaves the step normally (onEnter, onStepEnter, onLeave, onStepLeave)", async () => {
+		const onEnter = vi.fn();
+		const onLeave = vi.fn();
+		const load = vi
+			.fn<StepLoader<Data>>()
+			.mockRejectedValueOnce(new Error("offline"))
+			.mockResolvedValue({ onEnter, onLeave });
+		const onStepEnter = vi.fn();
+		const onStepLeave = vi.fn();
+		const { machine } = createMachine(lazyInitialDefinition(load), {
+			onStepEnter,
+			onStepLeave,
+		});
+		await flush();
+
+		await machine.goNext();
+		expect(machine.snapshot.currentStepId).toBe("end");
+		expect(onEnter).toHaveBeenCalledTimes(1);
+		expect(onLeave).toHaveBeenCalledTimes(1);
+		expect(onStepLeave).toHaveBeenCalledTimes(1);
+		expect(onStepLeave).toHaveBeenCalledWith("start", initialData);
+		const order = [
+			onEnter.mock.invocationCallOrder[0],
+			onStepEnter.mock.invocationCallOrder[0],
+			onLeave.mock.invocationCallOrder[0],
+			onStepLeave.mock.invocationCallOrder[0],
+		];
+		expect(order).toEqual([...order].sort((a, b) => a - b));
+		expect(onStepEnter.mock.calls[0][0]).toBe("start");
+	});
+
+	it("initial load failure: a preloaded but never-entered initial step is still left without its leave hooks", async () => {
+		const onEnter = vi.fn();
+		const onLeave = vi.fn();
+		const load = vi
+			.fn<StepLoader<Data>>()
+			.mockRejectedValueOnce(new Error("offline"))
+			.mockResolvedValue({ onEnter, onLeave });
+		const onStepLeave = vi.fn();
+		const { machine } = createMachine(lazyInitialDefinition(load), {
+			onStepLeave,
+		});
+		await flush();
+		await machine.preloadStep("start");
+
+		await machine.goTo("end", { skipValidation: true });
+		expect(machine.snapshot.currentStepId).toBe("end");
+		expect(onEnter).not.toHaveBeenCalled();
+		expect(onLeave).not.toHaveBeenCalled();
+		expect(onStepLeave).not.toHaveBeenCalled();
+	});
+
 	it("a replayed initial onEnter that throws is reported (phase 'lifecycle'), skips onStepEnter, and the operation continues", async () => {
 		const onEnter = vi.fn(() => {
 			throw new Error("enter boom");

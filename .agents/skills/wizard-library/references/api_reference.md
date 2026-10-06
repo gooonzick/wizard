@@ -276,11 +276,15 @@ createWizard<Application>("loan").step("documents", (s) =>
   required and the current step best-effort (failure reported with phase `"load"`, the
   skeleton's `onLeave` runs); only a target failure blocks. `goNext()` / `goTo()` with
   validation / `submit()` still require the current step loaded before validating.
-- A failed lazy INITIAL step: its `onEnter` + `onStepEnter` run once, the next time the wizard
-  prepares that step (validate / goNext / goTo / submit / navigation) while still on it;
+- A failed lazy INITIAL step has not been entered: its `onEnter` + `onStepEnter` run once, the
+  next time the step is used (validated by validate / canSubmit / goNext / goTo / submit) while
+  still on it. Lifecycle hooks of a step run only if it was entered: leaving it without
+  validation (goPrevious, `goTo(id, { skipValidation: true })`) skips loading it and skips its
+  `onLeave` (also a skeleton one) / `onStepLeave`; coming back loads and enters it normally.
   `reset()` / `cancel()` / `restore()` discard the pending entry.
 - `validate()` while the user moves to another step during its load validates the NEW current
-  step (no fake invalid result, no report for the step they left).
+  step (no fake invalid result, no report for the step they left). The abort signal is checked
+  only on entry: an abort while it waits does not reject it.
 - Plugins with an exhaustive `switch` on `ErrorContext.phase` need a `"load"` case.
 - `WizardState.isLoadingStep` is required: hand-built `WizardState` objects (test fakes) must
   include it.

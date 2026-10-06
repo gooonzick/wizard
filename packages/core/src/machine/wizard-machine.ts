@@ -225,9 +225,14 @@ export class WizardMachine<T extends WizardData> {
 	private loadingStep = false;
 	/**
 	 * WIZ-013: generation whose initial-step entry was skipped because the
-	 * initial step's load failed. Replayed (once) by `prepareSteps` when a later
-	 * operation finds the step loaded while the wizard is still on it; a new
-	 * generation (reset/cancel/restore) or leaving the step discards it.
+	 * initial step's load failed — while set (for the current generation and
+	 * the wizard is still on the initial step) the step has NOT been entered.
+	 * Lifecycle hooks of a step run only if the step was entered, so:
+	 * - validating the step uses it: the entry is replayed (once) by the
+	 *   validation's `prepareSteps` (opt-in; see `runValidation`);
+	 * - leaving it without validation (goPrevious, goTo with skipValidation)
+	 *   skips its load and its `onLeave` / `onStepLeave` (see `navigateToStep`).
+	 * A new generation (reset/cancel/restore) or leaving the step discards it.
 	 */
 	private pendingInitialEntryGen: number | undefined;
 	/** WIZ-013: staleness check for loads inside a transition / submit. */
@@ -356,11 +361,12 @@ export class WizardMachine<T extends WizardData> {
 		// WIZ-013: load a lazy initial step first. On failure the error is
 		// reported (phase "load") and onEnter/onStepEnter are skipped, but the
 		// guard refresh + state notify below still run. The skipped entry is
-		// remembered for this generation and replayed once by the next
-		// validate()/goNext()/goTo()/submit()/navigation that finds the step
-		// loaded while the wizard is still on it (see prepareSteps). If the user
-		// navigated away during the load, the initial step is neither entered
-		// nor reported as failed.
+		// remembered for this generation (pendingInitialEntryGen) and replayed
+		// once when the step is next validated (validate()/canSubmit() or the
+		// validation of goNext()/goTo()/submit()) while the wizard is still on
+		// it. Leaving it without validation never enters it (see
+		// navigateToStep). If the user navigated away during the load, the
+		// initial step is neither entered nor reported as failed.
 		const left = () =>
 			this.generation !== gen ||
 			this.isDestroyed ||
@@ -369,7 +375,7 @@ export class WizardMachine<T extends WizardData> {
 		// to lazy initial steps, so non-lazy wizards keep their exact behaviour.
 		const wasLazy = this.needsLoad(initialStepId);
 		let entered = true;
-		const prep = this.prepareSteps([initialStepId], [], left);
+		const prep = this.prepareSteps([initialStepId], [], left, false);
 		if (isPromiseLike(prep)) {
 			const prepared = await prep;
 			if (prepared.status === "stale") {
@@ -796,10 +802,13 @@ export class WizardMachine<T extends WizardData> {
 		// nor reported; the NEW current step is validated instead.
 		const currentStepId = this.state.currentStepId;
 		const superseded = () => this.generation !== gen || this.isDestroyed;
+		// Validating the step counts as using it: a pending initial-step entry
+		// is replayed before the validator runs.
 		const prep = this.prepareSteps(
 			[currentStepId],
 			[],
 			() => superseded() || this.state.currentStepId !== currentStepId,
+			true,
 		);
 		if (isPromiseLike(prep)) {
 			const prepared = await prep;
@@ -995,7 +1004,8 @@ export class WizardMachine<T extends WizardData> {
 	 *
 	 * A lazy current step (WIZ-013) is loaded in the background first — like
 	 * `preloadStep()`: no `isLoadingStep` flip and no `onError`. A failed load
-	 * resolves to `false` (unreported); the next call retries.
+	 * resolves to `false` (unreported); the next call retries. Validating the
+	 * step counts as using it, so a pending initial-step entry is replayed.
 	 */
 	async canSubmit(): Promise<boolean> {
 		if (this.state.isCompleted) {
@@ -1073,6 +1083,7 @@ export class WizardMachine<T extends WizardData> {
 				[this.state.currentStepId],
 				[],
 				this.transitionAborted,
+				false,
 			);
 			if (isPromiseLike(prep)) {
 				const prepared = await prep;
@@ -1158,6 +1169,7 @@ export class WizardMachine<T extends WizardData> {
 				[this.state.currentStepId],
 				[],
 				this.transitionAborted,
+				false,
 			);
 			if (isPromiseLike(prep)) {
 				const prepared = await prep;
@@ -1383,6 +1395,7 @@ export class WizardMachine<T extends WizardData> {
 					[this.state.currentStepId],
 					[],
 					this.transitionAborted,
+					false,
 				);
 				if (isPromiseLike(prep)) {
 					const prepared = await prep;
@@ -1607,11 +1620,16 @@ export class WizardMachine<T extends WizardData> {
 		// Only a TARGET failure blocks (the machine stays exactly where it was);
 		// a current-step failure is reported and the skeleton's onLeave is used,
 		// so a broken chunk never traps the user on its step.
+		// Lifecycle hooks of a step run only if the step was entered: an initial
+		// step whose entry is still pending (its load failed) is not loaded
+		// here, its pending entry is not replayed (opt-out) and its onLeave /
+		// onStepLeave are skipped below; the commit drops the pending marker.
 		if (!skipLifecycle) {
 			const prep = this.prepareSteps(
 				[stepId],
-				[this.state.currentStepId],
+				this.isInitialStepUnentered() ? [] : [this.state.currentStepId],
 				this.transitionAborted,
+				false,
 			);
 			if (isPromiseLike(prep)) {
 				const prepared = await prep;
@@ -1650,8 +1668,9 @@ export class WizardMachine<T extends WizardData> {
 			return;
 		}
 
-		// Call onLeave for current step
-		if (!skipLifecycle) {
+		// Call onLeave for current step (re-checked here: a concurrent validate()
+		// may have replayed a pending initial entry during the awaits above).
+		if (!skipLifecycle && !this.isInitialStepUnentered()) {
 			if (currentStep.onLeave) {
 				await currentStep.onLeave(this.state.data, this.context);
 			}
@@ -2151,16 +2170,18 @@ export class WizardMachine<T extends WizardData> {
 	 * - each failed load is reported once (phase "load"); a failed `required`
 	 *   id → `failed` with its error, failed `optional` ids are ignored (the
 	 *   skeleton's hooks are used);
-	 * - when the initial step's entry is still pending (its load failed in
-	 *   `initializeFirstStep`), the wizard is still on it in the same
-	 *   generation, it is among the prepared ids and it is now loaded (by this
-	 *   call or an earlier background load), its entry is replayed once — see
-	 *   `replayInitialEntry` — before `ready` is returned.
+	 * - with `replayPendingEntry` (opt-in: only validation, which "uses" the
+	 *   step, passes true), when the initial step's entry is still pending (its
+	 *   load failed in `initializeFirstStep`), the wizard is still on it in the
+	 *   same generation, it is among the prepared ids and it is now loaded (by
+	 *   this call or an earlier background load), its entry is replayed once —
+	 *   see `replayInitialEntry` — before `ready` is returned.
 	 */
 	private prepareSteps(
 		required: StepId[],
 		optional: StepId[],
 		isStale: () => boolean,
+		replayPendingEntry: boolean,
 	): PrepareResult | Promise<PrepareResult> {
 		if (!this.hasLazySteps) {
 			return PREPARE_READY;
@@ -2170,10 +2191,19 @@ export class WizardMachine<T extends WizardData> {
 				? required
 				: [...new Set([...required, ...optional])];
 		const toLoad = ids.filter((id) => this.needsLoad(id));
-		if (toLoad.length === 0 && !this.isInitialEntryPending(ids)) {
+		if (
+			toLoad.length === 0 &&
+			!(replayPendingEntry && this.isInitialEntryPending(ids))
+		) {
 			return PREPARE_READY;
 		}
-		return this.loadPreparedSteps(ids, toLoad, new Set(required), isStale);
+		return this.loadPreparedSteps(
+			ids,
+			toLoad,
+			new Set(required),
+			isStale,
+			replayPendingEntry,
+		);
 	}
 
 	private async loadPreparedSteps(
@@ -2181,6 +2211,7 @@ export class WizardMachine<T extends WizardData> {
 		toLoad: StepId[],
 		required: Set<StepId>,
 		isStale: () => boolean,
+		replayPendingEntry: boolean,
 	): Promise<PrepareResult> {
 		if (toLoad.length > 0) {
 			const settled = await this.trackForegroundLoad(
@@ -2209,7 +2240,7 @@ export class WizardMachine<T extends WizardData> {
 				return { status: "failed", error: failure };
 			}
 		}
-		if (this.isInitialEntryPending(ids)) {
+		if (replayPendingEntry && this.isInitialEntryPending(ids)) {
 			await this.replayInitialEntry(isStale);
 			if (isStale()) {
 				return { status: "stale" };
@@ -2219,20 +2250,29 @@ export class WizardMachine<T extends WizardData> {
 	}
 
 	/**
-	 * WIZ-013: true when the initial step's entry was skipped by a failed load
-	 * in this generation, the wizard is still on the initial step, `ids`
-	 * includes it, and it is loaded now. Synchronous.
+	 * WIZ-013: true when the wizard is on the initial step and that step has
+	 * not been entered: its entry was skipped by a failed load in this
+	 * generation and not replayed yet (whether or not it is loaded by now).
+	 * Synchronous.
+	 */
+	private isInitialStepUnentered(): boolean {
+		return (
+			this.pendingInitialEntryGen === this.generation &&
+			this.state.currentStepId === this.definition.initialStepId
+		);
+	}
+
+	/**
+	 * WIZ-013: true when the initial step's entry is ready to be replayed: the
+	 * step is unentered (see `isInitialStepUnentered`), `ids` includes it, and
+	 * it is loaded now. Synchronous.
 	 */
 	private isInitialEntryPending(ids: StepId[]): boolean {
-		if (this.pendingInitialEntryGen !== this.generation) {
+		if (!this.isInitialStepUnentered()) {
 			return false;
 		}
 		const initialStepId = this.definition.initialStepId;
-		return (
-			this.state.currentStepId === initialStepId &&
-			ids.includes(initialStepId) &&
-			!this.needsLoad(initialStepId)
-		);
+		return ids.includes(initialStepId) && !this.needsLoad(initialStepId);
 	}
 
 	/**

@@ -79,7 +79,8 @@ Invariants:
 - Skeleton-eager design: `next` / `previous` / `enabled` / `meta` are read synchronously in
   ~25 places (progress, `isLastStep`, disabled-step skipping), so only the four hooks are lazy.
 - Load points: navigating into/out of a step (current AND target, before `beforeTransition`,
-  `onLeave` and any state write, so a failed load never half-commits), `validate()`,
+  `onLeave` and any state write, so a failed load never half-commits; a never-entered initial
+  step is not loaded when left), `validate()`,
   `submit()`, the initial step, `validateAll()` (enabled lazy steps only, background) and
   `canSubmit()` (current step, background).
   `goTo(id, { skipLifecycle: true })` does not load the target; the current step is still
@@ -91,6 +92,18 @@ Invariants:
   required and the current step as optional (phase `"load"` reported, skeleton `onLeave`);
   only a target failure blocks. goNext / goTo with validation / submit / validate need the
   current step loaded first.
+- Never-entered lazy initial step (its load failed in `initializeFirstStep`): the
+  `pendingInitialEntryGen` marker IS the "not entered" flag. Replay is opt-in per
+  `prepareSteps` call (`replayPendingEntry`): only validation's prep (`runValidation`, so
+  `validate` / `canSubmit` / goNext / goTo / submit validation) replays `onEnter` +
+  `onStepEnter`. `navigateToStep` opts out and, when leaving such a step, neither loads it nor
+  runs its `onLeave` (skeleton or loaded) / `events.onStepLeave` — lifecycle hooks of a step
+  run only if it was entered. beforeTransition / afterTransition, history, statuses and the
+  target load / entry are unchanged; the commit drops the marker.
+- Abort: the signal is checked only on entry to a public method. `validate()` is a thin
+  wrapper (`checkAborted()` + private `runValidation()`); the drift re-target and the internal
+  callers (goNext / goTo / submit) call `runValidation()`, so an abort mid-flight never rejects
+  them. `canSubmit()` and `restore()`'s fire-and-forget re-validation keep calling `validate()`.
 - Cache: per machine; concurrent callers share one `import()`; success is cached for the
   machine's lifetime and survives `reset()` / `cancel()` / `restore()`; failure evicts, the
   next request retries.
