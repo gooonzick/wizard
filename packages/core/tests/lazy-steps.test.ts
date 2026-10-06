@@ -792,7 +792,11 @@ describe("WIZ-013 lazy steps — initial step, validate, restore", () => {
 					data: initialData,
 					isValid: true,
 					isCompleted: false,
-					stepStatuses: { start: "active", optional: "skipped", end: "pristine" },
+					stepStatuses: {
+						start: "active",
+						optional: "skipped",
+						end: "pristine",
+					},
 					visitedSteps: ["start"],
 					history: ["start"],
 				}),
@@ -907,7 +911,7 @@ describe("WIZ-013 lazy steps — validateAll", () => {
 		});
 		expect(summary.steps[2]).toMatchObject({
 			valid: false,
-			errors: { _error: 'Failed to load step "summary"' },
+			errors: { _error: 'Failed to load step "summary": x' },
 		});
 		expect(summary.invalidStepIds).toEqual(["documents", "summary"]);
 		expect(onError).not.toHaveBeenCalled();

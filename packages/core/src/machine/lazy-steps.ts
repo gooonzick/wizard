@@ -1,10 +1,10 @@
 import { WizardStepLoadError } from "../errors";
-import { combineValidators } from "./validators";
 import type { StepId, WizardContext } from "../types/base";
 import type {
 	LazyStepImplementation,
 	WizardStepDefinition,
 } from "../types/step";
+import { combineValidators } from "./validators";
 
 /** The only keys read from a loaded implementation (WIZ-013). */
 const LAZY_KEYS = ["validate", "onEnter", "onLeave", "onSubmit"] as const;

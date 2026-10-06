@@ -9,19 +9,31 @@ import {
 import type { WizardStepDefinition } from "../src/types/step";
 
 describe("WizardStepLoadError", () => {
-	it("carries the step id, a stable message, and the cause", () => {
+	it("carries the step id, the cause, and the cause's message", () => {
 		const cause = new Error("chunk failed");
 		const err = new WizardStepLoadError("documents", { cause });
 
 		expect(err).toBeInstanceOf(WizardError);
 		expect(err.name).toBe("WizardStepLoadError");
-		expect(err.message).toBe('Failed to load step "documents"');
+		expect(err.message).toBe('Failed to load step "documents": chunk failed');
 		expect(err.stepId).toBe("documents");
 		expect(err.cause).toBe(cause);
 	});
 
-	it("leaves cause undefined when none is given", () => {
-		expect(new WizardStepLoadError("x").cause).toBeUndefined();
+	it("uses the native, non-enumerable cause", () => {
+		const err = new WizardStepLoadError("documents", { cause: "offline" });
+		expect(err.message).toBe('Failed to load step "documents": offline');
+		expect(Object.getOwnPropertyDescriptor(err, "cause")?.enumerable).toBe(
+			false,
+		);
+		expect(Object.keys(err)).not.toContain("cause");
+	});
+
+	it("keeps the plain message and no cause when none is given", () => {
+		const err = new WizardStepLoadError("x");
+		expect(err.message).toBe('Failed to load step "x"');
+		expect(err.cause).toBeUndefined();
+		expect("cause" in err).toBe(false);
 	});
 });
 
