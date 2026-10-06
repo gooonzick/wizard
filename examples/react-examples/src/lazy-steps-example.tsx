@@ -129,8 +129,8 @@ function LazyStepsWizard({ onRecreate }: { onRecreate: () => void }) {
 			<p className="text-xs text-gray-500">
 				A loaded step is cached per wizard. Hovering “Next” on the first step
 				prefetches it with <code>preloadStep</code>, so no spinner appears.
-				“Fail next load” only matters before the step has loaded once —
-				recreate the wizard to try it again.
+				“Fail next load” only matters before the step has loaded once — recreate
+				the wizard to try it again.
 			</p>
 		</Card>
 	);

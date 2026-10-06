@@ -1,12 +1,14 @@
 import { createSignal, For, Match, Switch } from "solid-js";
 import { BasicExample } from "./BasicExample";
 import { ContextExample } from "./ContextExample";
+import { LazyStepsExample } from "./LazyStepsExample";
 
-type Tab = "basic" | "context";
+type Tab = "basic" | "context" | "lazy";
 
 const TABS: Array<{ id: Tab; label: string }> = [
 	{ id: "basic", label: "createWizard" },
 	{ id: "context", label: "Context" },
+	{ id: "lazy", label: "Lazy Steps" },
 ];
 
 export function App() {
@@ -42,6 +44,9 @@ export function App() {
 				</Match>
 				<Match when={tab() === "context"}>
 					<ContextExample />
+				</Match>
+				<Match when={tab() === "lazy"}>
+					<LazyStepsExample />
 				</Match>
 			</Switch>
 		</main>
