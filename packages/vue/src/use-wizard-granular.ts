@@ -75,7 +75,7 @@ export function useWizardValidation(): UseWizardValidation {
  * @example
  * ```vue
  * <script setup lang="ts">
- * const { isValidating, isSubmitting, isNavigating } = useWizardLoading();
+ * const { isValidating, isSubmitting, isNavigating, isLoadingStep } = useWizardLoading();
  * </script>
  * ```
  */
