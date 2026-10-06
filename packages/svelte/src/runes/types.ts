@@ -97,6 +97,8 @@ export interface WizardStoreLoading {
 	isValidating: boolean;
 	isSubmitting: boolean;
 	isNavigating: boolean;
+	/** A lazy step implementation is loading (WIZ-013). */
+	isLoadingStep: boolean;
 }
 
 /**
@@ -121,6 +123,8 @@ export interface WizardStoreActions<T extends WizardData> {
 	serialize: () => WizardSerializedState<T>;
 	/** Fire-and-forget (`void manager.runRestore(...)`). */
 	restore: (state: WizardSerializedState<T>) => void;
+	/** Loads a lazy step's implementation ahead of navigation (WIZ-013). */
+	preloadStep: (stepId: StepId) => Promise<void>;
 }
 
 /**
@@ -156,6 +160,7 @@ export interface Wizard<T extends WizardData> {
 	readonly isValidating: boolean;
 	readonly isSubmitting: boolean;
 	readonly isNavigating: boolean;
+	readonly isLoadingStep: boolean;
 
 	// ---- slice getters (parity with the store layer's sub-stores) ----
 	readonly state: WizardStoreState<T>;

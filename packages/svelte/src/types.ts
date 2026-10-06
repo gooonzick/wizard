@@ -92,6 +92,8 @@ export interface WizardStoreLoading {
 	isValidating: boolean;
 	isSubmitting: boolean;
 	isNavigating: boolean;
+	/** A lazy step implementation is loading (WIZ-013). */
+	isLoadingStep: boolean;
 }
 
 /**
@@ -147,6 +149,8 @@ export interface WizardStoreActions<T extends WizardData> {
 	serialize: SerializeFn<T>;
 	/** Fire-and-forget (`void manager.runRestore(...)`). */
 	restore: RestoreFn<T>;
+	/** Loads a lazy step's implementation ahead of navigation (WIZ-013). */
+	preloadStep: (stepId: StepId) => Promise<void>;
 }
 
 /**
