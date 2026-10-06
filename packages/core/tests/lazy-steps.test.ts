@@ -502,6 +502,7 @@ describe("WIZ-013 lazy steps — initial step, validate, restore", () => {
 		expect(pluginError.mock.calls[0][1]).toMatchObject({ phase: "load" });
 		expect(onStepEnter).not.toHaveBeenCalled();
 		expect(machine.snapshot.stepStatuses.optional).toBe("skipped");
+		expect(machine.snapshot.isLoadingStep).toBe(false);
 
 		await machine.validate();
 		expect(load).toHaveBeenCalledTimes(2);
@@ -764,5 +765,140 @@ describe("WIZ-013 lazy steps — supersede, destroy, dedupe", () => {
 		expect(pluginError).toHaveBeenCalledTimes(1);
 		expect(pluginError.mock.calls[0][1]).toMatchObject({ phase: "load" });
 		expect(loader.load).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe("WIZ-013 lazy steps — drift during a pending load", () => {
+	function lazyInitialDefinition(
+		load: StepLoader<Data>,
+	): WizardDefinition<Data> {
+		return {
+			id: "lazy-initial",
+			initialStepId: "start",
+			steps: {
+				start: { id: "start", load, next: { type: "static", to: "end" } },
+				end: { id: "end" },
+			},
+		};
+	}
+
+	for (const [name, supersede] of [
+		["reset()", (m: WizardMachine<Data>) => m.reset()],
+		["destroy()", (m: WizardMachine<Data>) => m.destroy()],
+	] as const) {
+		it(`validateAll({ updateStatuses }) superseded by ${name} during the load does not write or emit`, async () => {
+			const validate = vi.fn(() => ({
+				valid: false,
+				errors: { passport: "required" },
+			}));
+			const loader = controlledLoader({ validate });
+			const { machine, states } = createMachine(lazyDefinition(loader.load));
+			await flush();
+
+			const p = machine.validateAll({ updateStatuses: true });
+			await flush();
+			expect(loader.load).toHaveBeenCalledTimes(1);
+			await supersede(machine);
+			await flush();
+			const count = states.length;
+
+			loader.resolve();
+			const summary = await p;
+			await flush();
+			expect(summary.invalidStepIds).toEqual(["documents"]);
+			expect(machine.snapshot.stepStatuses.documents).toBe("pristine");
+			expect(states.length).toBe(count);
+		});
+	}
+
+	it("validate() does not validate or write for a step the user left during the load", async () => {
+		const documentsValidate = vi.fn(() => ({ valid: true }));
+		const loader = controlledLoader({ validate: documentsValidate });
+		const summaryValidate = vi.fn(() => ({
+			valid: false,
+			errors: { name: "required" },
+		}));
+		const def = lazyDefinition(loader.load);
+		def.steps.summary.load = vi.fn(async () => ({ validate: summaryValidate }));
+		const onValidation = vi.fn();
+		const onError = vi.fn();
+		const { machine, states } = createMachine(def, { onValidation, onError });
+		await machine.goTo("documents", {
+			skipValidation: true,
+			skipLifecycle: true,
+		});
+		await machine.preloadStep("summary");
+
+		const v = machine.validate();
+		await flush();
+		await machine.goTo("summary", {
+			skipValidation: true,
+			skipLifecycle: true,
+		});
+		const before = machine.snapshot;
+		const count = states.length;
+
+		loader.resolve();
+		await expect(v).resolves.toEqual({
+			valid: false,
+			errors: { general: "Validation error occurred" },
+		});
+		await flush();
+		expect(documentsValidate).not.toHaveBeenCalled();
+		expect(summaryValidate).not.toHaveBeenCalled();
+		expect(onValidation).not.toHaveBeenCalled();
+		expect(onError).not.toHaveBeenCalled();
+		expect(machine.snapshot.isValid).toBe(before.isValid);
+		expect(machine.snapshot.validationErrors).toBe(before.validationErrors);
+		// Only the foreground-load flag clears.
+		expect(states.slice(count)).toEqual([
+			{ currentStepId: "summary", isLoadingStep: false },
+		]);
+	});
+
+	it("the initial step is not entered after the user left it during its load", async () => {
+		const onEnter = vi.fn();
+		const loader = controlledLoader({ onEnter });
+		const onStepEnter = vi.fn();
+		const { machine } = createMachine(lazyInitialDefinition(loader.load), {
+			onStepEnter,
+		});
+
+		await machine.goTo("end", { skipValidation: true, skipLifecycle: true });
+		loader.resolve();
+		await flush();
+		expect(machine.snapshot.currentStepId).toBe("end");
+		expect(onEnter).not.toHaveBeenCalled();
+		expect(onStepEnter).not.toHaveBeenCalledWith("start", expect.anything());
+		expect(machine.snapshot.isLoadingStep).toBe(false);
+	});
+
+	it("an initial load failure for a step the user already left is not reported", async () => {
+		const loader = controlledLoader();
+		const onError = vi.fn();
+		const { machine } = createMachine(lazyInitialDefinition(loader.load), {
+			onError,
+		});
+
+		await machine.goTo("end", { skipValidation: true, skipLifecycle: true });
+		loader.reject();
+		await flush();
+		expect(machine.snapshot.currentStepId).toBe("end");
+		expect(onError).not.toHaveBeenCalled();
+		expect(machine.snapshot.isLoadingStep).toBe(false);
+	});
+
+	it("reset() during the constructor's pending initial load enters once and clears isLoadingStep", async () => {
+		const onEnter = vi.fn();
+		const loader = controlledLoader({ onEnter });
+		const { machine } = createMachine(lazyInitialDefinition(loader.load));
+		expect(machine.snapshot.isLoadingStep).toBe(true);
+
+		machine.reset();
+		loader.resolve();
+		await flush();
+		expect(onEnter).toHaveBeenCalledTimes(1);
+		expect(loader.load).toHaveBeenCalledTimes(1);
+		expect(machine.snapshot.isLoadingStep).toBe(false);
 	});
 });

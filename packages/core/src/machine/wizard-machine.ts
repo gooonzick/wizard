@@ -310,19 +310,25 @@ export class WizardMachine<T extends WizardData> {
 		// WIZ-013: load a lazy initial step first. On failure the error is
 		// reported (phase "load") and onEnter/onStepEnter are skipped, but the
 		// guard refresh + state notify below still run. The initial onEnter is
-		// NOT replayed when a later validate()/navigation loads the step.
+		// NOT replayed when a later validate()/navigation loads the step. If the
+		// user navigated away during the load, the initial step is neither
+		// entered nor reported as failed.
+		const left = () =>
+			this.generation !== gen ||
+			this.isDestroyed ||
+			this.state.currentStepId !== initialStepId;
 		let entered = true;
 		if (this.needsLoad(initialStepId)) {
 			try {
 				await this.ensureStepsLoaded([initialStepId]);
 			} catch (error) {
-				if (this.generation !== gen || this.isDestroyed) {
+				if (left()) {
 					return;
 				}
 				this.reportLoadError(error);
 				entered = false;
 			}
-			if (this.generation !== gen || this.isDestroyed) {
+			if (left()) {
 				return;
 			}
 		}
@@ -333,7 +339,10 @@ export class WizardMachine<T extends WizardData> {
 				if (initialStep.onEnter) {
 					await initialStep.onEnter(this.state.data, this.context);
 				}
-				if (this.generation !== gen) {
+				if (
+					this.generation !== gen ||
+					this.state.currentStepId !== initialStepId
+				) {
 					return;
 				}
 				this.events.onStepEnter?.(initialStepId, this.state.data);
@@ -704,27 +713,32 @@ export class WizardMachine<T extends WizardData> {
 		// WIZ-013: load a lazy current step before validating it. A failure is
 		// reported once (phase "load") and yields an invalid result WITHOUT a
 		// state write or onValidation — mirroring the thrown-validator path.
+		// Superseded (reset/cancel/restore, destroy, or the user navigated away
+		// during the load) → the generic superseded result, no write or report.
 		const currentStepId = this.state.currentStepId;
 		if (this.needsLoad(currentStepId)) {
-			const loadFailed = {
-				valid: false,
-				errors: { general: "Failed to load step" },
-			};
+			const superseded = () =>
+				this.generation !== gen ||
+				this.isDestroyed ||
+				this.state.currentStepId !== currentStepId;
+			let loadError: unknown;
+			let failed = false;
 			try {
 				await this.ensureStepsLoaded([currentStepId]);
 			} catch (error) {
-				if (this.generation !== gen || this.isDestroyed) {
-					return loadFailed;
-				}
-				this.reportLoadError(error);
-				this.validateAlreadyReported = true;
-				return loadFailed;
+				loadError = error;
+				failed = true;
 			}
-			if (this.generation !== gen || this.isDestroyed) {
+			if (superseded()) {
 				return {
 					valid: false,
 					errors: { general: "Validation error occurred" },
 				};
+			}
+			if (failed) {
+				this.reportLoadError(loadError);
+				this.validateAlreadyReported = true;
+				return { valid: false, errors: { general: "Failed to load step" } };
 			}
 		}
 		try {
@@ -795,16 +809,27 @@ export class WizardMachine<T extends WizardData> {
 	}): Promise<ValidationSummary> {
 		this.checkAborted();
 		const { updateStatuses = false } = options ?? {};
+		// A reset()/cancel()/restore() or destroy() during any await below
+		// supersedes the optional status write (the summary is still returned).
+		const gen = this.generation;
 
 		const steps: StepValidationSummary[] = [];
 		const invalidStepIds: StepId[] = [];
+		const toErrorResult = (error: unknown): ValidationResult => ({
+			valid: false,
+			errors: {
+				_error: error instanceof Error ? error.message : String(error),
+			},
+		});
 
 		const entries = Object.entries(this.definition.steps);
 		// WIZ-013: with unloaded lazy steps, evaluate all guards first, load the
 		// enabled lazy steps in parallel, then validate in insertion order.
 		// Without them the original per-step guard → validator order is kept.
-		const hasUnloaded = entries.some(([stepId]) => this.needsLoad(stepId));
-		const loadErrors = new Map<StepId, unknown>();
+		const hasUnloaded = entries.some(
+			([stepId, step]) => this.needsLoad(stepId) && step.enabled !== false,
+		);
+		const loadErrors = new Map<StepId, ValidationResult>();
 		let enabledIds: Set<StepId> | undefined;
 		if (hasUnloaded) {
 			enabledIds = new Set();
@@ -814,43 +839,32 @@ export class WizardMachine<T extends WizardData> {
 				}
 			}
 			const toLoad = [...enabledIds].filter((id) => this.needsLoad(id));
-			// Background loads: no isLoadingStep flip, no onError (validateAll is
-			// fully isolated from plugins).
-			const settled = await Promise.allSettled(
-				toLoad.map((id) => this.loadStep(id)),
-			);
-			for (const [index, result] of settled.entries()) {
-				if (result.status === "rejected") {
-					loadErrors.set(toLoad[index], result.reason);
+			if (toLoad.length > 0) {
+				// Background loads: no isLoadingStep flip, no onError (validateAll is
+				// fully isolated from plugins).
+				const settled = await Promise.allSettled(
+					toLoad.map((id) => this.loadStep(id)),
+				);
+				for (const [index, result] of settled.entries()) {
+					if (result.status === "rejected") {
+						loadErrors.set(toLoad[index], toErrorResult(result.reason));
+					}
 				}
 			}
 		}
 
 		// Insertion order == canonical order (matches computeProgress / Progress API).
 		for (const [stepId, step] of entries) {
-			if (enabledIds) {
-				if (!enabledIds.has(stepId)) {
-					continue;
-				}
-			} else {
-				// Skip disabled steps (boolean false OR guard resolving to false).
-				const isEnabled = await evaluateGuard(
-					step.enabled,
-					this.state.data,
-					this.context,
-				);
-				if (!isEnabled) {
-					continue;
-				}
+			// Skip disabled steps (boolean false OR guard resolving to false).
+			const enabled = enabledIds
+				? enabledIds.has(stepId)
+				: await evaluateGuard(step.enabled, this.state.data, this.context);
+			if (!enabled) {
+				continue;
 			}
 
-			let result: ValidationResult;
-			const loadError = loadErrors.get(stepId);
-			if (loadErrors.has(stepId)) {
-				const message =
-					loadError instanceof Error ? loadError.message : String(loadError);
-				result = { valid: false, errors: { _error: message } };
-			} else {
+			let result = loadErrors.get(stepId);
+			if (!result) {
 				const validator = this.resolvedStep(stepId).validate || alwaysValid;
 				try {
 					result = await validator(this.state.data, this.context);
@@ -858,9 +872,7 @@ export class WizardMachine<T extends WizardData> {
 					// A thrown validator is caught here and marked invalid with the
 					// sentinel `_error` field. Do NOT call handleError / dispatch to
 					// plugins — validateAll is fully isolated from the plugin system.
-					const message =
-						error instanceof Error ? error.message : String(error);
-					result = { valid: false, errors: { _error: message } };
+					result = toErrorResult(error);
 				}
 			}
 
@@ -871,7 +883,8 @@ export class WizardMachine<T extends WizardData> {
 		}
 
 		// Optionally persist "error" on invalid steps in a SINGLE state write.
-		if (updateStatuses && invalidStepIds.length > 0) {
+		const superseded = this.generation !== gen || this.isDestroyed;
+		if (updateStatuses && invalidStepIds.length > 0 && !superseded) {
 			const nextStatuses = { ...this.state.stepStatuses };
 			for (const id of invalidStepIds) {
 				nextStatuses[id] = "error";
