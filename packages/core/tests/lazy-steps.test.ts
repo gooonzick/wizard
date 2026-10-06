@@ -444,3 +444,124 @@ describe("WIZ-013 lazy steps — navigation", () => {
 		expect(machine.snapshot.isCompleted).toBe(true);
 	});
 });
+
+describe("WIZ-013 lazy steps — initial step, validate, restore", () => {
+	function lazyInitialDefinition(
+		load: StepLoader<Data>,
+	): WizardDefinition<Data> {
+		return {
+			id: "lazy-initial",
+			initialStepId: "start",
+			steps: {
+				start: { id: "start", load, next: { type: "static", to: "end" } },
+				optional: {
+					id: "optional",
+					enabled: () => false,
+					next: { type: "static", to: "end" },
+				},
+				end: { id: "end" },
+			},
+		};
+	}
+
+	it("loads a lazy initial step, then runs its onEnter and onStepEnter", async () => {
+		const onEnter = vi.fn();
+		const loader = controlledLoader({ onEnter });
+		const onStepEnter = vi.fn();
+		const { machine } = createMachine(lazyInitialDefinition(loader.load), {
+			onStepEnter,
+		});
+		expect(machine.snapshot.isLoadingStep).toBe(true);
+
+		loader.resolve();
+		await flush();
+		expect(onEnter).toHaveBeenCalledTimes(1);
+		expect(onStepEnter).toHaveBeenCalledWith("start", initialData);
+		expect(machine.snapshot.isLoadingStep).toBe(false);
+	});
+
+	it("initial load failure: reported, guard statuses still computed, onEnter not replayed after a successful retry", async () => {
+		const onEnter = vi.fn();
+		const validate = vi.fn(() => ({ valid: true }));
+		const load = vi
+			.fn<StepLoader<Data>>()
+			.mockRejectedValueOnce(new Error("offline"))
+			.mockResolvedValue({ onEnter, validate });
+		const onError = vi.fn();
+		const onStepEnter = vi.fn();
+		const pluginError = vi.fn();
+		const { machine } = createMachine(
+			lazyInitialDefinition(load),
+			{ onError, onStepEnter },
+			[{ name: "spy", onError: pluginError }],
+		);
+		await flush();
+
+		expect(onError).toHaveBeenCalledTimes(1);
+		expect(onError.mock.calls[0][0]).toBeInstanceOf(WizardStepLoadError);
+		expect(pluginError.mock.calls[0][1]).toMatchObject({ phase: "load" });
+		expect(onStepEnter).not.toHaveBeenCalled();
+		expect(machine.snapshot.stepStatuses.optional).toBe("skipped");
+
+		await machine.validate();
+		expect(load).toHaveBeenCalledTimes(2);
+		expect(validate).toHaveBeenCalledTimes(1);
+		expect(onEnter).not.toHaveBeenCalled();
+
+		await machine.goNext();
+		expect(machine.snapshot.currentStepId).toBe("end");
+	});
+
+	it("restore() onto a lazy step starts the load; an explicit validate() joins it", async () => {
+		const validate = vi.fn(() => ({
+			valid: false,
+			errors: { passport: "bad" },
+		}));
+		const loader = controlledLoader({ validate });
+		const { machine, states } = createMachine(lazyDefinition(loader.load));
+		await flush();
+
+		machine.restore(documentsSnapshot);
+		expect(machine.snapshot.isLoadingStep).toBe(true);
+		const result = machine.validate();
+		await flush();
+		expect(loader.load).toHaveBeenCalledTimes(1);
+
+		loader.resolve();
+		await expect(result).resolves.toEqual({
+			valid: false,
+			errors: { passport: "bad" },
+		});
+		await flush();
+		expect(validate).toHaveBeenCalledTimes(2); // restore's validate + explicit
+		expect(machine.snapshot.isLoadingStep).toBe(false);
+		expect(states.some((s) => s.isLoadingStep)).toBe(true);
+	});
+
+	it("validate() with a failing load: invalid result, reported once, no state write, no onValidation", async () => {
+		const load = vi
+			.fn<StepLoader<Data>>()
+			.mockRejectedValue(new Error("down"));
+		const onError = vi.fn();
+		const onValidation = vi.fn();
+		const { machine } = createMachine(lazyDefinition(load), {
+			onError,
+			onValidation,
+		});
+		await machine.goTo("documents", {
+			skipValidation: true,
+			skipLifecycle: true,
+		});
+		const before = machine.snapshot;
+
+		const result = await machine.validate();
+		expect(result).toEqual({
+			valid: false,
+			errors: { general: "Failed to load step" },
+		});
+		expect(onError).toHaveBeenCalledTimes(1);
+		expect(onValidation).not.toHaveBeenCalled();
+		expect(machine.snapshot.isValid).toBe(before.isValid);
+		expect(machine.snapshot.validationErrors).toBe(before.validationErrors);
+	});
+});

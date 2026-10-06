@@ -305,16 +305,40 @@ export class WizardMachine<T extends WizardData> {
 		// FIX 2: capture the generation so a stale re-enter from a superseded
 		// reset()/cancel() does not fire onStepEnter/onStateChange.
 		const gen = this.generation;
-		const initialStep = this.definition.steps[this.definition.initialStepId];
-		try {
-			if (initialStep.onEnter) {
-				await initialStep.onEnter(this.state.data, this.context);
+		const initialStepId = this.definition.initialStepId;
+
+		// WIZ-013: load a lazy initial step first. On failure the error is
+		// reported (phase "load") and onEnter/onStepEnter are skipped, but the
+		// guard refresh + state notify below still run. The initial onEnter is
+		// NOT replayed when a later validate()/navigation loads the step.
+		let entered = true;
+		if (this.needsLoad(initialStepId)) {
+			try {
+				await this.ensureStepsLoaded([initialStepId]);
+			} catch (error) {
+				if (this.generation !== gen || this.isDestroyed) {
+					return;
+				}
+				this.reportLoadError(error);
+				entered = false;
 			}
-			if (this.generation !== gen) {
+			if (this.generation !== gen || this.isDestroyed) {
 				return;
 			}
-			this.events.onStepEnter?.(this.definition.initialStepId, this.state.data);
-			this.debug(`Entered initial step: ${this.definition.initialStepId}`);
+		}
+
+		try {
+			if (entered) {
+				const initialStep = this.resolvedStep(initialStepId);
+				if (initialStep.onEnter) {
+					await initialStep.onEnter(this.state.data, this.context);
+				}
+				if (this.generation !== gen) {
+					return;
+				}
+				this.events.onStepEnter?.(initialStepId, this.state.data);
+				this.debug(`Entered initial step: ${initialStepId}`);
+			}
 			// Recompute "skipped" for function `enabled` guards against the initial
 			// data (constructor and reset re-entry). Folded into the notify below.
 			let guardRefresh: { error: unknown } | undefined;
@@ -677,6 +701,32 @@ export class WizardMachine<T extends WizardData> {
 		// FIX F6: capture the generation so a reset()/cancel() during the awaited
 		// validator supersedes this validation (mirrors isTransitionStale).
 		const gen = this.generation;
+		// WIZ-013: load a lazy current step before validating it. A failure is
+		// reported once (phase "load") and yields an invalid result WITHOUT a
+		// state write or onValidation — mirroring the thrown-validator path.
+		const currentStepId = this.state.currentStepId;
+		if (this.needsLoad(currentStepId)) {
+			const loadFailed = {
+				valid: false,
+				errors: { general: "Failed to load step" },
+			};
+			try {
+				await this.ensureStepsLoaded([currentStepId]);
+			} catch (error) {
+				if (this.generation !== gen || this.isDestroyed) {
+					return loadFailed;
+				}
+				this.reportLoadError(error);
+				this.validateAlreadyReported = true;
+				return loadFailed;
+			}
+			if (this.generation !== gen || this.isDestroyed) {
+				return {
+					valid: false,
+					errors: { general: "Validation error occurred" },
+				};
+			}
+		}
 		try {
 			const step = this.currentStep;
 			const validator = step.validate || alwaysValid;
