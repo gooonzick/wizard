@@ -158,6 +158,44 @@ describe("WIZ-013 lazy steps — plumbing", () => {
 		expect(states.some((s) => s.isLoadingStep)).toBe(false);
 	});
 
+	it("isLoadingStep flips do not invalidate the cached progress", async () => {
+		const run = async (lazy: boolean) => {
+			const when = vi.fn(() => true);
+			const def = lazyDefinition(vi.fn(async () => ({})));
+			def.steps.account.next = {
+				type: "conditional",
+				branches: [{ when, to: "documents" }],
+			};
+			if (!lazy) {
+				delete def.steps.documents.load;
+			}
+			const emitted: WizardState<Data>[] = [];
+			const machine = new WizardMachine<Data>(def, {}, initialData, {
+				onStateChange: (s) => emitted.push(s),
+			});
+			await flush();
+			emitted.length = 0;
+			when.mockClear();
+			await machine.goNext();
+			return { emitted, whenCalls: when.mock.calls.length };
+		};
+
+		const lazy = await run(true);
+		const eager = await run(false);
+
+		expect(lazy.emitted.map((s) => s.isLoadingStep)).toEqual([
+			false, // validate()
+			true,
+			false,
+			false, // navigation commit
+		]);
+		// The flag flips reuse the progress object of the preceding emission…
+		expect(lazy.emitted[1].progress).toBe(lazy.emitted[0].progress);
+		expect(lazy.emitted[2].progress).toBe(lazy.emitted[0].progress);
+		// …so progress (and its sync branch predicates) is not recomputed.
+		expect(lazy.whenCalls).toBe(eager.whenCalls);
+	});
+
 	it("preloadStep rejects for an unknown step id", async () => {
 		const { machine } = createMachine(lazyDefinition(vi.fn(async () => ({}))));
 		const error = await machine.preloadStep("nope").catch((e) => e);

@@ -52,6 +52,13 @@ export interface WizardState<T> {
 }
 
 /**
+ * Versioned internal state: everything in the snapshot except the derived
+ * `progress` and the transient `isLoadingStep` flag (WIZ-013), which are
+ * merged in by the `snapshot` getter.
+ */
+type InternalState<T> = Omit<WizardState<T>, "progress" | "isLoadingStep">;
+
+/**
  * JSON-safe serialized wizard runtime state
  */
 export interface WizardSerializedState<T> {
@@ -149,7 +156,7 @@ function isPromiseLike<V>(value: V | Promise<V>): value is Promise<V> {
 export class WizardMachine<T extends WizardData> {
 	private definition: WizardDefinition<T>;
 	private context: WizardContext;
-	private _state!: Omit<WizardState<T>, "progress">;
+	private _state!: InternalState<T>;
 	private events: WizardEvents<T>;
 	private visitedSteps: Set<StepId> = new Set();
 	private stepHistory: StepId[] = [];
@@ -210,6 +217,11 @@ export class WizardMachine<T extends WizardData> {
 	/** WIZ-013: load errors already reported (each failed attempt reports once). */
 	private reportedLoadErrors = new WeakSet<Error>();
 	/**
+	 * WIZ-013: `snapshot.isLoadingStep`. Kept outside `_state` so its flips do
+	 * not bump `stateVersion` (and so never invalidate the cached progress).
+	 */
+	private loadingStep = false;
+	/**
 	 * WIZ-013: generation whose initial-step entry was skipped because the
 	 * initial step's load failed. Replayed (once) by `prepareSteps` when a later
 	 * operation finds the step loaded while the wizard is still on it; a new
@@ -256,7 +268,6 @@ export class WizardMachine<T extends WizardData> {
 			isValid: true,
 			isCompleted: false,
 			canGoBack: false,
-			isLoadingStep: false,
 			stepStatuses: this.initializeStepStatuses(),
 		};
 		this.visitedSteps.add(definition.initialStepId);
@@ -312,11 +323,11 @@ export class WizardMachine<T extends WizardData> {
 	 * Internal state accessor. Writing bumps the state version so the cached
 	 * progress (FIX 10) is invalidated on every state mutation.
 	 */
-	private get state(): Omit<WizardState<T>, "progress"> {
+	private get state(): InternalState<T> {
 		return this._state;
 	}
 
-	private set state(next: Omit<WizardState<T>, "progress">) {
+	private set state(next: InternalState<T>) {
 		this._state = next;
 		this.stateVersion++;
 	}
@@ -442,7 +453,11 @@ export class WizardMachine<T extends WizardData> {
 	 * Gets the current state snapshot
 	 */
 	get snapshot(): WizardState<T> {
-		const snapshot = { ...this.state, progress: this.computeProgress() };
+		const snapshot = {
+			...this.state,
+			isLoadingStep: this.loadingStep,
+			progress: this.computeProgress(),
+		};
 		// FIX 8: shallow-freeze the snapshot and its stepStatuses to prevent
 		// callers from mutating internal state. `data` is intentionally NOT
 		// frozen (user data may legitimately be mutated / re-set via updateData).
@@ -542,6 +557,8 @@ export class WizardMachine<T extends WizardData> {
 		// Supersede in-flight transitions / initial-step entry (mirrors reset()).
 		this.generation++;
 
+		// WIZ-013: loads of the superseded generation no longer drive the flag.
+		this.loadingStep = false;
 		this.stepHistory = [...serializedState.history];
 		this.visitedSteps = new Set([
 			...serializedState.visitedSteps,
@@ -558,7 +575,6 @@ export class WizardMachine<T extends WizardData> {
 			canGoBack:
 				serializedState.currentStepId !== this.definition.initialStepId &&
 				this.stepHistory.length > 1,
-			isLoadingStep: false,
 			validationErrors: serializedState.validationErrors
 				? { ...serializedState.validationErrors }
 				: undefined,
@@ -1806,6 +1822,8 @@ export class WizardMachine<T extends WizardData> {
 		}
 
 		const initialStepId = this.definition.initialStepId;
+		// WIZ-013: loads of the superseded generation no longer drive the flag.
+		this.loadingStep = false;
 		this.stepHistory = [initialStepId];
 		this.visitedSteps = new Set([initialStepId]);
 		this.state = {
@@ -1814,7 +1832,6 @@ export class WizardMachine<T extends WizardData> {
 			isValid: true,
 			isCompleted: false,
 			canGoBack: false,
-			isLoadingStep: false,
 			validationErrors: undefined,
 			stepStatuses: this.initializeStepStatuses(),
 		};
@@ -1988,7 +2005,7 @@ export class WizardMachine<T extends WizardData> {
 	 * WIZ-013: reference-counts foreground loads of the current generation.
 	 * 0 → 1 sets `isLoadingStep: true`, 1 → 0 sets it back to false (one
 	 * `onStateChange` each). Loads that started before a reset()/cancel()/
-	 * restore() (which rebuild state with `isLoadingStep: false`) or that
+	 * restore() (which reset `isLoadingStep` to false) or that
 	 * settle after destroy() never touch the flag, and a load started after
 	 * destroy() never sets it.
 	 */
@@ -2022,10 +2039,12 @@ export class WizardMachine<T extends WizardData> {
 	}
 
 	private setLoadingStep(value: boolean): void {
-		if (this.state.isLoadingStep === value) {
+		if (this.loadingStep === value) {
 			return;
 		}
-		this.state = { ...this.state, isLoadingStep: value };
+		// Not a state write: the flag lives outside `_state`, so flipping it
+		// does not bump `stateVersion` and the cached progress stays valid.
+		this.loadingStep = value;
 		this.notifyStateChange();
 	}
 
