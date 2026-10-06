@@ -5,6 +5,7 @@ import type {
 	ValidationResult,
 	WizardContext,
 } from "../src/types/base";
+import type { LazyStepImplementation, StepLoader } from "../src/types/step";
 import type { StepTransition } from "../src/types/transitions";
 
 describe("Base Types", () => {
@@ -77,5 +78,30 @@ describe("StepBuilder.required types", () => {
 		step.required("nope");
 		// @ts-expect-error - messages keys must be keys of Form
 		step.required("email", { messages: { nope: "x" } });
+	});
+});
+
+describe("WIZ-013 lazy step types", () => {
+	type D = { name: string };
+
+	test("LazyStepImplementation has exactly the four hook keys", () => {
+		expectTypeOf<keyof LazyStepImplementation<D>>().toEqualTypeOf<
+			"validate" | "onEnter" | "onLeave" | "onSubmit"
+		>();
+	});
+
+	test("StepLoader accepts bare and default-export module shapes", () => {
+		expectTypeOf<() => Promise<{ onEnter: () => void }>>().toMatchTypeOf<
+			StepLoader<D>
+		>();
+		expectTypeOf<
+			() => Promise<{ default: { validate: () => { valid: true } } }>
+		>().toMatchTypeOf<StepLoader<D>>();
+	});
+
+	test("StepLoader rejects results that only carry skeleton keys", () => {
+		expectTypeOf<
+			() => Promise<{ next: { type: "static"; to: string } }>
+		>().not.toMatchTypeOf<StepLoader<D>>();
 	});
 });
