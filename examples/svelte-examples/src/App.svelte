@@ -1,14 +1,16 @@
 <script lang="ts">
 	import ContextParent from "./ContextParent.svelte";
+	import LazyStepsExample from "./LazyStepsExample.svelte";
 	import RunesExample from "./RunesExample.svelte";
 	import StoreExample from "./StoreExample.svelte";
 
-	type Tab = "store" | "runes" | "context";
+	type Tab = "store" | "runes" | "context" | "lazy";
 
 	const TABS: Array<{ id: Tab; label: string }> = [
 		{ id: "store", label: "Store API" },
 		{ id: "runes", label: "Runes API" },
 		{ id: "context", label: "Context" },
+		{ id: "lazy", label: "Lazy Steps" },
 	];
 
 	let tab = $state<Tab>("store");
@@ -40,6 +42,8 @@
 		<StoreExample />
 	{:else if tab === "runes"}
 		<RunesExample />
+	{:else if tab === "lazy"}
+		<LazyStepsExample />
 	{:else}
 		<ContextParent />
 	{/if}
