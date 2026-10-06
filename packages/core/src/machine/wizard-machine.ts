@@ -27,8 +27,8 @@ import type {
 	WizardProgress,
 	WizardStepDefinition,
 } from "../types/step";
-import { resolveStepInDirection } from "./step-resolver";
 import { loadStepDefinition } from "./lazy-steps";
+import { resolveStepInDirection } from "./step-resolver";
 import { evaluateGuard } from "./transitions";
 import { alwaysValid } from "./validators";
 
@@ -860,7 +860,12 @@ export class WizardMachine<T extends WizardData> {
 				throw new WizardNavigationError("Wizard is already completed");
 			}
 
-			const step = this.currentStep;
+			// WIZ-013: a load failure is not a validation failure — load first.
+			// The needsLoad check is synchronous so non-lazy wizards add no await.
+			const loadId = this.state.currentStepId;
+			if (this.needsLoad(loadId) && !(await this.loadForTransition([loadId]))) {
+				return;
+			}
 
 			// Validate before submit (validate() is generation-guarded per F6)
 			const validationResult = await this.validate();
@@ -884,6 +889,8 @@ export class WizardMachine<T extends WizardData> {
 				throw err;
 			}
 
+			// WIZ-013: re-read after the load so a lazy step's loaded onSubmit runs.
+			const step = this.currentStep;
 			// Execute step's submit handler
 			if (step.onSubmit) {
 				await step.onSubmit(this.state.data, this.context);
@@ -904,9 +911,13 @@ export class WizardMachine<T extends WizardData> {
 				await this.complete();
 			}
 		} catch (error) {
-			// A WizardValidationError was already reported above (phase "validation");
-			// do not re-report it. All other errors are reported with phase "submit".
-			if (!(error instanceof WizardValidationError)) {
+			// A WizardValidationError was already reported above (phase "validation")
+			// and an already-reported WizardStepLoadError (phase "load"); do not
+			// re-report them. All other errors are reported with phase "submit".
+			if (
+				!(error instanceof WizardValidationError) &&
+				!this.isReportedLoadError(error)
+			) {
 				this.handleError(error, "submit");
 			}
 			throw error;
@@ -922,6 +933,13 @@ export class WizardMachine<T extends WizardData> {
 		return this.withTransition(async () => {
 			if (this.state.isCompleted) {
 				throw new WizardNavigationError("Wizard is already completed");
+			}
+
+			// WIZ-013: a load failure is not a validation failure — load first.
+			// The needsLoad check is synchronous so non-lazy wizards add no await.
+			const loadId = this.state.currentStepId;
+			if (this.needsLoad(loadId) && !(await this.loadForTransition([loadId]))) {
+				return;
 			}
 
 			// Validate current step
@@ -1132,6 +1150,15 @@ export class WizardMachine<T extends WizardData> {
 
 			// Validate current step before leaving (unless skipped)
 			if (!skipValidation) {
+				// WIZ-013: a load failure is not a validation failure — load first.
+				// The needsLoad check is synchronous so non-lazy wizards add no await.
+				const loadId = this.state.currentStepId;
+				if (
+					this.needsLoad(loadId) &&
+					!(await this.loadForTransition([loadId]))
+				) {
+					return;
+				}
 				const validationResult = await this.validate();
 				// A reset()/cancel()/restore() during the awaited validator
 				// supersedes this transition.
@@ -1333,8 +1360,20 @@ export class WizardMachine<T extends WizardData> {
 			skipLifecycle = false,
 			popHistory = 0,
 		} = options ?? {};
+		// WIZ-013: load the current (for onLeave) and target (for onEnter)
+		// implementations BEFORE beforeTransition / onLeave / any state write, so
+		// a failed load leaves the machine exactly where it was.
+		if (!skipLifecycle) {
+			const ids = [this.state.currentStepId, stepId];
+			if (
+				ids.some((id) => this.needsLoad(id)) &&
+				!(await this.loadForTransition(ids))
+			) {
+				return;
+			}
+		}
 		const currentStep = this.currentStep;
-		const targetStep = this.definition.steps[stepId];
+		const targetStep = this.resolvedStep(stepId);
 
 		// WIZ-007: beforeTransition (sequential, veto/throw aware) at the very top,
 		// before onLeave / state write, where both from and to are known.
@@ -1734,12 +1773,13 @@ export class WizardMachine<T extends WizardData> {
 		if (inFlight) {
 			return inFlight;
 		}
-		const pending = loadStepDefinition(stepId, this.definition.steps[stepId]).then(
-			(merged) => {
-				this.loadedSteps.set(stepId, merged);
-				return merged;
-			},
-		);
+		const pending = loadStepDefinition(
+			stepId,
+			this.definition.steps[stepId],
+		).then((merged) => {
+			this.loadedSteps.set(stepId, merged);
+			return merged;
+		});
 		this.stepLoads.set(stepId, pending);
 		const settle = () => {
 			if (this.stepLoads.get(stepId) === pending) {
@@ -1825,6 +1865,26 @@ export class WizardMachine<T extends WizardData> {
 
 	private isReportedLoadError(error: unknown): boolean {
 		return error instanceof Error && this.reportedLoadErrors.has(error);
+	}
+
+	/**
+	 * WIZ-013: loads `stepIds` inside a transition (withTransition / submit).
+	 * Only call it when `stepIds.some((id) => this.needsLoad(id))`.
+	 * Returns false when the transition was superseded or the machine was
+	 * destroyed during the load — the caller must then return silently. A
+	 * failure is reported once (phase "load") and rethrown, unless superseded.
+	 */
+	private async loadForTransition(stepIds: StepId[]): Promise<boolean> {
+		try {
+			await this.ensureStepsLoaded(stepIds);
+		} catch (error) {
+			if (this.isTransitionStale() || this.isDestroyed) {
+				return false;
+			}
+			this.reportLoadError(error);
+			throw error;
+		}
+		return !(this.isTransitionStale() || this.isDestroyed);
 	}
 
 	/**
@@ -2292,10 +2352,14 @@ export class WizardMachine<T extends WizardData> {
 		try {
 			return await operation();
 		} catch (error) {
-			// A WizardValidationError was already reported (with phase "validation")
-			// and its step status set by the navigation method that threw it; do not
-			// re-report it here. All other errors are reported with the default phase.
-			if (!(error instanceof WizardValidationError)) {
+			// A WizardValidationError (phase "validation") and an already-reported
+			// WizardStepLoadError (phase "load") are not re-reported here; the
+			// former also had its step status set by the navigation method that
+			// threw it. All other errors are reported with the default phase.
+			if (
+				!(error instanceof WizardValidationError) &&
+				!this.isReportedLoadError(error)
+			) {
 				this.handleError(error);
 			}
 			throw error;
