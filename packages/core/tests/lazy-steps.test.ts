@@ -537,7 +537,7 @@ describe("WIZ-013 lazy steps — initial step, validate, restore", () => {
 		expect(machine.snapshot.isLoadingStep).toBe(false);
 	});
 
-	it("initial load failure: reported, guard statuses still computed, onEnter not replayed after a successful retry", async () => {
+	it("initial load failure: reported, guard statuses still computed; a later validate() loads the step and replays its entry once, before the validator", async () => {
 		const onEnter = vi.fn();
 		const validate = vi.fn(() => ({ valid: true }));
 		const load = vi
@@ -564,10 +564,130 @@ describe("WIZ-013 lazy steps — initial step, validate, restore", () => {
 		await machine.validate();
 		expect(load).toHaveBeenCalledTimes(2);
 		expect(validate).toHaveBeenCalledTimes(1);
-		expect(onEnter).not.toHaveBeenCalled();
+		expect(onEnter).toHaveBeenCalledTimes(1);
+		expect(onStepEnter).toHaveBeenCalledTimes(1);
+		expect(onStepEnter).toHaveBeenCalledWith("start", initialData);
+		expect(onEnter.mock.invocationCallOrder[0]).toBeLessThan(
+			onStepEnter.mock.invocationCallOrder[0],
+		);
+		expect(onStepEnter.mock.invocationCallOrder[0]).toBeLessThan(
+			validate.mock.invocationCallOrder[0],
+		);
+
+		await machine.validate();
+		await machine.goNext();
+		expect(machine.snapshot.currentStepId).toBe("end");
+		expect(onEnter).toHaveBeenCalledTimes(1);
+		expect(onStepEnter).toHaveBeenCalledTimes(2); // start (replayed), end
+	});
+
+	it("initial load failure: goNext() loads the step and replays its entry before navigating", async () => {
+		const onEnter = vi.fn();
+		const validate = vi.fn(() => ({ valid: true }));
+		const load = vi
+			.fn<StepLoader<Data>>()
+			.mockRejectedValueOnce(new Error("offline"))
+			.mockResolvedValue({ onEnter, validate });
+		const onStepEnter = vi.fn();
+		const { machine } = createMachine(lazyInitialDefinition(load), {
+			onStepEnter,
+		});
+		await flush();
 
 		await machine.goNext();
 		expect(machine.snapshot.currentStepId).toBe("end");
+		expect(onEnter).toHaveBeenCalledTimes(1);
+		expect(onStepEnter.mock.calls.map((c) => c[0])).toEqual(["start", "end"]);
+		expect(onEnter.mock.invocationCallOrder[0]).toBeLessThan(
+			validate.mock.invocationCallOrder[0],
+		);
+	});
+
+	it("initial load failure: preloadStep() then goNext() replays the entry once", async () => {
+		const onEnter = vi.fn();
+		const load = vi
+			.fn<StepLoader<Data>>()
+			.mockRejectedValueOnce(new Error("offline"))
+			.mockResolvedValue({ onEnter });
+		const onStepEnter = vi.fn();
+		const { machine } = createMachine(lazyInitialDefinition(load), {
+			onStepEnter,
+		});
+		await flush();
+
+		await machine.preloadStep("start");
+		expect(onEnter).not.toHaveBeenCalled();
+
+		await machine.goNext();
+		expect(load).toHaveBeenCalledTimes(2);
+		expect(onEnter).toHaveBeenCalledTimes(1);
+		expect(onStepEnter.mock.calls.map((c) => c[0])).toEqual(["start", "end"]);
+	});
+
+	it("a replayed initial onEnter that throws is reported (phase 'lifecycle'), skips onStepEnter, and the operation continues", async () => {
+		const onEnter = vi.fn(() => {
+			throw new Error("enter boom");
+		});
+		const validate = vi.fn(() => ({ valid: true }));
+		const load = vi
+			.fn<StepLoader<Data>>()
+			.mockRejectedValueOnce(new Error("offline"))
+			.mockResolvedValue({ onEnter, validate });
+		const onStepEnter = vi.fn();
+		const pluginError = vi.fn();
+		const { machine } = createMachine(
+			lazyInitialDefinition(load),
+			{ onStepEnter },
+			[{ name: "spy", onError: pluginError }],
+		);
+		await flush();
+		pluginError.mockClear();
+
+		await expect(machine.validate()).resolves.toEqual({ valid: true });
+		expect(onEnter).toHaveBeenCalledTimes(1);
+		expect(validate).toHaveBeenCalledTimes(1);
+		expect(onStepEnter).not.toHaveBeenCalled();
+		expect(pluginError).toHaveBeenCalledTimes(1);
+		expect(pluginError.mock.calls[0][1]).toMatchObject({ phase: "lifecycle" });
+
+		await machine.validate();
+		expect(onEnter).toHaveBeenCalledTimes(1);
+	});
+
+	it("reset() and restore() discard a pending initial entry", async () => {
+		for (const supersede of [
+			(m: WizardMachine<Data>) => m.reset(),
+			(m: WizardMachine<Data>) =>
+				m.restore({
+					version: 1,
+					currentStepId: "start",
+					data: initialData,
+					isValid: true,
+					isCompleted: false,
+					stepStatuses: { start: "active", optional: "skipped", end: "pristine" },
+					visitedSteps: ["start"],
+					history: ["start"],
+				}),
+		]) {
+			const onEnter = vi.fn();
+			const load = vi
+				.fn<StepLoader<Data>>()
+				.mockRejectedValueOnce(new Error("offline"))
+				.mockResolvedValue({ onEnter });
+			const { machine } = createMachine(lazyInitialDefinition(load));
+			await flush();
+
+			supersede(machine);
+			await flush();
+			// reset() re-enters the initial step itself (once); restore() never
+			// enters it. Neither replays the superseded pending entry.
+			const entered = onEnter.mock.calls.length;
+			expect(entered).toBeLessThanOrEqual(1);
+
+			await machine.validate();
+			await machine.goNext();
+			expect(onEnter).toHaveBeenCalledTimes(entered);
+		}
 	});
 
 	it("restore() onto a lazy step starts the load; an explicit validate() joins it", async () => {

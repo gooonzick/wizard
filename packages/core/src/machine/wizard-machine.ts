@@ -207,6 +207,16 @@ export class WizardMachine<T extends WizardData> {
 	private foregroundLoadsGen = -1;
 	/** WIZ-013: load errors already reported (each failed attempt reports once). */
 	private reportedLoadErrors = new WeakSet<Error>();
+	/**
+	 * WIZ-013: generation whose initial-step entry was skipped because the
+	 * initial step's load failed. Replayed (once) by `prepareSteps` when a later
+	 * operation finds the step loaded while the wizard is still on it; a new
+	 * generation (reset/cancel/restore) or leaving the step discards it.
+	 */
+	private pendingInitialEntryGen: number | undefined;
+	/** WIZ-013: staleness check for loads inside a transition / submit. */
+	private readonly transitionAborted = (): boolean =>
+		this.isTransitionStale() || this.isDestroyed;
 
 	/**
 	 * @param plugins Optional plugins to register at construction time.
@@ -327,10 +337,12 @@ export class WizardMachine<T extends WizardData> {
 
 		// WIZ-013: load a lazy initial step first. On failure the error is
 		// reported (phase "load") and onEnter/onStepEnter are skipped, but the
-		// guard refresh + state notify below still run. The initial onEnter is
-		// NOT replayed when a later validate()/navigation loads the step. If the
-		// user navigated away during the load, the initial step is neither
-		// entered nor reported as failed.
+		// guard refresh + state notify below still run. The skipped entry is
+		// remembered for this generation and replayed once by the next
+		// validate()/goNext()/goTo()/submit()/navigation that finds the step
+		// loaded while the wizard is still on it (see prepareSteps). If the user
+		// navigated away during the load, the initial step is neither entered
+		// nor reported as failed.
 		const left = () =>
 			this.generation !== gen ||
 			this.isDestroyed ||
@@ -348,6 +360,7 @@ export class WizardMachine<T extends WizardData> {
 				}
 				this.reportLoadError(error);
 				entered = false;
+				this.pendingInitialEntryGen = gen;
 			}
 			if (left()) {
 				return;
@@ -737,27 +750,23 @@ export class WizardMachine<T extends WizardData> {
 		// Superseded (reset/cancel/restore, destroy, or the user navigated away
 		// during the load) → the generic superseded result, no write or report.
 		const currentStepId = this.state.currentStepId;
-		if (this.needsLoad(currentStepId)) {
-			const superseded = () =>
+		const prep = this.prepareSteps(
+			[currentStepId],
+			[],
+			() =>
 				this.generation !== gen ||
 				this.isDestroyed ||
-				this.state.currentStepId !== currentStepId;
-			let loadError: unknown;
-			let failed = false;
-			try {
-				await this.ensureStepsLoaded([currentStepId]);
-			} catch (error) {
-				loadError = error;
-				failed = true;
-			}
-			if (superseded()) {
+				this.state.currentStepId !== currentStepId,
+		);
+		if (isPromiseLike(prep)) {
+			const prepared = await prep;
+			if (prepared.status === "stale") {
 				return {
 					valid: false,
 					errors: { general: "Validation error occurred" },
 				};
 			}
-			if (failed) {
-				this.reportLoadError(loadError);
+			if (prepared.status === "failed") {
 				this.validateAlreadyReported = true;
 				return { valid: false, errors: { general: "Failed to load step" } };
 			}
@@ -988,10 +997,20 @@ export class WizardMachine<T extends WizardData> {
 			}
 
 			// WIZ-013: a load failure is not a validation failure — load first.
-			// The needsLoad check is synchronous so non-lazy wizards add no await.
-			const loadId = this.state.currentStepId;
-			if (this.needsLoad(loadId) && !(await this.loadForTransition([loadId]))) {
-				return;
+			// prepareSteps is synchronous when nothing needs loading (no await).
+			const prep = this.prepareSteps(
+				[this.state.currentStepId],
+				[],
+				this.transitionAborted,
+			);
+			if (isPromiseLike(prep)) {
+				const prepared = await prep;
+				if (prepared.status === "stale") {
+					return;
+				}
+				if (prepared.status === "failed") {
+					throw prepared.error;
+				}
 			}
 
 			// Validate before submit (validate() is generation-guarded per F6)
@@ -1063,10 +1082,20 @@ export class WizardMachine<T extends WizardData> {
 			}
 
 			// WIZ-013: a load failure is not a validation failure — load first.
-			// The needsLoad check is synchronous so non-lazy wizards add no await.
-			const loadId = this.state.currentStepId;
-			if (this.needsLoad(loadId) && !(await this.loadForTransition([loadId]))) {
-				return;
+			// prepareSteps is synchronous when nothing needs loading (no await).
+			const prep = this.prepareSteps(
+				[this.state.currentStepId],
+				[],
+				this.transitionAborted,
+			);
+			if (isPromiseLike(prep)) {
+				const prepared = await prep;
+				if (prepared.status === "stale") {
+					return;
+				}
+				if (prepared.status === "failed") {
+					throw prepared.error;
+				}
 			}
 
 			// Validate current step
@@ -1278,13 +1307,20 @@ export class WizardMachine<T extends WizardData> {
 			// Validate current step before leaving (unless skipped)
 			if (!skipValidation) {
 				// WIZ-013: a load failure is not a validation failure — load first.
-				// The needsLoad check is synchronous so non-lazy wizards add no await.
-				const loadId = this.state.currentStepId;
-				if (
-					this.needsLoad(loadId) &&
-					!(await this.loadForTransition([loadId]))
-				) {
-					return;
+				// prepareSteps is synchronous when nothing needs loading (no await).
+				const prep = this.prepareSteps(
+					[this.state.currentStepId],
+					[],
+					this.transitionAborted,
+				);
+				if (isPromiseLike(prep)) {
+					const prepared = await prep;
+					if (prepared.status === "stale") {
+						return;
+					}
+					if (prepared.status === "failed") {
+						throw prepared.error;
+					}
 				}
 				const validationResult = await this.validate();
 				// A reset()/cancel()/restore() during the awaited validator
@@ -1496,14 +1532,16 @@ export class WizardMachine<T extends WizardData> {
 			const prep = this.prepareSteps(
 				[stepId],
 				[this.state.currentStepId],
-				() => this.isTransitionStale() || this.isDestroyed,
+				this.transitionAborted,
 			);
-			const result = isPromiseLike(prep) ? await prep : prep;
-			if (result.status === "stale") {
-				return;
-			}
-			if (result.status === "failed") {
-				throw result.error;
+			if (isPromiseLike(prep)) {
+				const prepared = await prep;
+				if (prepared.status === "stale") {
+					return;
+				}
+				if (prepared.status === "failed") {
+					throw prepared.error;
+				}
 			}
 		}
 		const currentStep = this.currentStep;
@@ -1586,6 +1624,8 @@ export class WizardMachine<T extends WizardData> {
 				[stepId]: targetStatus,
 			},
 		};
+		// WIZ-013: leaving the initial step discards its pending (skipped) entry.
+		this.pendingInitialEntryGen = undefined;
 
 		this.visitedSteps.add(stepId);
 
@@ -2017,70 +2057,113 @@ export class WizardMachine<T extends WizardData> {
 	 * - `isStale()` → `stale` (nothing is reported);
 	 * - each failed load is reported once (phase "load"); a failed `required`
 	 *   id → `failed` with its error, failed `optional` ids are ignored (the
-	 *   skeleton's hooks are used).
+	 *   skeleton's hooks are used);
+	 * - when the initial step's entry is still pending (its load failed in
+	 *   `initializeFirstStep`), the wizard is still on it in the same
+	 *   generation, it is among the prepared ids and it is now loaded (by this
+	 *   call or an earlier background load), its entry is replayed once — see
+	 *   `replayInitialEntry` — before `ready` is returned.
 	 */
 	private prepareSteps(
 		required: StepId[],
 		optional: StepId[],
 		isStale: () => boolean,
 	): PrepareResult | Promise<PrepareResult> {
-		const requiredSet = new Set(required);
-		const ids = [...new Set([...required, ...optional])].filter((id) =>
-			this.needsLoad(id),
-		);
-		if (ids.length === 0) {
+		const ids =
+			optional.length === 0
+				? required
+				: [...new Set([...required, ...optional])];
+		const toLoad = ids.filter((id) => this.needsLoad(id));
+		if (toLoad.length === 0 && !this.isInitialEntryPending(ids)) {
 			return PREPARE_READY;
 		}
-		return this.loadPreparedSteps(ids, requiredSet, isStale);
+		return this.loadPreparedSteps(ids, toLoad, new Set(required), isStale);
 	}
 
 	private async loadPreparedSteps(
 		ids: StepId[],
+		toLoad: StepId[],
 		required: Set<StepId>,
 		isStale: () => boolean,
 	): Promise<PrepareResult> {
-		const settled = await this.trackForegroundLoad(
-			Promise.allSettled(ids.map((id) => this.loadStep(id))),
-		);
-		if (isStale()) {
-			return { status: "stale" };
-		}
-		let failure: WizardStepLoadError | undefined;
-		for (const [index, result] of settled.entries()) {
-			if (result.status === "fulfilled") {
-				continue;
+		if (toLoad.length > 0) {
+			const settled = await this.trackForegroundLoad(
+				Promise.allSettled(toLoad.map((id) => this.loadStep(id))),
+			);
+			if (isStale()) {
+				return { status: "stale" };
 			}
-			const stepId = ids[index];
-			const error =
-				result.reason instanceof WizardStepLoadError
-					? result.reason
-					: new WizardStepLoadError(stepId, { cause: result.reason });
-			this.reportLoadError(error);
-			if (required.has(stepId)) {
-				failure ??= error;
+			let failure: WizardStepLoadError | undefined;
+			for (const [index, result] of settled.entries()) {
+				if (result.status === "fulfilled") {
+					continue;
+				}
+				const stepId = toLoad[index];
+				const error =
+					result.reason instanceof WizardStepLoadError
+						? result.reason
+						: new WizardStepLoadError(stepId, { cause: result.reason });
+				this.reportLoadError(error);
+				if (required.has(stepId)) {
+					failure ??= error;
+				}
+			}
+			if (failure) {
+				return { status: "failed", error: failure };
 			}
 		}
-		return failure ? { status: "failed", error: failure } : PREPARE_READY;
+		if (this.isInitialEntryPending(ids)) {
+			await this.replayInitialEntry(isStale);
+			if (isStale()) {
+				return { status: "stale" };
+			}
+		}
+		return PREPARE_READY;
 	}
 
 	/**
-	 * WIZ-013: loads `stepIds` inside a transition (withTransition / submit).
-	 * Only call it when `stepIds.some((id) => this.needsLoad(id))`.
-	 * Returns false when the transition was superseded or the machine was
-	 * destroyed during the load — the caller must then return silently. A
-	 * failure is reported once (phase "load") and rethrown, unless superseded.
+	 * WIZ-013: true when the initial step's entry was skipped by a failed load
+	 * in this generation, the wizard is still on the initial step, `ids`
+	 * includes it, and it is loaded now. Synchronous.
 	 */
-	private async loadForTransition(stepIds: StepId[]): Promise<boolean> {
-		try {
-			await this.ensureStepsLoaded(stepIds);
-		} catch (error) {
-			if (this.isTransitionStale() || this.isDestroyed) {
-				return false;
-			}
-			this.reportLoadError(error);
-			throw error;
+	private isInitialEntryPending(ids: StepId[]): boolean {
+		if (this.pendingInitialEntryGen !== this.generation) {
+			return false;
 		}
-		return !(this.isTransitionStale() || this.isDestroyed);
+		const initialStepId = this.definition.initialStepId;
+		return (
+			this.state.currentStepId === initialStepId &&
+			ids.includes(initialStepId) &&
+			!this.needsLoad(initialStepId)
+		);
+	}
+
+	/**
+	 * WIZ-013: runs the initial step's skipped entry (loaded `onEnter`, then
+	 * `events.onStepEnter`) at most once. A throwing `onEnter` is reported
+	 * (phase "lifecycle") and skips `onStepEnter`; the caller's operation
+	 * continues either way. Nothing more runs when superseded or when the
+	 * wizard left the initial step during `onEnter`.
+	 */
+	private async replayInitialEntry(isStale: () => boolean): Promise<void> {
+		this.pendingInitialEntryGen = undefined;
+		const initialStepId = this.definition.initialStepId;
+		const step = this.resolvedStep(initialStepId);
+		try {
+			if (step.onEnter) {
+				await step.onEnter(this.state.data, this.context);
+			}
+		} catch (error) {
+			if (!isStale()) {
+				this.handleError(error, "lifecycle");
+			}
+			return;
+		}
+		if (isStale() || this.state.currentStepId !== initialStepId) {
+			return;
+		}
+		this.events.onStepEnter?.(initialStepId, this.state.data);
+		this.debug(`Entered initial step: ${initialStepId}`);
 	}
 
 	/**
