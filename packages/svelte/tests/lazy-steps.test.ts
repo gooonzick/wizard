@@ -29,7 +29,10 @@ function lazyDefinition() {
 describe("svelte — lazy steps (WIZ-013)", () => {
 	it("store API: loading.isLoadingStep and $wizard.isLoadingStep", async () => {
 		const { definition, release } = lazyDefinition();
-		const wizard = createWizardStore<D>({ definition, initialData: { name: "" } });
+		const wizard = createWizardStore<D>({
+			definition,
+			initialData: { name: "" },
+		});
 		expect(typeof wizard.actions.preloadStep).toBe("function");
 
 		const nav = wizard.goNext();

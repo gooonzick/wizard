@@ -32,7 +32,9 @@ describe("useWizard — lazy steps (WIZ-013)", () => {
 		act(() => {
 			nav = result.current.navigation.goNext();
 		});
-		await waitFor(() => expect(result.current.loading.isLoadingStep).toBe(true));
+		await waitFor(() =>
+			expect(result.current.loading.isLoadingStep).toBe(true),
+		);
 
 		await act(async () => {
 			release();
