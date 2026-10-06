@@ -123,7 +123,11 @@ export interface WizardStoreActions<T extends WizardData> {
 	serialize: () => WizardSerializedState<T>;
 	/** Fire-and-forget (`void manager.runRestore(...)`). */
 	restore: (state: WizardSerializedState<T>) => void;
-	/** Loads a lazy step's implementation ahead of navigation (WIZ-013). */
+	/**
+	 * Loads a lazy step's implementation ahead of navigation (WIZ-013).
+	 * Never rejects: meant for fire-and-forget hover/focus handlers; failures
+	 * are reported by the navigation that needs the step.
+	 */
 	preloadStep: (stepId: StepId) => Promise<void>;
 }
 

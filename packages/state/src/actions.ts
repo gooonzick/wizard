@@ -29,7 +29,12 @@ export interface WizardBindingActions<T extends WizardData> {
 	goBack: (steps?: number) => Promise<void>;
 	goTo: (stepId: StepId, options?: GoToOptions) => Promise<void>;
 	goToStep: (stepId: StepId) => Promise<void>;
-	/** WIZ-013: prefetch a lazy step's implementation (no loading flag). */
+	/**
+	 * WIZ-013: prefetch a lazy step's implementation (no loading flag).
+	 * Never rejects (including an unknown step id): meant for fire-and-forget
+	 * hover/focus handlers; failures are reported by the navigation that needs
+	 * the step. `machine.preloadStep()` itself still rejects.
+	 */
 	preloadStep: (stepId: StepId) => Promise<void>;
 }
 
@@ -84,6 +89,6 @@ export function createWizardActions<T extends WizardData>(
 		goBack: (steps) => navigating(() => machine.goBack(steps)),
 		goTo,
 		goToStep: (stepId) => goTo(stepId, { skipValidation: true }),
-		preloadStep: (stepId) => machine.preloadStep(stepId),
+		preloadStep: (stepId) => machine.preloadStep(stepId).catch(() => {}),
 	};
 }

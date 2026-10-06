@@ -142,6 +142,29 @@ describe("WizardStateManager — isLoadingStep (WIZ-013)", () => {
 		expectTypeOf<{ isLoadingStep: true }>().not.toMatchTypeOf<Update>();
 	});
 
+	it("actions.preloadStep never rejects; the machine's preloadStep still does", async () => {
+		const load = vi
+			.fn()
+			.mockRejectedValue(new Error("offline")) as unknown as StepLoader<Data>;
+		const definition: WizardDefinition<Data> = {
+			id: "state-lazy-fail",
+			initialStepId: "a",
+			steps: {
+				a: { id: "a", next: { type: "static", to: "b" } },
+				b: { id: "b", load },
+			},
+		};
+		const machine = new WizardMachine<Data>(definition, {}, { name: "" });
+		const manager = new WizardStateManager<Data>(machine, "a");
+		const actions = createWizardActions(manager, () => {});
+
+		await expect(machine.preloadStep("b")).rejects.toThrow(/offline/);
+		await expect(actions.preloadStep("b")).resolves.toBeUndefined();
+		await expect(actions.preloadStep("missing")).resolves.toBeUndefined();
+		expect(load).toHaveBeenCalledTimes(2);
+		expectTypeOf(actions.preloadStep).returns.toEqualTypeOf<Promise<void>>();
+	});
+
 	it("actions.preloadStep delegates to the machine without loading flags", async () => {
 		const { manager, gate, load } = setup();
 		await flush();

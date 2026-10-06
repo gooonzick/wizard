@@ -80,6 +80,32 @@ describe("useWizard — lazy steps (WIZ-013)", () => {
 		expect(seen).not.toContain(true);
 	});
 
+	it("actions.preloadStep never rejects when the chunk fails; navigation reports it", async () => {
+		const loader = vi.fn(async () => {
+			throw new Error("offline");
+		}) as unknown as StepLoader<D>;
+		const { definition, load } = lazyDefinition("react-preload-fail", loader);
+		const onError = vi.fn();
+		const { result } = renderHook(() =>
+			useWizard({ definition, initialData: { name: "" }, onError }),
+		);
+
+		await act(async () => {
+			await expect(
+				result.current.actions.preloadStep("b"),
+			).resolves.toBeUndefined();
+		});
+		expect(load).toHaveBeenCalledTimes(1);
+		expect(onError).not.toHaveBeenCalled();
+
+		await act(async () => {
+			await expect(result.current.navigation.goNext()).rejects.toThrow(
+				/Failed to load step "b"/,
+			);
+		});
+		expect(result.current.state.currentStepId).toBe("a");
+	});
+
 	it("granular useWizardLoading reflects isLoadingStep under WizardProvider", async () => {
 		const { definition, release } = lazyDefinition("react-granular");
 		const wrapper = ({ children }: { children: React.ReactNode }) => (
