@@ -389,6 +389,46 @@ describe("WIZ-013 lazy steps — navigation", () => {
 		expect(machine.snapshot.validationErrors).toBeUndefined();
 	});
 
+	it("regression: non-lazy wizards run validate() synchronously in goNext/goTo/submit (no added microtask)", async () => {
+		for (const run of [
+			(m: WizardMachine<Data>) => m.goNext(),
+			(m: WizardMachine<Data>) => m.goTo("b"),
+			(m: WizardMachine<Data>) => m.submit(),
+		]) {
+			const validate = vi.fn(() => ({
+				valid: false,
+				errors: { name: "req" },
+			}));
+			const def: WizardDefinition<Data> = {
+				id: "eager",
+				initialStepId: "a",
+				steps: {
+					a: { id: "a", validate, next: { type: "static", to: "b" } },
+					b: { id: "b" },
+				},
+			};
+			const { machine } = createMachine(def);
+			await flush();
+
+			const p = run(machine).catch(() => {});
+			expect(validate).toHaveBeenCalledTimes(1);
+			await p;
+		}
+	});
+
+	it("after destroy(), a lazy goNext() never flips isLoadingStep to true", async () => {
+		const load = vi.fn(async () => ({}));
+		const { machine, states } = createMachine(lazyDefinition(load));
+		await flush();
+		await machine.destroy();
+		states.length = 0;
+
+		await machine.goNext().catch(() => {});
+		await flush();
+		expect(machine.snapshot.isLoadingStep).toBe(false);
+		expect(states.some((s) => s.isLoadingStep)).toBe(false);
+	});
+
 	it("submit() on a lazy last step runs the LOADED onSubmit", async () => {
 		const onSubmit = vi.fn();
 		const def = lazyDefinition(vi.fn(async () => ({})));

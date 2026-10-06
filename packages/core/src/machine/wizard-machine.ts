@@ -1811,9 +1811,13 @@ export class WizardMachine<T extends WizardData> {
 	 * 0 → 1 sets `isLoadingStep: true`, 1 → 0 sets it back to false (one
 	 * `onStateChange` each). Loads that started before a reset()/cancel()/
 	 * restore() (which rebuild state with `isLoadingStep: false`) or that
-	 * settle after destroy() never touch the flag.
+	 * settle after destroy() never touch the flag, and a load started after
+	 * destroy() never sets it.
 	 */
 	private async trackForegroundLoad<R>(work: Promise<R>): Promise<R> {
+		if (this.isDestroyed) {
+			return work;
+		}
 		const gen = this.generation;
 		if (this.foregroundLoadsGen !== gen) {
 			this.foregroundLoadsGen = gen;
@@ -1852,15 +1856,17 @@ export class WizardMachine<T extends WizardData> {
 	 * error instance (all callers awaiting one failed attempt share it).
 	 */
 	private reportLoadError(error: unknown): void {
-		if (error instanceof WizardStepLoadError) {
+		if (error instanceof Error) {
 			if (this.reportedLoadErrors.has(error)) {
 				return;
 			}
 			this.reportedLoadErrors.add(error);
-			this.handleError(error, "load", error.stepId);
-			return;
 		}
-		this.handleError(error, "load");
+		this.handleError(
+			error,
+			"load",
+			error instanceof WizardStepLoadError ? error.stepId : undefined,
+		);
 	}
 
 	private isReportedLoadError(error: unknown): boolean {
