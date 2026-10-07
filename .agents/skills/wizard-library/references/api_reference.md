@@ -25,6 +25,9 @@ Use public exports from `@gooonzick/wizard-core`:
   (restore-on-init + debounced auto-save, with the built-in `localStorageAdapter` /
   `sessionStorageAdapter`). All are re-exported from the main barrel and from the
   `@gooonzick/wizard-core/plugins` subpath.
+- Lazy steps (WIZ-013): `WizardStepDefinition.load`, `StepLoader`, `LazyStepImplementation`,
+  `StepBuilder.lazy(loader)`, `WizardMachine.preloadStep(stepId)`, `WizardState.isLoadingStep`,
+  `WizardStepLoadError` (`stepId`, `cause`). See "Lazy steps" below.
 - Types: `WizardData`, `WizardDefinition`, `WizardStepDefinition`, `StepTransition`, `WizardContext`
 
 Prefer building on exported APIs over importing deep internal modules.
@@ -148,6 +151,13 @@ Solid (`@gooonzick/wizard-solid`, Solid 1.x) mirrors the Svelte runes surface wi
 - `autoDestroy` (default `true`) registers `onCleanup` only when `getOwner()` is non-null.
 - Destructuring the wizard loses reactivity (like Solid props).
 
+Lazy steps in the adapters (WIZ-013): `isLoadingStep` sits in every `loading` slice next to
+`isNavigating` (React/Vue `useWizardLoading`, Svelte stores + runes incl. the flat getter,
+Solid loading slice + flat getter) and `actions.preloadStep(stepId)` is in every `actions`
+slice. `isLoadingStep` mirrors `machine.snapshot.isLoadingStep`; `@gooonzick/wizard-state`
+exports `TrackedLoadingFlag` (the flags `trackLoading()` accepts), so
+`trackLoading("isLoadingStep")` is a type error.
+
 All four adapters accept an `onDataChange` option — React/Vue `useWizard` (and
 `<WizardProvider>`), Svelte `createWizardStore` / runes `createWizard`, and Solid
 `createWizard` — `(prevData, nextData, changedFields) => void` (plain `T` params) — that
@@ -217,6 +227,69 @@ Use context for external dependencies instead of hard-coding globals in guards/r
   operation (`goNext()`, `updateField`, ...) is NOT rejected.
 - `snapshot`, its `stepStatuses`, and `snapshot.progress` (with its `enabledStepIds`
   array) are frozen; `snapshot.data` is intentionally NOT frozen.
+
+### Lazy steps (WIZ-013)
+
+```ts
+// steps/documents.ts
+export default {
+	validate: createStandardSchemaValidator(heavySchema),
+	onEnter: async (data, ctx) => {},
+} satisfies LazyStepImplementation<Application>;
+
+createWizard<Application>("loan").step("documents", (s) =>
+	s.title("Documents").previous("personal").next("summary")
+		.lazy(() => import("./steps/documents")),
+);
+// declarative: { id: "documents", next, previous, load: () => import("./steps/documents") }
+```
+
+- Only `validate` / `onEnter` / `onLeave` / `onSubmit` are lazy (`LazyStepImplementation<T>` is a
+  `Pick` of those four). The skeleton (`id`, `next`, `previous`, `enabled`, `meta`) stays eager.
+- The loader resolves to the implementation or a module namespace; an object `default` export
+  wins over named exports. Loaded hooks must be functions — a non-function
+  `validate` / `onEnter` / `onLeave` / `onSubmit` is a load error (`WizardStepLoadError`,
+  `TypeError` cause). A hook defined on BOTH sides is composed, never replaced: `validate` →
+  `combineValidators(skeleton, loaded)` (both must pass, errors merged); `onEnter` / `onLeave`
+  / `onSubmit` → skeleton hook first, then the loaded one. A hook only one side defines is used
+  as-is (an `undefined` loaded key keeps the skeleton's), so `.required("x").lazy(...)` keeps
+  its required check. The merged definition does not keep `load`.
+- `machine.preloadStep(id)` returns a promise the caller owns: it never sets `isLoadingStep`
+  and never reports through `onError`, rejects with `WizardNavigationError` (`"not-found"`)
+  for an unknown id and `WizardStepLoadError` on failure. Fire-and-forget on the MACHINE needs
+  `.catch(() => {})`. Bindings' `actions.preloadStep(id)` (from `wizard-state`) never rejects —
+  failures are reported by the navigation that needs the step — so it is safe in hover/focus
+  handlers. When the preloaded step is the CURRENT step, the machine emits one
+  `onStateChange` (so bindings refresh `currentStep`; the state manager refreshes its cached
+  `currentStep` whenever `machine.currentStep` changes identity). `validateAll()` emits at most
+  once when it loaded the current step; `canSubmit()` loads a lazy current step in the
+  background (no `isLoadingStep`, no `onError`; failure → `false`).
+- `WizardStepLoadError` message: `Failed to load step "<id>": <cause message>` (just
+  `Failed to load step "<id>"` without a cause); `cause` is the native Error cause, so UIs
+  show `error.message` only.
+- Failure: navigation / `submit()` reject with `WizardStepLoadError`, reported once through
+  `onError` and plugin `onError` with `phase: "load"` (each failed attempt once, even when
+  several operations await it; a retry is a new attempt). The wizard stays on the current
+  step. `validate()` resolves `{ valid: false, errors: { general: "Failed to load step" } }`
+  without a state write; `validateAll()` marks the step invalid with `errors._error`.
+- Leaving a step whose own chunk failed is NOT blocked: navigation loads the target as
+  required and the current step best-effort (failure reported with phase `"load"`, the
+  skeleton's `onLeave` runs); only a target failure blocks. `goNext()` / `goTo()` with
+  validation / `submit()` still require the current step loaded before validating.
+- A failed lazy INITIAL step has not been entered: its `onEnter` + `onStepEnter` run once, the
+  next time the step is used (validated by validate / canSubmit / goNext / goTo / submit) while
+  still on it. Lifecycle hooks of a step run only if it was entered: leaving it without
+  validation (goPrevious, `goTo(id, { skipValidation: true })`) skips loading it and skips its
+  `onLeave` (also a skeleton one) / `onStepLeave`; coming back loads and enters it normally.
+  The same holds while the initial step's first load is still in flight (it is then never
+  entered when that load settles, and a failure is not reported).
+  `reset()` / `cancel()` / `restore()` discard the pending entry.
+- `validate()` while the user moves to another step during its load validates the NEW current
+  step (no fake invalid result, no report for the step they left). The abort signal is checked
+  only on entry: an abort while it waits does not reject it.
+- Plugins with an exhaustive `switch` on `ErrorContext.phase` need a `"load"` case.
+- `WizardState.isLoadingStep` is required: hand-built `WizardState` objects (test fakes) must
+  include it.
 
 ### Built-in analytics plugin (WIZ-016)
 

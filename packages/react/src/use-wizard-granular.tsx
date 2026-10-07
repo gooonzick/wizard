@@ -138,7 +138,7 @@ export function useWizardValidation(): UseWizardValidation {
  *
  * @example
  * ```tsx
- * const { isValidating, isSubmitting, isNavigating } = useWizardLoading();
+ * const { isValidating, isSubmitting, isNavigating, isLoadingStep } = useWizardLoading();
  * ```
  */
 export function useWizardLoading(): UseWizardLoading {
@@ -158,11 +158,13 @@ export function useWizardLoading(): UseWizardLoading {
 			isValidating: loadingSnapshot.isValidating,
 			isSubmitting: loadingSnapshot.isSubmitting,
 			isNavigating: loadingSnapshot.isNavigating,
+			isLoadingStep: loadingSnapshot.isLoadingStep,
 		}),
 		[
 			loadingSnapshot.isValidating,
 			loadingSnapshot.isSubmitting,
 			loadingSnapshot.isNavigating,
+			loadingSnapshot.isLoadingStep,
 		],
 	);
 }

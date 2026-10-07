@@ -2,7 +2,8 @@
 	"extends": "../../tsconfig.base.json",
 	"compilerOptions": {
 		"outDir": "./.tsbuild",
-		"emitDeclarationOnly": true
+		"emitDeclarationOnly": true,
+		"types": ["node"]
 	},
 	"include": ["src/**/*", "tests/**/*"],
 	"references": [{ "path": "./tsconfig.build.json" }]

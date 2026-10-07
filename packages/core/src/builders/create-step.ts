@@ -9,6 +9,7 @@ import {
 import type { StepId, WizardContext, WizardData } from "../types/base";
 import type {
 	LifecycleHook,
+	StepLoader,
 	StepMeta,
 	SubmitHandler,
 	Validator,
@@ -149,6 +150,20 @@ export class StepBuilder<T extends WizardData> {
 	 */
 	onSubmit(handler: SubmitHandler<T>): this {
 		this.step.onSubmit = handler;
+		return this;
+	}
+
+	/**
+	 * Loads this step's implementation (validate / onEnter / onLeave /
+	 * onSubmit) lazily on first use (WIZ-013), e.g.
+	 * `.lazy(() => import("./steps/documents"))`. Transitions, `enabled` and
+	 * meta set on this builder stay eager. Hooks set on this builder are
+	 * composed with the loaded ones, not replaced: e.g. `.required(...)` still
+	 * applies alongside a loaded `validate` (both must pass), and an eager
+	 * `onEnter` runs before the loaded `onEnter`.
+	 */
+	lazy(loader: StepLoader<T>): this {
+		this.step.load = loader;
 		return this;
 	}
 

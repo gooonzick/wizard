@@ -183,7 +183,7 @@ creation — they are not reactive; recreate the store to reconfigure):
 | `state` | `Readable<WizardStoreState<T>>` | `currentStepId`, `currentStep`, `data`, `isCompleted`, `stepStatuses`, `progress` |
 | `validation` | `Readable<WizardStoreValidation>` | `isValid`, `validationErrors` |
 | `navigation` | `Readable<WizardStoreNavigation>` | `canGoNext`, `canGoPrevious`, `canGoBack`, `isFirstStep`, `isLastStep`, `visitedSteps`, `availableSteps`, `stepHistory` |
-| `loading` | `Readable<WizardStoreLoading>` | `isValidating`, `isSubmitting`, `isNavigating` |
+| `loading` | `Readable<WizardStoreLoading>` | `isValidating`, `isSubmitting`, `isNavigating`, `isLoadingStep` |
 | `actions` | `WizardStoreActions<T>` | see below |
 | `goNext` / `goPrevious` / `goTo` | `() => Promise<void>` | flat navigation methods |
 | `goBack` / `goToStep` | deprecated | use `goPrevious()` / `goTo(stepId)` |
@@ -193,7 +193,7 @@ creation — they are not reactive; recreate the store to reconfigure):
 | `isDestroyed` | `boolean` | |
 
 **Actions:** `updateData`, `setData`, `updateField`, `validate`, `validateAll`,
-`canSubmit`, `submit`, `reset`, `cancel`, `serialize`, `restore`.
+`canSubmit`, `submit`, `reset`, `cancel`, `serialize`, `restore`, `preloadStep`.
 
 `reset` and `restore` return `void`, not `Promise<void>` (exact parity with the React
 binding). They are dispatched fire-and-forget; a rejection — e.g. the

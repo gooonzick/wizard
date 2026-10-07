@@ -12,6 +12,7 @@ import type {
 	StateSnapshot,
 	SubscriptionChannel,
 	SubscriptionListener,
+	TrackedLoadingFlag,
 	ValidationState,
 	WizardStateManagerOptions,
 } from "./types";
@@ -36,7 +37,7 @@ export class WizardStateManager<T extends WizardData> {
 	private loadingCache: LoadingState;
 	// Per-flag reference counts for trackLoading(): a flag stays true while any
 	// tracked operation holding it is in flight.
-	private loadingCounts: Record<keyof LoadingState, number> = {
+	private loadingCounts: Record<TrackedLoadingFlag, number> = {
 		isValidating: 0,
 		isSubmitting: 0,
 		isNavigating: 0,
@@ -90,15 +91,18 @@ export class WizardStateManager<T extends WizardData> {
 			["all", new Set()],
 		]);
 
-		// Initialize loading state (UI concern, not from machine)
+		// Initialize state cache
+		const snapshot = this.machine.snapshot;
+
+		// Loading flags: the three UI flags start off; isLoadingStep mirrors the
+		// machine, which may already be loading a lazy initial step (WIZ-013).
 		this.loadingCache = {
 			isValidating: false,
 			isSubmitting: false,
 			isNavigating: false,
+			isLoadingStep: snapshot.isLoadingStep,
 		};
 
-		// Initialize state cache
-		const snapshot = this.machine.snapshot;
 		this.snapshotCache = snapshot;
 		this.lastState = snapshot;
 		this.stateCache = {
@@ -484,9 +488,13 @@ export class WizardStateManager<T extends WizardData> {
 	}
 
 	/**
-	 * Update loading state and notify loading channel
+	 * Update the manager-owned loading flags and notify the loading channel.
+	 * `isLoadingStep` is machine-owned (mirrored in handleStateChange) and is
+	 * deliberately not accepted here.
 	 */
-	setLoadingState(update: Partial<LoadingState>): void {
+	setLoadingState(
+		update: Partial<Pick<LoadingState, TrackedLoadingFlag>>,
+	): void {
 		if (this.destroyed) return;
 		this.loadingCache = { ...this.loadingCache, ...update };
 		this.notifySubscribersForChannel("loading");
@@ -506,10 +514,11 @@ export class WizardStateManager<T extends WizardData> {
 	 *
 	 * runReset()/runRestore()/runCancel() force every flag off and discard all
 	 * outstanding references; operations in flight at that moment release
-	 * nothing when they later settle.
+	 * nothing when they later settle. `isLoadingStep` is machine-owned and is
+	 * not touched by these (the machine resets it itself).
 	 */
 	async trackLoading<R>(
-		flag: keyof LoadingState,
+		flag: TrackedLoadingFlag,
 		fn: () => Promise<R>,
 	): Promise<R> {
 		const epoch = this.loadingEpoch;
@@ -530,7 +539,7 @@ export class WizardStateManager<T extends WizardData> {
 	/**
 	 * Set a single loading flag, notifying "loading" only on an actual change.
 	 */
-	private setLoadingFlag(flag: keyof LoadingState, value: boolean): void {
+	private setLoadingFlag(flag: TrackedLoadingFlag, value: boolean): void {
 		if (this.loadingCache[flag] === value) return;
 		this.setLoadingState({ [flag]: value });
 	}
@@ -552,6 +561,9 @@ export class WizardStateManager<T extends WizardData> {
 	 * Force every loading flag off (always notifies, as before) and discard all
 	 * trackLoading() references so aborted in-flight operations cannot drive a
 	 * counter negative or clear a newer operation's flag when they settle.
+	 *
+	 * `isLoadingStep` is machine-owned and is not touched here (the machine
+	 * resets it itself).
 	 */
 	private forceLoadingOff(): void {
 		this.discardLoadingRefs();
@@ -602,6 +614,7 @@ export class WizardStateManager<T extends WizardData> {
 	 *
 	 * Sets the loading flags + notifies "loading", calls the machine's
 	 * synchronous reset(), then clears the loading flags + notifies "loading".
+	 * (`isLoadingStep` is machine-owned and is not touched by this.)
 	 *
 	 * The state/navigation/validation channels are notified automatically via the
 	 * machine's onStateChange auto-routing (handleStateChange), so this method
@@ -623,6 +636,7 @@ export class WizardStateManager<T extends WizardData> {
 	 * (which always resets, then rejects if a cancel handler threw), then clears
 	 * the loading flags + notifies "loading". Rejections from the machine
 	 * propagate to the caller.
+	 * (`isLoadingStep` is machine-owned and is not touched by this.)
 	 *
 	 * The state/navigation/validation channels are notified automatically via the
 	 * machine's onStateChange auto-routing.
@@ -645,6 +659,7 @@ export class WizardStateManager<T extends WizardData> {
 	 *
 	 * Sets the loading flags + notifies "loading", calls the machine's
 	 * synchronous restore(), then clears the loading flags + notifies "loading".
+	 * (`isLoadingStep` is machine-owned and is not touched by this.)
 	 *
 	 * The state/navigation/validation channels are notified automatically via the
 	 * machine's onStateChange auto-routing (restore emits sync + async-validate
@@ -740,6 +755,24 @@ export class WizardStateManager<T extends WizardData> {
 			)
 		) {
 			affected.push("navigation");
+		}
+
+		// WIZ-013: isLoadingStep is owned by the machine. Mirror it into the
+		// loading cache.
+		if (newState.isLoadingStep !== oldState.isLoadingStep) {
+			this.loadingCache = {
+				...this.loadingCache,
+				isLoadingStep: newState.isLoadingStep,
+			};
+			affected.push("loading");
+		}
+
+		// WIZ-013: a lazy step finished loading in place (initial step, after
+		// restore(), or a background preloadStep()/validateAll() of the current
+		// step) and machine.currentStep changed identity without any other
+		// state change, so the state slice must pick up the merged definition.
+		if (this.machine.currentStep !== this.stateCache.currentStep) {
+			affected.push("state");
 		}
 
 		if (affected.length > 0) {

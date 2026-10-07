@@ -14,6 +14,7 @@ export {
 	WizardError,
 	WizardNavigationError,
 	WizardRestoreError,
+	WizardStepLoadError,
 	WizardValidationError,
 } from "./errors";
 // Transitions
@@ -98,7 +99,9 @@ export {
 export type { CompleteHandler, WizardDefinition } from "./types/definition";
 // Step types
 export type {
+	LazyStepImplementation,
 	LifecycleHook,
+	StepLoader,
 	StepMeta,
 	StepStatus,
 	SubmitHandler,

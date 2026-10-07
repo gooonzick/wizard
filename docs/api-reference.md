@@ -18,6 +18,7 @@ Complete type and function reference for the Wizard packages.
 
 - [Core Concepts](./core-concepts.md) — state machine, validation (`validate` / `validateAll`), transitions, progress
 - [Defining Wizards](./defining-wizards.md) — declarative, builder, linear helper
+- [Lazy Steps](./defining-wizards.md#lazy-steps) — `load` / `.lazy()`, `preloadStep`, `isLoadingStep`, `WizardStepLoadError`
 - [Plugins](./plugins.md) — `WizardPlugin`, veto, logging + analytics + persistence plugins
 - [React Integration](./react-integration.md)
 - [Vue Integration](./vue-integration.md)

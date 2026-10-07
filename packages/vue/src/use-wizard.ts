@@ -166,6 +166,7 @@ export function useWizard<T extends WizardData>(
 		isValidating: computed(() => loading.value.isValidating),
 		isSubmitting: computed(() => loading.value.isSubmitting),
 		isNavigating: computed(() => loading.value.isNavigating),
+		isLoadingStep: computed(() => loading.value.isLoadingStep),
 	};
 
 	const actionsSlice: UseWizardActions<T> = {
@@ -180,6 +181,7 @@ export function useWizard<T extends WizardData>(
 		cancel: actions.cancel,
 		serialize: actions.serialize,
 		restore: actions.restore,
+		preloadStep: actions.preloadStep,
 	};
 
 	return {

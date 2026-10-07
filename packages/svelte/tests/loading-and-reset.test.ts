@@ -184,6 +184,7 @@ describe.each([
 				"cancel",
 				"serialize",
 				"restore",
+				"preloadStep",
 			].sort(),
 		);
 	});

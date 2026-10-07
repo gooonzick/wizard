@@ -53,6 +53,7 @@ Creates a `WizardMachine` and a `WizardStateManager` and mirrors the manager's f
 | `isValidating` | `boolean` | loading |
 | `isSubmitting` | `boolean` | loading |
 | `isNavigating` | `boolean` | loading |
+| `isLoadingStep` | `boolean` | loading — `true` while a lazy step's implementation loads (WIZ-013) |
 | `state` | `WizardStoreState<T>` | state |
 | `validation` | `WizardStoreValidation` | validation |
 | `navigation` | `WizardStoreNavigation` | navigation |
@@ -74,13 +75,14 @@ Creates a `WizardMachine` and a `WizardStateManager` and mirrors the manager's f
 | `updateData` | `(updater: (data: T) => T) => void` | |
 | `setData` | `(data: T) => void` | |
 | `validate` | `() => Promise<void>` | Toggles `isValidating`. Resolves on an invalid step; rejects only if aborted. |
-| `validateAll` | `(options?: { updateStatuses?: boolean }) => Promise<ValidationSummary>` | Toggles `isValidating`. Resolves even with invalid steps (a throwing validator counts as invalid); rejects if aborted or if a step's `enabled` guard throws. Not supersede-protected — a `reset()`/`cancel()` mid-call does not cancel it, and with `updateStatuses: true` its statuses still get written. |
+| `validateAll` | `(options?: { updateStatuses?: boolean }) => Promise<ValidationSummary>` | Toggles `isValidating`. Resolves even with invalid steps (a throwing validator counts as invalid); rejects if aborted or if a step's `enabled` guard throws. With `updateStatuses: true`, statuses are not written if `reset()` / `cancel()` / `restore()` / `destroy()` happened while it was running. |
 | `canSubmit` | `() => Promise<boolean>` | |
 | `submit` | `() => Promise<void>` | Toggles `isSubmitting`. |
 | `reset` | `(data?: T) => void` | Fire-and-forget; errors → `onError` (else `console.error`). |
 | `cancel` | `() => Promise<void>` | Calls `onCancel`, then resets. |
 | `serialize` | `() => WizardSerializedState<T>` | |
 | `restore` | `(state: WizardSerializedState<T>) => void` | Fire-and-forget; `WizardRestoreError` → `onError` (else `console.error`). |
+| `preloadStep` | `(stepId: StepId) => Promise<void>` | Prefetches a lazy step's implementation (WIZ-013). Does not set `isLoadingStep`; never rejects (safe to fire and forget — failures are reported by the navigation that needs the step). |
 
 **Other members**
 

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { AnalyticsExample } from "./analytics-example";
 import { DataChangeExample } from "./data-change-example";
 import { HistoryExample } from "./history-example";
+import { LazyStepsExample } from "./lazy-steps-example";
 import { PersistencePluginExample } from "./persistence-plugin-example";
 import { PluginsExample } from "./plugins-example";
 import { ProviderExample } from "./provider-example";
@@ -18,7 +19,8 @@ type View =
 	| "persistence-plugin"
 	| "plugins"
 	| "analytics"
-	| "data-change";
+	| "data-change"
+	| "lazy-steps";
 
 const tabs: Array<{ id: View; label: string }> = [
 	{ id: "wizard", label: "Registration Wizard" },
@@ -30,6 +32,7 @@ const tabs: Array<{ id: View; label: string }> = [
 	{ id: "plugins", label: "Plugins" },
 	{ id: "analytics", label: "Analytics" },
 	{ id: "data-change", label: "Data Change" },
+	{ id: "lazy-steps", label: "Lazy Steps" },
 ];
 
 const VIEWS: View[] = tabs.map((tab) => tab.id);
@@ -86,6 +89,7 @@ export function App() {
 			{view === "plugins" && <PluginsExample />}
 			{view === "analytics" && <AnalyticsExample />}
 			{view === "data-change" && <DataChangeExample />}
+			{view === "lazy-steps" && <LazyStepsExample />}
 		</div>
 	);
 }

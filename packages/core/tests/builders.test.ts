@@ -138,3 +138,24 @@ describe("WizardBuilder", () => {
 		);
 	});
 });
+
+describe("StepBuilder.lazy (WIZ-013)", () => {
+	test("sets the step's load function", () => {
+		const loader = async () => ({ onEnter: () => {} });
+		const step = createStep<{ name: string }>("heavy")
+			.next("done")
+			.lazy(loader)
+			.build();
+		expect(step.load).toBe(loader);
+		expect(step.next).toEqual({ type: "static", to: "done" });
+	});
+
+	test("is chainable from createWizard().step()", () => {
+		const loader = async () => ({});
+		const def = createWizard<{ name: string }>("w")
+			.initialStep("a")
+			.step("a", (s) => s.lazy(loader))
+			.build();
+		expect(def.steps.a.load).toBe(loader);
+	});
+});

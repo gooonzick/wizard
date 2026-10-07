@@ -159,6 +159,7 @@ navigation.goToStep(stepId); // @deprecated — use goTo() instead
 loading.isValidating;
 loading.isSubmitting;
 loading.isNavigating;
+loading.isLoadingStep; // a lazy step's implementation is loading
 
 // Actions slice
 actions.updateField("name", "John");
@@ -171,6 +172,7 @@ actions.submit();
 actions.reset();
 actions.cancel(); // onCancel + reset
 actions.serialize(); // / actions.restore(saved)
+actions.preloadStep("documents"); // prefetch a lazy step (never rejects)
 ```
 
 ### Plugins
@@ -250,6 +252,7 @@ interface UseWizardLoading {
   isValidating: boolean;
   isSubmitting: boolean;
   isNavigating: boolean;
+  isLoadingStep: boolean; // a lazy step's implementation is loading
 }
 
 interface UseWizardActions<T> {
@@ -264,6 +267,7 @@ interface UseWizardActions<T> {
   cancel(): Promise<void>;
   serialize(): WizardSerializedState<T>;
   restore(state: WizardSerializedState<T>): void;
+  preloadStep(stepId: string): Promise<void>; // prefetch a lazy step; never rejects
 }
 ```
 
@@ -321,8 +325,8 @@ function MyWizardForm() {
 - **`useWizardData<T>()`** - Current step ID, step definition, data, completion status
 - **`useWizardNavigation()`** - Navigation state and methods (canGoNext, goNext, etc.)
 - **`useWizardValidation()`** - Validation status and field errors
-- **`useWizardLoading()`** - Loading flags (isValidating, isSubmitting, isNavigating)
-- **`useWizardActions<T>()`** - All wizard action methods (updateField, submit, reset, etc.)
+- **`useWizardLoading()`** - Loading flags (isValidating, isSubmitting, isNavigating, isLoadingStep)
+- **`useWizardActions<T>()`** - All wizard action methods (updateField, submit, reset, preloadStep, etc.)
 
 ### When to Use Granular Hooks
 

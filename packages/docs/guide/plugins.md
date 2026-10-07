@@ -63,7 +63,7 @@ interface TransitionEvent<TData> {
 /** Context passed to a plugin's onError hook. */
 interface ErrorContext<TData> {
   stepId: StepId;
-  phase: "validation" | "transition" | "lifecycle" | "submit" | "data" | "state";
+  phase: "validation" | "transition" | "lifecycle" | "submit" | "data" | "state" | "load";
   data: DeepReadonly<TData>;
 }
 
@@ -213,6 +213,22 @@ Each error is reported to plugins **exactly once** regardless of where it origin
 Plugin hook errors themselves are **isolated**: if your plugin's `onComplete` throws, the error is routed through `onError` at phase `"lifecycle"` and does not propagate to the calling code.
 
 A throwing `onStateChange` subscriber (the machine-level event, or a framework binding's listener) is isolated the same way: the error is routed through `onError` at phase `"state"` and the in-flight operation (e.g. `goNext()`, `updateField`) still completes.
+
+### Error Phases
+
+`ErrorContext.phase` tells `onError` where a failure originated:
+
+| Phase | Origin |
+|---|---|
+| `"validation"` | A step validator threw, or returned an invalid result during `goNext()` / `goTo()` / `submit()` |
+| `"transition"` | The default for navigation: a resolver, guard or `beforeTransition` failure, an `onLeave` / `onEnter` throw, a plugin `afterTransition` throw, guard / progress resolution errors, and an `onSubmit` (or `definition.onComplete` / `events.onComplete`) throw inside `goNext()` |
+| `"lifecycle"` | A plugin `onInit` / `onComplete` / `onReset` / `destroy` failure, an error from `cancel()` handlers (`definition.onCancel` / `events.onCancel`), or the initial step's `onEnter` |
+| `"submit"` | `onSubmit` (or a completion handler) threw inside `submit()` — only `submit()` uses this phase; the same throw inside `goNext()` is `"transition"` |
+| `"data"` | An `onDataChange` handler or a `watchField` callback threw (plugin `onDataChange` too) |
+| `"state"` | An `onStateChange` subscriber threw |
+| `"load"` | A lazy step failed to load (WIZ-013) |
+
+A failed lazy-step load is reported once (with a `WizardStepLoadError` whose message is `Failed to load step "<id>": <cause message>` and whose native `cause` is the original failure) even when several operations await the same failed attempt; a retry is a new attempt and is reported again. Plugins with an exhaustive `switch` on `phase` need a `"load"` case.
 
 ### Re-entrancy / Busy Guard
 

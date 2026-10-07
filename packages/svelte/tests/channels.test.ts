@@ -49,6 +49,7 @@ describe("channel sub-stores", () => {
 			isValidating: false,
 			isSubmitting: false,
 			isNavigating: false,
+			isLoadingStep: false,
 		});
 	});
 
@@ -106,6 +107,7 @@ describe("channel sub-stores", () => {
 			isValidating: false,
 			isSubmitting: false,
 			isNavigating: false,
+			isLoadingStep: false,
 		});
 		unsubscribe();
 	});

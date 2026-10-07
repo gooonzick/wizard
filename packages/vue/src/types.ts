@@ -129,6 +129,8 @@ export interface UseWizardLoading {
 	isValidating: ComputedRef<boolean>;
 	isSubmitting: ComputedRef<boolean>;
 	isNavigating: ComputedRef<boolean>;
+	/** A lazy step implementation is loading (WIZ-013). */
+	isLoadingStep: ComputedRef<boolean>;
 }
 
 /**
@@ -177,6 +179,12 @@ export interface UseWizardActions<T extends WizardData> {
 	cancel: CancelFn;
 	serialize: SerializeFn<T>;
 	restore: RestoreFn<T>;
+	/**
+	 * Loads a lazy step's implementation ahead of navigation (WIZ-013).
+	 * Never rejects: meant for fire-and-forget hover/focus handlers; failures
+	 * are reported by the navigation that needs the step.
+	 */
+	preloadStep: (stepId: StepId) => Promise<void>;
 }
 
 /**

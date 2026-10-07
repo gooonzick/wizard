@@ -121,6 +121,7 @@ describe("createWizard (runes)", () => {
 			"isValidating",
 			"isSubmitting",
 			"isNavigating",
+			"isLoadingStep",
 		].sort();
 
 		expect(runesKeys).toEqual(expected);

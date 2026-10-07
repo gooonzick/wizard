@@ -225,6 +225,7 @@ await navigation.goTo(id); // Jump to specific step (validates first)
 loading.isValidating.value; // Validation in progress? (ComputedRef)
 loading.isSubmitting.value; // Submission in progress? (ComputedRef)
 loading.isNavigating.value; // Navigation in progress? (ComputedRef)
+loading.isLoadingStep.value; // A lazy step's implementation is loading? (ComputedRef, see Lazy Steps)
 ```
 
 #### Actions Slice
@@ -269,7 +270,12 @@ await actions.cancel(); // Awaits definition.onCancel + onCancel event, then res
 actions.serialize(); // JSON-safe runtime snapshot
 actions.restore(savedState); // Re-apply snapshot (throws WizardRestoreError if incompatible)
 // (Prefer `createPersistencePlugin` for automatic save/restore — see "Persisting Progress".)
+
+// Lazy steps
+actions.preloadStep("documents"); // Prefetch a lazy step's implementation (never rejects)
 ```
+
+Steps declared with `load` / `.lazy()` load their `validate` and lifecycle hooks on first use; show a spinner with `loading.isLoadingStep.value`. `actions.preloadStep` does not set the flag and never rejects (failures are reported by the navigation that needs the step), so it is safe to fire and forget from hover/focus handlers; `machine.preloadStep()` in core still rejects. See [Lazy Steps](./defining-wizards.md#lazy-steps).
 
 ## Reset & Cancel
 
@@ -743,7 +749,7 @@ const name = useWizardField<{ name: string }, "name">("name");
 | `useWizardData<T>()`    | Current step, data, isCompleted          | Form inputs, step content |
 | `useWizardNavigation()` | canGoNext, goNext, goBack, etc.          | Navigation buttons        |
 | `useWizardValidation()` | isValid, validationErrors                | Error display             |
-| `useWizardLoading()`    | isValidating, isSubmitting, isNavigating | Loading indicators        |
+| `useWizardLoading()`    | isValidating, isSubmitting, isNavigating, isLoadingStep | Loading indicators        |
 | `useWizardActions<T>()` | updateField, validateAll, submit, reset, cancel, serialize, restore | Form handlers             |
 | `useWizardField<T>()`   | Writable computed ref (`wizard, field` or field-only in Provider) | `v-model` field binding   |
 

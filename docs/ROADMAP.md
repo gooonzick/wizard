@@ -38,10 +38,11 @@
 | Plugin System (WIZ-007)                               | ✅     | `core`  |
 | Validate All Steps (WIZ-008)                          | ✅     | `core`  |
 | onDataChange / Field Subscriptions (WIZ-010)          | ✅     | `core`  |
+| Lazy steps (WIZ-013)                                  | ✅     | `core`  |
 
 ### Current Release
 
-The published version is **1.9.0** (`core`, `react`, `vue`, `svelte`, `solid`, and `state` are fixed-versioned together; `solid` joins with the next release). The WIZ-001..008 runtime foundation above shipped by 1.5.0 and was hardened in 1.5.1 by a pre-release audit covering concurrency/veto-safety, resolver-safety, StrictMode-safe React/Vue bindings, and real-machine state tests. Later releases:
+The published version is **1.11.2** (`core`, `react`, `vue`, `svelte`, `solid`, and `state` are fixed-versioned together); **1.12.0 (next)** adds lazy steps. The WIZ-001..008 runtime foundation above shipped by 1.5.0 and was hardened in 1.5.1 by a pre-release audit covering concurrency/veto-safety, resolver-safety, StrictMode-safe React/Vue bindings, and real-machine state tests. Later releases:
 
 | Version | Shipped                                                                                   |
 | ------- | ----------------------------------------------------------------------------------------- |
@@ -49,9 +50,13 @@ The published version is **1.9.0** (`core`, `react`, `vue`, `svelte`, `solid`, a
 | 1.7.0   | Built-in `createAnalyticsPlugin` (WIZ-016)                                                 |
 | 1.8.0   | Built-in `createPersistencePlugin` + storage adapters (WIZ-006 follow-up)                  |
 | 1.9.0   | `@gooonzick/wizard-svelte` (WIZ-014); React/Vue `updateField` and reset/restore error fixes |
-| 1.10.0 (next) | `@gooonzick/wizard-solid` (WIZ-015) |
+| 1.10.0  | `@gooonzick/wizard-solid` (WIZ-015); `onStateChange` subscriber errors isolated via `onError` (new `ErrorContext.phase` `"state"`); `WizardStateManager.trackLoading()` |
+| 1.11.0  | Correctness batch from a full-repo review (reset/cancel supersede pending validation, `onComplete` ordering, guard-aware `goPrevious()`, `"skipped"` status for guard-disabled steps, progress reaches 100%); all bindings moved onto shared `wizard-state` wiring (`createMachineAndManager`, `createWizardActions`, ref-counted loading flags, synchronously seeded `canGoNext`/`isLastStep`) |
+| 1.11.1  | Docs: Svelte/Solid/state READMEs synced to the 1.11.0 navigation seeding; Quick Start Next buttons fixed |
+| 1.11.2  | Docs: React/Vue README Next buttons fixed so the last step can be finished |
+| 1.12.0 (next) | Lazy steps (WIZ-013): `load` / `.lazy()`, `isLoadingStep`, `preloadStep`, `WizardStepLoadError`, loaded hooks validated as functions, "Lazy Steps" example tab in all four frameworks; plus a `wizard-state` packaging fix (core no longer bundled) |
 
-Remaining backlog: WIZ-011 (sub-wizards), WIZ-012 (DevTools / Mermaid export), WIZ-013 (lazy steps).
+Remaining backlog: WIZ-011 (sub-wizards), WIZ-012 (DevTools / Mermaid export).
 
 ### Architectural Decisions
 
@@ -89,7 +94,7 @@ Remaining backlog: WIZ-011 (sub-wizards), WIZ-012 (DevTools / Mermaid export), W
 
 ### Key Takeaway
 
-`gooonzick/wizard` already outperforms most competitors in its foundation: typing, declarative approach, framework-agnostic architecture, conditional branching, guard combinators, and Standard Schema. Its **runtime capabilities** are now complete too — navigation (including `goTo` and history), step status tracking, progress, reset/cancel, persistence, plugins, and all-steps validation (WIZ-001 through WIZ-008) have all shipped. Its **framework reach** is now a differentiator as well: alongside React and Vue, first-class Svelte support ships in `@gooonzick/wizard-svelte` (WIZ-014) with a classic store API for Svelte 4/5 and a native Svelte 5 runes API — almost every lightweight competitor is React-only, and the framework-agnostic ones (XState, `@robo-wizard`) leave the binding to you. The remaining differentiators on the horizon are sub-wizards and DevTools/visualization — closing those will make the library an undisputed leader in its niche.
+`gooonzick/wizard` already outperforms most competitors in its foundation: typing, declarative approach, framework-agnostic architecture, conditional branching, guard combinators, and Standard Schema. Its **runtime capabilities** are now complete too — navigation (including `goTo` and history), step status tracking, progress, reset/cancel, persistence, plugins, and all-steps validation (WIZ-001 through WIZ-008) have all shipped. Its **framework reach** is now a differentiator as well: alongside React and Vue, first-class Svelte support ships in `@gooonzick/wizard-svelte` (WIZ-014) with a classic store API for Svelte 4/5 and a native Svelte 5 runes API, and Solid support in `@gooonzick/wizard-solid` (WIZ-015) — almost every lightweight competitor is React-only, and the framework-agnostic ones (XState, `@robo-wizard`) leave the binding to you. The remaining differentiators on the horizon are sub-wizards and DevTools/visualization — closing those will make the library an undisputed leader in its niche.
 
 ---
 
@@ -603,7 +608,7 @@ interface TransitionEvent<TData> {
 
 interface ErrorContext<TData> {
   stepId: StepId;
-  phase: "validation" | "transition" | "lifecycle" | "submit" | "data";
+  phase: "validation" | "transition" | "lifecycle" | "submit" | "data" | "state" | "load"; // "state" since 1.10.0, "load" since 1.12.0
   data: DeepReadonly<TData>;
 }
 
@@ -971,7 +976,7 @@ const dot = toDot(signupWizard);
 
 #### WIZ-013: Async Step Loading (Lazy Steps)
 
-**Status:** 📋 Planned
+**Status:** ✅ Done (see "Shipped vs. specced deltas")
 **Priority:** 🟢 Low
 **Effort:** M (4–5 hours)
 **Package:** `@gooonzick/wizard-core`
@@ -1023,6 +1028,21 @@ interface WizardState<TData> {
 - Repeated navigation does not reload
 - Load error → onError
 - Progress API works with lazy steps
+
+##### Shipped vs. specced deltas
+
+- **Implementation-only laziness via `load` on the step (skeleton eager)** instead of a function step value. `id`, `next`, `previous`, `enabled` and `meta` stay in the definition, so progress, `isLastStep`, disabled-step skipping and `getAvailableSteps` never wait for a load; only `validate`, `onEnter`, `onLeave` and `onSubmit` are loaded (`load: () => import("./step")`, typed as `StepLoader` / `LazyStepImplementation`). This keeps the `steps` type unchanged, so no major version is needed.
+- **`StepBuilder.lazy(loader)`** instead of `WizardBuilder.lazyStep()`.
+- **`preloadStep(stepId)`** added (machine and binding `actions`) for prefetching without navigating; it never sets `isLoadingStep`. `machine.preloadStep` rejects on failure; the binding `actions.preloadStep` never rejects (failures are reported by the navigation that needs the step). When it loads the current step the machine emits one `onStateChange`.
+- **Loaded hooks compose with skeleton hooks** instead of replacing them: `validate` via `combineValidators(skeleton, loaded)` (both must pass, errors merged), `onEnter` / `onLeave` / `onSubmit` skeleton first, then loaded. A builder's `.required(...)` keeps working after `.lazy(...)`.
+- **`WizardStepLoadError`** (`stepId`, original error as the native `cause`; message `Failed to load step "<id>": <cause message>`) and the new plugin `ErrorContext.phase` value `"load"`. Loaded hooks are validated as functions; a non-function hook is a load error.
+- **`isLoadingStep`** is also exposed by `wizard-state` (mirrored from the machine, not ref-counted; `TrackedLoadingFlag` keeps `trackLoading("isLoadingStep")` a type error) and by every binding's loading slice (React, Vue, Svelte stores + runes, Solid).
+- Loads happen **before `beforeTransition`**, `onLeave` and any state write, so a failed load never half-commits.
+- **Failed loads are not cached**: the next attempt retries; each failed attempt is reported once.
+- Leaving a step whose own chunk failed is not blocked (current-step load is best-effort for `onLeave`; only a target failure blocks). A failed lazy initial step replays its `onEnter` / `onStepEnter` once, the next time it is validated (`validate()`, `canSubmit()`, or the validation in `goNext()` / `goTo()` / `submit()`); leaving it without validation — also while its first load is still in flight — does not load it and skips its `onLeave` / `onStepLeave` (lifecycle hooks of a step run only if it was entered). An abort during an in-flight `validate()` no longer rejects it (the signal is checked only on entry). `validate()` re-targets the new current step when the user moved during the load. `canSubmit()` loads a lazy current step in the background. Background loads of the current step (`preloadStep` / `validateAll`) emit one `onStateChange` (they previously never emitted, so `currentStep` could lag in bindings).
+- Also fixed: `validateAll({ updateStatuses: true })` no longer writes statuses after a `reset()` / `cancel()` / `restore()` / `destroy()` that happened while it ran (also for non-lazy wizards with async validators).
+- Every example app (React, Vue, Svelte, Solid) has a "Lazy Steps" tab.
+- Ships in **1.12.0**.
 
 ---
 
@@ -1279,7 +1299,7 @@ function App() {
   like Svelte's `setWizardContext`, rather than creation options.
 - **Solid 1.x only** (`solid-js ^1.8.0`); Solid 2.0 is a follow-up.
 - Also depends on `@gooonzick/wizard-state` (the shared `WizardStateManager`), like the other bindings.
-- Ships in **1.10.0**.
+- Shipped in **1.10.0**.
 
 ---
 
@@ -1399,7 +1419,7 @@ Phase 4 (Integrations):                                        ✅ shipped
 Phase 5 (Advanced):                                            🚧 in progress
   WIZ-011 Sub-wizards          ── depends on WIZ-001–WIZ-005     📋
   WIZ-012 DevTools             ── depends on WIZ-003             📋
-  WIZ-013 Lazy Steps           ── independent                    📋
+  WIZ-013 Lazy Steps           ── independent                    ✅ 1.12.0
   WIZ-014 Svelte Integration   ── independent                    ✅ 1.9.0
   WIZ-015 Solid Integration    ── independent                    ✅ 1.10.0
 ```
@@ -1415,8 +1435,8 @@ Phase 5 (Advanced):                                            🚧 in progress
 | WIZ-006 Persistence | New instance methods (serialize/restore) | Additive, non-breaking                      |
 | WIZ-007 Plugins     | New `use()` method                       | Additive, non-breaking                      |
 | WIZ-011 Sub-wizards | New step type                            | Additive, non-breaking                      |
-| WIZ-013 Lazy Steps  | Steps can be a function                  | Requires `typeof step === 'function'` check |
+| WIZ-013 Lazy Steps  | New optional `load` field on a step      | Additive, non-breaking                      |
 
-**Release history:** Phases 1–4 shipped incrementally as additive minor releases (1.1.0–1.8.0) rather than the originally proposed per-phase bundles; see Appendix A for per-task versions. WIZ-014 shipped additively in 1.9.0; WIZ-015 ships additively in 1.10.0.
+**Release history:** Phases 1–4 shipped incrementally as additive minor releases (1.1.0–1.8.0) rather than the originally proposed per-phase bundles; see Appendix A for per-task versions. WIZ-014 shipped additively in 1.9.0 and WIZ-015 in 1.10.0. 1.11.0 was a correctness-and-wiring minor (no new backlog items); 1.11.1–1.11.2 were docs-only patches.
 
-**Recommendation for the rest of Phase 5:** ship WIZ-011 and WIZ-012 as additive minors. Reserve a major (v2.0.0) for WIZ-013 only if lazy steps cannot be introduced without changing the `steps` type for existing consumers.
+**Recommendation for the rest of Phase 5:** WIZ-013 shipped additively in 1.12.0; WIZ-011 and WIZ-012 remain additive minors.

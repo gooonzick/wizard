@@ -95,6 +95,12 @@ export interface WizardStoreActions<T extends WizardData> {
 	serialize: () => WizardSerializedState<T>;
 	/** Fire-and-forget; failures (e.g. `WizardRestoreError`) go to `onError`. */
 	restore: (state: WizardSerializedState<T>) => void;
+	/**
+	 * Loads a lazy step's implementation ahead of navigation (WIZ-013).
+	 * Never rejects: meant for fire-and-forget hover/focus handlers; failures
+	 * are reported by the navigation that needs the step.
+	 */
+	preloadStep: (stepId: StepId) => Promise<void>;
 }
 
 /**
@@ -134,6 +140,7 @@ export interface Wizard<T extends WizardData> {
 	readonly isValidating: boolean;
 	readonly isSubmitting: boolean;
 	readonly isNavigating: boolean;
+	readonly isLoadingStep: boolean;
 
 	// ---- slice getters ----
 	readonly state: WizardStoreState<T>;

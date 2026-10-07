@@ -83,6 +83,8 @@ interface UseWizardLoading {
   isValidating: ComputedRef<boolean>;
   isSubmitting: ComputedRef<boolean>;
   isNavigating: ComputedRef<boolean>;
+  /** True while a lazy step's implementation loads (WIZ-013). Mirrored from the machine. */
+  isLoadingStep: ComputedRef<boolean>;
 }
 
 interface UseWizardActions<T> {
@@ -97,6 +99,8 @@ interface UseWizardActions<T> {
   cancel(): Promise<void>;
   serialize(): WizardSerializedState<T>;
   restore(state: WizardSerializedState<T>): void;
+  /** WIZ-013: prefetch a lazy step's implementation without navigating. Does not set isLoadingStep; never rejects (failures are reported by the navigation that needs the step). */
+  preloadStep(stepId: StepId): Promise<void>;
 }
 ```
 
@@ -153,7 +157,7 @@ For fine-grained subscriptions, use `WizardProvider` with these composables:
 const { data, currentStepId, currentStep, isCompleted } = useWizardData<T>();
 const { canGoNext, canGoPrevious, canGoBack, goNext, goPrevious, goTo, ... } = useWizardNavigation();
 const { isValid, validationErrors } = useWizardValidation();
-const { isValidating, isSubmitting, isNavigating } = useWizardLoading();
+const { isValidating, isSubmitting, isNavigating, isLoadingStep } = useWizardLoading();
 const {
   updateField,
   updateData,
@@ -166,6 +170,7 @@ const {
   cancel,
   serialize,
   restore,
+  preloadStep,
 } = useWizardActions<T>();
 ```
 

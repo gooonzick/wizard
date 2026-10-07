@@ -17,5 +17,11 @@ export default defineConfig({
 			formats: ["es"],
 		},
 		outDir: "./dist",
+		rollupOptions: {
+			// Never bundle core (nor any of its subpath entries): consumers must
+			// share one copy of the machine and error classes
+			// (`instanceof WizardValidationError` etc.).
+			external: [/^@gooonzick\/wizard-core(\/|$)/],
+		},
 	},
 });

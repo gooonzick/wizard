@@ -233,6 +233,9 @@ const checkoutWizard = createWizard<CheckoutData>("checkout")
 
     // Availability
     .enabled(true) // or (data) => boolean
+
+    // Lazy implementation (validate / onEnter / onLeave / onSubmit)
+    .lazy(() => import("./steps/documents"))
 )
 ```
 
@@ -379,6 +382,63 @@ const step = (s) => s.title("Account Setup").validateWithSchema(schema);
     })
 )
 ```
+
+### Lazy Steps
+
+Large wizards can defer a step's heavy implementation — validation schemas, lifecycle code — until the step is actually used. The step **skeleton** (`id`, `next`, `previous`, `enabled`, `meta`) stays in the definition, so progress, `isLastStep` and disabled-step skipping never wait for a download. Only `validate`, `onEnter`, `onLeave` and `onSubmit` are loaded lazily.
+
+```typescript
+// steps/documents.ts — becomes its own chunk
+import type { LazyStepImplementation } from "@gooonzick/wizard-core";
+
+export default {
+  validate: createStandardSchemaValidator(heavyDocumentsSchema),
+  onEnter: async (data, ctx) => { /* … */ },
+} satisfies LazyStepImplementation<Application>;
+
+// wizard.ts
+createWizard<Application>("loan")
+  .step("documents", (s) =>
+    s
+      .title("Documents")
+      .previous("personal")
+      .next("summary")
+      .lazy(() => import("./steps/documents")),
+  );
+```
+
+Declaratively, set `load: () => import("./steps/documents")` on the step definition. The loader may resolve to the implementation object or to a module namespace with a `default` export (an object `default` export wins over named exports). A hook defined on both the skeleton and the loaded implementation is **composed**, never replaced: `validate` becomes `combineValidators(skeleton, loaded)` (both must pass, their errors are merged) and `onEnter` / `onLeave` / `onSubmit` run the skeleton's hook first, then the loaded one (if the operation is superseded by `reset()`, `cancel()` or `restore()` while the skeleton's hook runs, the loaded one does not run). A hook only one side defines is used as-is, and a loaded key that is `undefined` keeps the skeleton's hook. So a builder's `.required(...)` keeps protecting the step after its implementation loads:
+
+```typescript
+.step("documents", (s) =>
+  s
+    .required("passport") // skeleton validate — still enforced after the load
+    .lazy(() => import("./steps/documents")), // its validate runs in addition
+)
+```
+
+Every loaded hook must be a function — a non-function `validate`, `onEnter`, `onLeave` or `onSubmit` is a load error. The merged step definition does not keep `load`.
+
+**When it loads.** The first time the implementation is needed: navigating into or out of the step (before `beforeTransition`, `onLeave` and any state change; a never-entered initial step is not loaded when left — see **Initial lazy step** below), validating or submitting it, or entering it as the initial step. `validateAll()` loads every enabled lazy step. A successful load is cached for the lifetime of the machine (it survives `reset()`); `goTo(id, { skipLifecycle: true })` does not load the target step; the current step is still loaded for validation unless `skipValidation` is also set.
+
+**Loading state.** `snapshot.isLoadingStep` (and `isLoadingStep` in every binding's loading slice) is `true` while the current or target step loads in the foreground (navigation, `submit()`, the initial step) — show a spinner with it. Background loads (`preloadStep()`, `validateAll()`, `canSubmit()`) never set it. If the user moves to another step (for example with `goTo(id, { skipLifecycle: true })`) while the load for the step they left is still pending, that load's result is dropped, and `isLoadingStep` can stay `true` until the abandoned load settles. After `destroy()` no loading flag flips and a navigation that still needs a load is a silent no-op (loaders may still run after `destroy()`; navigation into already-loaded or eager steps behaves as before).
+
+**Prefetching.** `machine.preloadStep("documents")` starts the load without navigating — e.g. on hover of "Next". It does not set `isLoadingStep`, is not reported through `onError`, and **rejects** with `WizardStepLoadError` when the load fails (or `WizardNavigationError` for an unknown step id), so a fire-and-forget call on the machine must handle the rejection. In a binding, `actions.preloadStep(id)` is meant for exactly that use and **never rejects**: failures are swallowed there and reported by the navigation that needs the step.
+
+```typescript
+machine.preloadStep("documents").catch(() => {}); // core: you own the rejection
+actions.preloadStep("documents"); // bindings: safe to fire and forget
+```
+
+When a background load (`preloadStep()` or `validateAll()`) replaces the definition of the **current** step, the machine emits one `onStateChange` so bindings pick up the loaded `currentStep` (`validateAll()` emits at most once in total). `canSubmit()` also loads a lazy current step in the background — no `isLoadingStep`, no `onError`; a failed load resolves `false`.
+
+**Errors.** A failed load rejects the navigation / `submit()` with `WizardStepLoadError` (`stepId`, original error as the native `cause`). Its message contains the cause: `Failed to load step "<id>": <cause message>` (just `Failed to load step "<id>"` when there is no cause), so showing `error.message` is enough. The failure is reported once through `onError` and plugin `onError` with `phase: "load"` — even when several operations await the same failed attempt. When the **target** step fails to load in `goNext()`, the wizard stays on the current step; the current step's `onSubmit` (and `events.onSubmit`) have already run, so a retry runs them again — the same as with a throwing `beforeTransition`; design `onSubmit` to be idempotent. Failed loads are not cached — the next attempt is a new attempt, retries the loader and is reported again.
+
+**Leaving a step whose chunk failed.** Navigation loads the target as required and the current step as best-effort (for its `onLeave`): if the current step's own load fails, the failure is reported once with `phase: "load"`, the skeleton's `onLeave` runs and the navigation continues — a broken chunk never traps the user on its step. Only a failing *target* load blocks. `goNext()`, `goTo()` with validation and `submit()` still need the current step loaded before they validate it, so they reject with `WizardStepLoadError` until it loads.
+
+**Initial lazy step.** If the initial step's load fails, its `onEnter` and `events.onStepEnter` have not run — the step has not been entered. They run once, the next time the step is used — validated by `validate()`, `canSubmit()`, or the validation in `goNext()`, `goTo()` and `submit()` — while it is still the current step. Operations that use the step while that entry is running (another `validate()`, `goNext()`, `submit()`, leaving the step unless `skipLifecycle` is set) wait for its `onEnter` to finish instead of running it again. Lifecycle hooks of a step run only if the step was entered, so leaving it without validation (`goPrevious()`, `goTo(id, { skipValidation: true })`) does not load it and skips its `onLeave` and `events.onStepLeave` (a skeleton `onLeave` on that step does not run either); `beforeTransition` / `afterTransition`, history and statuses behave as usual. Coming back to it later loads it as the target and enters it normally. The same applies while the initial step's first load is still in flight: leaving it (without validation) does not wait for that load and skips its leave hooks, and when the load settles the step is not entered (a failure is not reported). `reset()`, `cancel()` and `restore()` discard the pending entry.
+
+**Validation.** `validate()` on an unloaded lazy step resolves `{ valid: false, errors: { general: "Failed to load step" } }` when the load fails; `validateAll()` marks the step invalid with `errors._error`. If the user moves to another step while `validate()` is waiting for the load, the step they left is neither validated nor reported — `validate()` validates the **new** current step instead. A `validate()` superseded by `reset()` / `cancel()` / `restore()` resolves `{ valid: false, errors: { general: "Validation error occurred" } }`. The `AbortSignal` is checked only when `validate()` is called: aborting while it waits for the load does not reject it.
 
 ### Using Context in Validation
 
