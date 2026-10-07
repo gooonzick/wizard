@@ -1,5 +1,13 @@
 # @gooonzick/wizard-svelte-example
 
+## 0.0.7
+
+### Patch Changes
+
+- Updated dependencies [f162a12]
+  - @gooonzick/wizard-core@1.12.0
+  - @gooonzick/wizard-svelte@1.12.0
+
 ## 0.0.6
 
 ### Patch Changes
